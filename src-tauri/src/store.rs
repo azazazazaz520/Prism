@@ -50,7 +50,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_load_tasks_returns_empty_when_no_file() {
+    fn test_empty_store_has_no_tasks() {
         let store = TaskStore {
             version: 1,
             tasks: vec![],

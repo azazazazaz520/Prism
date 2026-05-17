@@ -1,0 +1,52 @@
+<h2>TODO 工具布局方案</h2>
+<p class="subtitle">基础版 — 单页面任务管理</p>
+
+<div class="section">
+  <h3>整体结构</h3>
+  <div class="mockup">
+    <div class="mockup-header">TODO App — 基础版</div>
+    <div class="mockup-body" style="padding: 16px; background: var(--bg-secondary, #f5f5f5); border-radius: 8px;">
+      <div style="display: flex; gap: 10px; margin-bottom: 16px;">
+        <input class="mock-input" style="flex: 1;" placeholder="输入新任务...">
+        <button class="mock-button" style="min-width: 60px;">添加</button>
+      </div>
+      <div style="background: white; border-radius: 6px; overflow: hidden;">
+        <div style="display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid #eee;">
+          <input type="checkbox" style="margin-right: 12px;">
+          <span style="flex: 1;">买水果</span>
+          <span style="color: var(--text-secondary, #999); font-size: 0.85em;">2 小时前</span>
+        </div>
+        <div style="display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid #eee;">
+          <input type="checkbox" style="margin-right: 12px;">
+          <span style="flex: 1;">写周报</span>
+          <span style="color: var(--text-secondary, #999); font-size: 0.85em;">昨天</span>
+        </div>
+        <div style="display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid #eee; background: var(--bg-hover, #fafafa);">
+          <input type="checkbox" checked style="margin-right: 12px;">
+          <span style="flex: 1; text-decoration: line-through; color: var(--text-secondary, #999);">完成PPT</span>
+          <span style="color: var(--text-secondary, #999); font-size: 0.85em;">3 天前</span>
+        </div>
+        <div style="display: flex; align-items: center; padding: 12px 16px;">
+          <input type="checkbox" style="margin-right: 12px;">
+          <span style="flex: 1;">回复邮件</span>
+          <span style="color: var(--text-secondary, #999); font-size: 0.85em;">刚刚</span>
+        </div>
+      </div>
+      <div style="display: flex; justify-content: space-between; margin-top: 12px; color: var(--text-secondary, #999); font-size: 0.85em;">
+        <span>共 4 项 | 1 项已完成</span>
+        <span style="cursor: pointer; color: var(--accent, #4a90d9);">清除已完成</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>操作说明</h3>
+  <ul>
+    <li><strong>添加</strong>：顶部输入框 + 回车 / 点击添加按钮</li>
+    <li><strong>完成</strong>：点击左侧复选框标记完成</li>
+    <li><strong>编辑</strong>：双击任务文字进入编辑模式</li>
+    <li><strong>删除</strong>：悬停出现删除按钮，或右键菜单</li>
+    <li><strong>数据</strong>：自动保存到本地 JSON 文件</li>
+  </ul>
+</div>

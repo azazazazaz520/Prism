@@ -15,7 +15,15 @@ fn get_tasks(state: tauri::State<AppState>) -> Vec<store::Task> {
 }
 
 #[tauri::command]
-fn add_task(state: tauri::State<AppState>, title: String, due_date: Option<String>) -> Result<store::Task, String> {
+fn add_task(
+    state: tauri::State<AppState>,
+    title: String,
+    due_date: Option<String>,
+    tags: Option<Vec<String>>,
+    important: Option<bool>,
+    pinned: Option<bool>,
+    is_daily: Option<bool>,
+) -> Result<store::Task, String> {
     let mut store = state.store.lock().unwrap();
     let task = store::Task {
         id: uuid::Uuid::new_v4().to_string(),
@@ -24,10 +32,10 @@ fn add_task(state: tauri::State<AppState>, title: String, due_date: Option<Strin
         created_at: chrono::Utc::now().to_rfc3339(),
         completed_at: None,
         due_date,
-        tags: vec![],
-        important: false,
-        pinned: false,
-        is_daily: false,
+        tags: tags.unwrap_or_default(),
+        important: important.unwrap_or(false),
+        pinned: pinned.unwrap_or(false),
+        is_daily: is_daily.unwrap_or(false),
     };
     store.tasks.push(task.clone());
     store::save_tasks(&store)?;
@@ -49,11 +57,38 @@ fn toggle_task(state: tauri::State<AppState>, id: String) -> Result<(), String> 
 }
 
 #[tauri::command]
-fn update_task(state: tauri::State<AppState>, id: String, title: String, due_date: Option<String>) -> Result<(), String> {
+fn toggle_daily_task(state: tauri::State<AppState>, id: String, date: String) -> Result<(), String> {
+    let mut store = state.store.lock().unwrap();
+    if let Some(pos) = store.daily_completions.iter().position(|dc| dc.task_id == id && dc.date == date) {
+        store.daily_completions.remove(pos);
+    } else {
+        store.daily_completions.push(store::DailyCompletion {
+            task_id: id,
+            date,
+        });
+    }
+    store::save_tasks(&store)
+}
+
+#[tauri::command]
+fn update_task(
+    state: tauri::State<AppState>,
+    id: String,
+    title: String,
+    due_date: Option<String>,
+    tags: Vec<String>,
+    important: bool,
+    pinned: bool,
+    is_daily: bool,
+) -> Result<(), String> {
     let mut store = state.store.lock().unwrap();
     if let Some(task) = store.tasks.iter_mut().find(|t| t.id == id) {
         task.title = title;
         task.due_date = due_date;
+        task.tags = tags;
+        task.important = important;
+        task.pinned = pinned;
+        task.is_daily = is_daily;
     }
     store::save_tasks(&store)
 }
@@ -82,6 +117,26 @@ fn get_tasks_by_date(state: tauri::State<AppState>, date: String) -> Vec<store::
         .collect()
 }
 
+#[tauri::command]
+fn get_all_tags(state: tauri::State<AppState>) -> Vec<String> {
+    let store = state.store.lock().unwrap();
+    let mut tags: Vec<String> = store.tasks.iter()
+        .flat_map(|t| t.tags.clone())
+        .collect();
+    tags.sort();
+    tags.dedup();
+    tags
+}
+
+#[tauri::command]
+fn delete_tag(state: tauri::State<AppState>, tag: String) -> Result<(), String> {
+    let mut store = state.store.lock().unwrap();
+    for task in store.tasks.iter_mut() {
+        task.tags.retain(|t| t != &tag);
+    }
+    store::save_tasks(&store)
+}
+
 fn main() {
     let store = store::load_tasks();
     tauri::Builder::default()
@@ -92,10 +147,13 @@ fn main() {
             get_tasks,
             add_task,
             toggle_task,
+            toggle_daily_task,
             update_task,
             delete_task,
             clear_completed,
             get_tasks_by_date,
+            get_all_tags,
+            delete_tag,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

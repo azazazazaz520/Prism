@@ -4,10 +4,12 @@ import type { Task } from '../types';
 
 const props = defineProps<{
   task: Task;
+  isDailyCompleted: boolean;
 }>();
 
 const emit = defineEmits<{
   toggle: [id: string];
+  toggleDaily: [id: string, date: string];
   update: [id: string, title: string];
   delete: [id: string];
 }>();
@@ -49,6 +51,23 @@ function formatTime(isoString: string): string {
   return date.toLocaleDateString('zh-CN');
 }
 
+const displayCompleted = computed(() => {
+  if (props.task.is_daily) return props.isDailyCompleted;
+  return props.task.completed;
+});
+
+function handleToggle() {
+  if (props.task.is_daily) {
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const d = String(today.getDate()).padStart(2, '0');
+    emit('toggleDaily', props.task.id, `${y}-${m}-${d}`);
+  } else {
+    emit('toggle', props.task.id);
+  }
+}
+
 const dueStatus = computed<'overdue' | 'today' | 'upcoming' | null>(() => {
   if (!props.task.due_date) return null;
   const today = new Date();
@@ -72,25 +91,30 @@ const dueLabel = computed(() => {
 <template>
   <div
     :class="['task-item', {
-      completed: task.completed,
+      completed: displayCompleted,
       editing: editing,
-      [dueStatus || '']: !task.completed && dueStatus
+      [dueStatus || '']: !displayCompleted && dueStatus
     }]"
   >
     <input
       type="checkbox"
       class="task-checkbox"
-      :checked="task.completed"
-      @change="emit('toggle', task.id)"
+      :checked="displayCompleted"
+      @change="handleToggle"
     />
 
     <div class="task-body" @dblclick="startEdit">
       <template v-if="!editing">
-        <span :class="['task-title', { done: task.completed }]">{{ task.title }}</span>
-        <span class="task-meta">
+        <div class="task-title-row">
+          <span :class="['task-title', { done: displayCompleted }]">{{ task.title }}</span>
+          <span v-if="task.important && !displayCompleted" class="icon-star">⭐</span>
+          <span v-if="task.is_daily" class="icon-daily" :class="{ done: displayCompleted }">☀️</span>
+        </div>
+        <div class="task-meta">
           <span class="task-time">{{ formatTime(task.created_at) }}</span>
-          <span v-if="dueLabel && !task.completed" :class="['due-badge', dueStatus]">{{ dueLabel }}</span>
-        </span>
+          <span v-if="dueLabel && !displayCompleted" :class="['due-badge', dueStatus]">{{ dueLabel }}</span>
+          <span v-for="tag in task.tags" :key="tag" class="tag-badge">{{ tag }}</span>
+        </div>
       </template>
       <template v-else>
         <input
@@ -150,6 +174,12 @@ const dueLabel = computed(() => {
   cursor: default;
 }
 
+.task-title-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .task-title {
   font-size: 15px;
   color: #333;
@@ -160,11 +190,16 @@ const dueLabel = computed(() => {
 
 .task-title.done { text-decoration: line-through; color: #aaa; }
 
+.icon-star { font-size: 13px; flex-shrink: 0; }
+.icon-daily { font-size: 13px; flex-shrink: 0; }
+.icon-daily.done { opacity: 0.4; }
+
 .task-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 2px;
+  gap: 6px;
+  margin-top: 3px;
+  flex-wrap: wrap;
 }
 
 .task-time {
@@ -182,6 +217,14 @@ const dueLabel = computed(() => {
 .due-badge.overdue { background: #fde8e8; color: #e74c3c; }
 .due-badge.today { background: #fef3e0; color: #e67e22; }
 .due-badge.upcoming { background: #e8f0fe; color: #4a90d9; }
+
+.tag-badge {
+  font-size: 10px;
+  background: #f0f0f0;
+  color: #888;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
 
 .task-edit-input {
   font-size: 15px;

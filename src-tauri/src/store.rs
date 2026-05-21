@@ -9,6 +9,7 @@ pub struct Task {
     pub completed: bool,
     pub created_at: String,
     pub completed_at: Option<String>,
+    pub due_date: Option<String>,  // ISO-8601 date string
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -66,11 +67,13 @@ mod tests {
             completed: false,
             created_at: "2026-05-17T00:00:00+08:00".to_string(),
             completed_at: None,
+            due_date: Some("2026-05-21".to_string()),
         };
         let json = serde_json::to_string(&task).unwrap();
         let parsed: Task = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.title, "测试任务");
         assert!(!parsed.completed);
         assert!(parsed.completed_at.is_none());
+        assert_eq!(parsed.due_date, Some("2026-05-21".to_string()));
     }
 }

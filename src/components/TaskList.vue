@@ -1,16 +1,33 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import type { Task } from '../types';
 import TaskItem from './TaskItem.vue';
 
-defineProps<{
+const props = defineProps<{
   tasks: Task[];
+  dailyCompletionsMap: Record<string, boolean>;
 }>();
 
 const emit = defineEmits<{
   toggle: [id: string];
+  toggleDaily: [id: string, date: string];
   update: [id: string, title: string];
   delete: [id: string];
 }>();
+
+const sortedTasks = computed(() => {
+  const arr = [...props.tasks];
+  arr.sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    if (a.important !== b.important) return a.important ? -1 : 1;
+    if (a.completed !== b.completed) return a.completed ? 1 : -1;
+    return b.created_at.localeCompare(a.created_at);
+  });
+  return arr;
+});
+
+const pinnedTasks = computed(() => sortedTasks.value.filter(t => t.pinned && !t.completed));
+const normalTasks = computed(() => sortedTasks.value.filter(t => !t.pinned || t.completed));
 </script>
 
 <template>
@@ -18,14 +35,32 @@ const emit = defineEmits<{
     <div v-if="tasks.length === 0" class="task-empty">
       暂无任务，添加一个吧
     </div>
-    <TaskItem
-      v-for="task in tasks"
-      :key="task.id"
-      :task="task"
-      @toggle="(id) => emit('toggle', id)"
-      @update="(id, title) => emit('update', id, title)"
-      @delete="(id) => emit('delete', id)"
-    />
+    <template v-else>
+      <div v-if="pinnedTasks.length > 0" class="pinned-section">
+        <div class="pinned-header">📌 已置顶</div>
+        <TaskItem
+          v-for="task in pinnedTasks"
+          :key="task.id"
+          :task="task"
+          :is-daily-completed="dailyCompletionsMap[task.id] ?? false"
+          @toggle="(id) => emit('toggle', id)"
+          @toggle-daily="(id, date) => emit('toggleDaily', id, date)"
+          @update="(id, title) => emit('update', id, title)"
+          @delete="(id) => emit('delete', id)"
+        />
+      </div>
+      <div v-if="pinnedTasks.length > 0 && normalTasks.filter(t => !t.completed).length > 0" class="section-divider"></div>
+      <TaskItem
+        v-for="task in normalTasks"
+        :key="task.id"
+        :task="task"
+        :is-daily-completed="dailyCompletionsMap[task.id] ?? false"
+        @toggle="(id) => emit('toggle', id)"
+        @toggle-daily="(id, date) => emit('toggleDaily', id, date)"
+        @update="(id, title) => emit('update', id, title)"
+        @delete="(id) => emit('delete', id)"
+      />
+    </template>
   </div>
 </template>
 
@@ -42,5 +77,23 @@ const emit = defineEmits<{
   text-align: center;
   color: #bbb;
   font-size: 15px;
+}
+
+.pinned-section {
+  background: #fffdf5;
+}
+
+.pinned-header {
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #b7950b;
+  background: #fef9e7;
+  border-bottom: 1px solid #f0c060;
+}
+
+.section-divider {
+  height: 1px;
+  background: #f0f0f0;
 }
 </style>

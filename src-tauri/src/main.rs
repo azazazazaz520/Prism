@@ -137,6 +137,16 @@ fn delete_tag(state: tauri::State<AppState>, tag: String) -> Result<(), String> 
     store::save_tasks(&store)
 }
 
+#[tauri::command]
+fn get_daily_completions(state: tauri::State<AppState>, date: String) -> Vec<String> {
+    state.store.lock().unwrap()
+        .daily_completions
+        .iter()
+        .filter(|dc| dc.date == date)
+        .map(|dc| dc.task_id.clone())
+        .collect()
+}
+
 fn main() {
     let store = store::load_tasks();
     tauri::Builder::default()
@@ -154,6 +164,7 @@ fn main() {
             get_tasks_by_date,
             get_all_tags,
             delete_tag,
+            get_daily_completions,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -15,7 +15,7 @@ fn get_tasks(state: tauri::State<AppState>) -> Vec<store::Task> {
 }
 
 #[tauri::command]
-fn add_task(state: tauri::State<AppState>, title: String) -> Result<store::Task, String> {
+fn add_task(state: tauri::State<AppState>, title: String, due_date: Option<String>) -> Result<store::Task, String> {
     let mut store = state.store.lock().unwrap();
     let task = store::Task {
         id: uuid::Uuid::new_v4().to_string(),
@@ -23,7 +23,7 @@ fn add_task(state: tauri::State<AppState>, title: String) -> Result<store::Task,
         completed: false,
         created_at: chrono::Utc::now().to_rfc3339(),
         completed_at: None,
-        due_date: None,
+        due_date,
     };
     store.tasks.push(task.clone());
     store::save_tasks(&store)?;
@@ -45,10 +45,11 @@ fn toggle_task(state: tauri::State<AppState>, id: String) -> Result<(), String> 
 }
 
 #[tauri::command]
-fn update_task(state: tauri::State<AppState>, id: String, title: String) -> Result<(), String> {
+fn update_task(state: tauri::State<AppState>, id: String, title: String, due_date: Option<String>) -> Result<(), String> {
     let mut store = state.store.lock().unwrap();
     if let Some(task) = store.tasks.iter_mut().find(|t| t.id == id) {
         task.title = title;
+        task.due_date = due_date;
     }
     store::save_tasks(&store)
 }
@@ -67,6 +68,16 @@ fn clear_completed(state: tauri::State<AppState>) -> Result<(), String> {
     store::save_tasks(&store)
 }
 
+#[tauri::command]
+fn get_tasks_by_date(state: tauri::State<AppState>, date: String) -> Vec<store::Task> {
+    state.store.lock().unwrap()
+        .tasks
+        .iter()
+        .filter(|t| t.due_date.as_deref() == Some(&date))
+        .cloned()
+        .collect()
+}
+
 fn main() {
     let store = store::load_tasks();
     tauri::Builder::default()
@@ -80,6 +91,7 @@ fn main() {
             update_task,
             delete_task,
             clear_completed,
+            get_tasks_by_date,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, nextTick } from 'vue';
+import { ref, nextTick, computed } from 'vue';
 import type { Task } from '../types';
 
 const props = defineProps<{
@@ -33,9 +33,7 @@ function confirmEdit() {
   editing.value = false;
 }
 
-function cancelEdit() {
-  editing.value = false;
-}
+function cancelEdit() { editing.value = false; }
 
 function formatTime(isoString: string): string {
   const date = new Date(isoString);
@@ -44,17 +42,41 @@ function formatTime(isoString: string): string {
   const diffMin = Math.floor(diffMs / 60000);
   const diffHr = Math.floor(diffMs / 3600000);
   const diffDay = Math.floor(diffMs / 86400000);
-
   if (diffMin < 1) return '刚刚';
   if (diffMin < 60) return `${diffMin} 分钟前`;
   if (diffHr < 24) return `${diffHr} 小时前`;
   if (diffDay < 7) return `${diffDay} 天前`;
   return date.toLocaleDateString('zh-CN');
 }
+
+const dueStatus = computed<'overdue' | 'today' | 'upcoming' | null>(() => {
+  if (!props.task.due_date) return null;
+  const today = new Date();
+  const y = today.getFullYear();
+  const m = String(today.getMonth() + 1).padStart(2, '0');
+  const d = String(today.getDate()).padStart(2, '0');
+  const todayStr = `${y}-${m}-${d}`;
+  if (props.task.due_date < todayStr) return 'overdue';
+  if (props.task.due_date === todayStr) return 'today';
+  return 'upcoming';
+});
+
+const dueLabel = computed(() => {
+  if (!props.task.due_date) return '';
+  if (dueStatus.value === 'today') return '今天到期';
+  if (dueStatus.value === 'overdue') return '已过期';
+  return props.task.due_date;
+});
 </script>
 
 <template>
-  <div :class="['task-item', { completed: task.completed, editing: editing }]">
+  <div
+    :class="['task-item', {
+      completed: task.completed,
+      editing: editing,
+      [dueStatus || '']: !task.completed && dueStatus
+    }]"
+  >
     <input
       type="checkbox"
       class="task-checkbox"
@@ -65,7 +87,10 @@ function formatTime(isoString: string): string {
     <div class="task-body" @dblclick="startEdit">
       <template v-if="!editing">
         <span :class="['task-title', { done: task.completed }]">{{ task.title }}</span>
-        <span class="task-time">{{ formatTime(task.created_at) }}</span>
+        <span class="task-meta">
+          <span class="task-time">{{ formatTime(task.created_at) }}</span>
+          <span v-if="dueLabel" :class="['due-badge', dueStatus]">{{ dueLabel }}</span>
+        </span>
       </template>
       <template v-else>
         <input
@@ -97,16 +122,16 @@ function formatTime(isoString: string): string {
   align-items: center;
   padding: 12px 16px;
   border-bottom: 1px solid #f0f0f0;
+  border-left: 3px solid transparent;
   transition: background 0.15s;
 }
 
-.task-item:hover {
-  background: #f8f9fa;
-}
+.task-item:hover { background: #f8f9fa; }
+.task-item.completed { background: #fafafa; }
 
-.task-item.completed {
-  background: #fafafa;
-}
+.task-item.overdue { border-left-color: #e74c3c; }
+.task-item.today { border-left-color: #f39c12; }
+.task-item.upcoming { border-left-color: #4a90d9; }
 
 .task-checkbox {
   width: 18px;
@@ -133,16 +158,30 @@ function formatTime(isoString: string): string {
   white-space: nowrap;
 }
 
-.task-title.done {
-  text-decoration: line-through;
-  color: #aaa;
+.task-title.done { text-decoration: line-through; color: #aaa; }
+
+.task-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
 }
 
 .task-time {
   font-size: 12px;
   color: #999;
-  margin-top: 2px;
 }
+
+.due-badge {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.due-badge.overdue { background: #fde8e8; color: #e74c3c; }
+.due-badge.today { background: #fef3e0; color: #e67e22; }
+.due-badge.upcoming { background: #e8f0fe; color: #4a90d9; }
 
 .task-edit-input {
   font-size: 15px;
@@ -165,7 +204,5 @@ function formatTime(isoString: string): string {
   transition: color 0.15s;
 }
 
-.task-delete-btn:hover {
-  color: #e74c3c;
-}
+.task-delete-btn:hover { color: #e74c3c; }
 </style>

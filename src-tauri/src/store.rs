@@ -9,13 +9,29 @@ pub struct Task {
     pub completed: bool,
     pub created_at: String,
     pub completed_at: Option<String>,
-    pub due_date: Option<String>,  // ISO-8601 date string
+    pub due_date: Option<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub important: bool,
+    #[serde(default)]
+    pub pinned: bool,
+    #[serde(default)]
+    pub is_daily: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DailyCompletion {
+    pub task_id: String,
+    pub date: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TaskStore {
     pub version: u32,
     pub tasks: Vec<Task>,
+    #[serde(default)]
+    pub daily_completions: Vec<DailyCompletion>,
 }
 
 fn get_store_path() -> PathBuf {
@@ -32,10 +48,12 @@ pub fn load_tasks() -> TaskStore {
         Ok(content) => serde_json::from_str(&content).unwrap_or_else(|_| TaskStore {
             version: 1,
             tasks: vec![],
+            daily_completions: vec![],
         }),
         Err(_) => TaskStore {
             version: 1,
             tasks: vec![],
+            daily_completions: vec![],
         },
     }
 }
@@ -55,6 +73,7 @@ mod tests {
         let store = TaskStore {
             version: 1,
             tasks: vec![],
+            daily_completions: vec![],
         };
         assert_eq!(store.tasks.len(), 0);
     }
@@ -68,6 +87,10 @@ mod tests {
             created_at: "2026-05-17T00:00:00+08:00".to_string(),
             completed_at: None,
             due_date: Some("2026-05-21".to_string()),
+            tags: vec![],
+            important: false,
+            pinned: false,
+            is_daily: false,
         };
         let json = serde_json::to_string(&task).unwrap();
         let parsed: Task = serde_json::from_str(&json).unwrap();

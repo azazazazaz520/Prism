@@ -24,6 +24,10 @@ fn add_task(state: tauri::State<AppState>, title: String, due_date: Option<Strin
         created_at: chrono::Utc::now().to_rfc3339(),
         completed_at: None,
         due_date,
+        tags: vec![],
+        important: false,
+        pinned: false,
+        is_daily: false,
     };
     store.tasks.push(task.clone());
     store::save_tasks(&store)?;

@@ -26,12 +26,16 @@ pub struct DailyCompletion {
     pub date: String,
 }
 
+fn default_reminder_minutes() -> u32 { 30 }
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TaskStore {
     pub version: u32,
     pub tasks: Vec<Task>,
     #[serde(default)]
     pub daily_completions: Vec<DailyCompletion>,
+    #[serde(default = "default_reminder_minutes")]
+    pub reminder_minutes: u32,
 }
 
 fn get_store_path() -> PathBuf {
@@ -49,11 +53,13 @@ pub fn load_tasks() -> TaskStore {
             version: 1,
             tasks: vec![],
             daily_completions: vec![],
+            reminder_minutes: 30,
         }),
         Err(_) => TaskStore {
             version: 1,
             tasks: vec![],
             daily_completions: vec![],
+            reminder_minutes: 30,
         },
     }
 }
@@ -74,6 +80,7 @@ mod tests {
             version: 1,
             tasks: vec![],
             daily_completions: vec![],
+            reminder_minutes: 30,
         };
         assert_eq!(store.tasks.len(), 0);
     }

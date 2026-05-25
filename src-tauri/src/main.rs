@@ -2,6 +2,7 @@
 
 use std::sync::Mutex;
 use store::TaskStore;
+use tauri::Manager;
 
 mod store;
 
@@ -147,9 +148,34 @@ fn get_daily_completions(state: tauri::State<AppState>, date: String) -> Vec<Str
         .collect()
 }
 
+#[tauri::command]
+fn show_floating_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(main_win) = app.get_webview_window("main") {
+        main_win.hide().map_err(|e| e.to_string())?;
+    }
+    if let Some(float_win) = app.get_webview_window("floating") {
+        float_win.show().map_err(|e| e.to_string())?;
+        float_win.set_focus().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(float_win) = app.get_webview_window("floating") {
+        float_win.hide().map_err(|e| e.to_string())?;
+    }
+    if let Some(main_win) = app.get_webview_window("main") {
+        main_win.show().map_err(|e| e.to_string())?;
+        main_win.set_focus().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 fn main() {
     let store = store::load_tasks();
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .manage(AppState {
             store: Mutex::new(store),
         })
@@ -165,6 +191,8 @@ fn main() {
             get_all_tags,
             delete_tag,
             get_daily_completions,
+            show_floating_window,
+            show_main_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -150,25 +150,25 @@ fn get_daily_completions(state: tauri::State<AppState>, date: String) -> Vec<Str
 
 #[tauri::command]
 fn show_floating_window(app: tauri::AppHandle) -> Result<(), String> {
+    let float_win = app.get_webview_window("floating")
+        .ok_or("floating window not found")?;
     if let Some(main_win) = app.get_webview_window("main") {
         main_win.hide().map_err(|e| e.to_string())?;
     }
-    if let Some(float_win) = app.get_webview_window("floating") {
-        float_win.show().map_err(|e| e.to_string())?;
-        float_win.set_focus().map_err(|e| e.to_string())?;
-    }
+    float_win.show().map_err(|e| e.to_string())?;
+    float_win.set_focus().map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[tauri::command]
 fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
+    let main_win = app.get_webview_window("main")
+        .ok_or("main window not found")?;
     if let Some(float_win) = app.get_webview_window("floating") {
         float_win.hide().map_err(|e| e.to_string())?;
     }
-    if let Some(main_win) = app.get_webview_window("main") {
-        main_win.show().map_err(|e| e.to_string())?;
-        main_win.set_focus().map_err(|e| e.to_string())?;
-    }
+    main_win.show().map_err(|e| e.to_string())?;
+    main_win.set_focus().map_err(|e| e.to_string())?;
     Ok(())
 }
 

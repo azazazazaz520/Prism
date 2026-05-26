@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, nextTick } from 'vue';
 
 const props = defineProps<{
   tags: string[];
@@ -13,9 +13,17 @@ const emit = defineEmits<{
 
 const showInput = ref(false);
 const newTagName = ref('');
+const tagInputRef = ref<HTMLInputElement | null>(null);
 
 function toggleTag(tag: string) {
   emit('toggleTag', tag);
+}
+
+function openAddTag() {
+  showInput.value = true;
+  nextTick(() => {
+    tagInputRef.value?.focus();
+  });
 }
 
 function handleAddTag() {
@@ -48,7 +56,7 @@ function handleAddTag() {
       <button
         v-if="!showInput"
         class="tag-chip add"
-        @click="showInput = true"
+        @click="openAddTag"
       >
         +
       </button>
@@ -56,6 +64,7 @@ function handleAddTag() {
         v-else
         v-model="newTagName"
         type="text"
+        ref="tagInputRef"
         class="tag-input-inline"
         placeholder="新标签"
         @keydown.enter="handleAddTag"
@@ -111,6 +120,6 @@ function handleAddTag() {
   border: 1px solid #4a90d9;
   border-radius: 12px;
   outline: none;
-  width: 80px;
+  min-width: 80px;
 }
 </style>

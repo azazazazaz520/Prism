@@ -32,12 +32,12 @@ function closeMenu() {
 }
 
 function toggleMenuImportant() {
-  emit('updateMeta', props.task.id, props.task.tags, !props.task.important, props.task.pinned);
+  emit('updateMeta', props.task.id, [...menuTags.value], !props.task.important, props.task.pinned);
   showMenu.value = false;
 }
 
 function toggleMenuPinned() {
-  emit('updateMeta', props.task.id, props.task.tags, props.task.important, !props.task.pinned);
+  emit('updateMeta', props.task.id, [...menuTags.value], props.task.important, !props.task.pinned);
   showMenu.value = false;
 }
 
@@ -452,6 +452,7 @@ const dueLabel = computed(() => {
 
 .menu-tag-input {
   flex: 1;
+  min-width: 0;
   padding: 4px 8px;
   border: 1px solid #e0e0e0;
   border-radius: 4px;

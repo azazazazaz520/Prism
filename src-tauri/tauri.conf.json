@@ -25,6 +25,8 @@
         "height": 360,
         "decorations": false,
         "transparent": true,
+        "shadow": false,
+        "dragDropEnabled": true,
         "alwaysOnTop": true,
         "resizable": false,
         "visible": false,

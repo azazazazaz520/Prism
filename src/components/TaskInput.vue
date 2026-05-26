@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, nextTick } from 'vue';
 import DatePicker from './DatePicker.vue';
 
 const emit = defineEmits<{
@@ -16,6 +16,7 @@ const isDaily = ref(false);
 const tags = ref<string[]>([]);
 const showTagInput = ref(false);
 const newTag = ref('');
+const tagInputRef = ref<HTMLInputElement | null>(null);
 
 function handleSubmit() {
   const trimmed = title.value.trim();
@@ -46,6 +47,15 @@ function addTag() {
     tags.value.push(t);
   }
   newTag.value = '';
+}
+
+function toggleTagInput() {
+  showTagInput.value = !showTagInput.value;
+  if (showTagInput.value) {
+    nextTick(() => {
+      tagInputRef.value?.focus();
+    });
+  }
 }
 
 function removeTag(tag: string) {
@@ -105,7 +115,7 @@ function formatDueDate(d: string): string {
       </button>
       <button
         :class="['qa-btn', { active: showTagInput || tags.length > 0 }]"
-        @click="showTagInput = !showTagInput"
+        @click="toggleTagInput"
       >
         🏷 标签
       </button>
@@ -113,6 +123,7 @@ function formatDueDate(d: string): string {
 
     <div v-if="showTagInput" class="tag-input-row">
       <input
+        ref="tagInputRef"
         v-model="newTag"
         type="text"
         placeholder="输入标签名..."
@@ -194,6 +205,7 @@ function formatDueDate(d: string): string {
   display: flex;
   gap: 6px;
   margin-top: 8px;
+  flex-wrap: wrap;
 }
 
 .qa-btn {

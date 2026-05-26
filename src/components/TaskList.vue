@@ -61,6 +61,7 @@ const normalTasks = computed(() => sortedTasks.value.filter(t => !t.pinned || t.
         @toggle-daily="(id, date) => emit('toggleDaily', id, date)"
         @update="(id, title) => emit('update', id, title)"
         @delete="(id) => emit('delete', id)"
+        @update-meta="(id, tags, important, pinned) => emit('updateMeta', id, tags, important, pinned)"
       />
     </template>
   </div>
@@ -70,7 +71,6 @@ const normalTasks = computed(() => sortedTasks.value.filter(t => !t.pinned || t.
 .task-list {
   background: white;
   border-radius: 10px;
-  overflow: hidden;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 

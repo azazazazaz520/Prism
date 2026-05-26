@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { Task } from '../types';
 
 const tasks = ref<Task[]>([]);
@@ -101,25 +102,70 @@ async function exitFloating() {
 }
 
 onMounted(async () => {
+  document.body.style.margin = '0';
+  document.body.style.padding = '0';
+  document.body.style.background = 'transparent';
+  document.body.style.overflow = 'hidden';
   await loadTasks();
   resetTimer();
   const interval = setInterval(loadTasks, 30000);
-  onUnmounted(() => clearInterval(interval));
+  const appWindow = getCurrentWindow();
+  const unlistenFocus = await appWindow.listen('tauri://focus', () => {
+    loadTasks();
+  });
+  onUnmounted(() => {
+    clearInterval(interval);
+    unlistenFocus();
+  });
 });
 
 onUnmounted(() => {
   if (timer) clearInterval(timer);
 });
+
+// Grab-to-scroll
+const scrollContainer = ref<HTMLElement | null>(null);
+const isDragging = ref(false);
+let dragStartY = 0;
+let scrollStartY = 0;
+
+function onPointerDown(e: PointerEvent) {
+  const target = e.target as HTMLElement;
+  if (target.closest('button, input, select, .topbar, .panel')) return;
+  isDragging.value = true;
+  dragStartY = e.clientY;
+  if (scrollContainer.value) {
+    scrollStartY = scrollContainer.value.scrollTop;
+  }
+}
+
+function onPointerMove(e: PointerEvent) {
+  if (!isDragging.value) return;
+  const deltaY = dragStartY - e.clientY;
+  if (scrollContainer.value) {
+    scrollContainer.value.scrollTop = scrollStartY + deltaY;
+  }
+}
+
+function onPointerUp() {
+  isDragging.value = false;
+}
 </script>
 
 <template>
   <div
+    ref="scrollContainer"
     class="floating-window"
+    :class="{ dragging: isDragging }"
     :style="{ background: `rgba(30, 30, 40, ${opacity})` }"
+    @pointerdown="onPointerDown"
+    @pointermove="onPointerMove"
+    @pointerup="onPointerUp"
+    @pointerleave="onPointerUp"
     @mouseenter="onMouseEnter"
     @mouseleave="onMouseLeave"
   >
-    <div class="topbar">
+    <div class="topbar" data-tauri-drag-region>
       <div class="topbar-left">
         <span>🎯 未完成:</span>
         <span class="count">{{ incompleteTasks.length }}</span>
@@ -211,13 +257,19 @@ onUnmounted(() => {
 
 .floating-window {
   width: 320px;
-  min-height: 180px;
+  min-height: 100vh;
   border-radius: 14px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08);
-  overflow-y: auto;
+  overflow-y: scroll;
+  scrollbar-width: none;
   user-select: none;
+  cursor: grab;
   font-family: -apple-system, BlinkMacSystemFont, "Microsoft YaHei", sans-serif;
 }
+
+.floating-window::-webkit-scrollbar { display: none; }
+
+.floating-window.dragging { cursor: grabbing; }
 
 .topbar {
   display: flex;
@@ -226,6 +278,8 @@ onUnmounted(() => {
   padding: 10px 14px;
   background: rgba(255,255,255,0.05);
   border-bottom: 1px solid rgba(255,255,255,0.06);
+  cursor: move;
+  -webkit-app-region: drag;
 }
 
 .topbar-left {
@@ -253,6 +307,7 @@ onUnmounted(() => {
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s;
+  -webkit-app-region: no-drag;
 }
 
 .topbar-btn:hover { background: rgba(255,255,255,0.15); color: #ddd; }

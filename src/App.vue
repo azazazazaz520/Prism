@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { Task } from './types';
 import TaskInput from './components/TaskInput.vue';
 import TaskList from './components/TaskList.vue';
@@ -15,10 +16,21 @@ const allTags = ref<string[]>([]);
 const dailyCompletedIds = ref<string[]>([]);
 
 onMounted(async () => {
+  await loadAll();
+  const appWindow = getCurrentWindow();
+  const unlistenFocus = await appWindow.listen('tauri://focus', () => {
+    loadAll();
+  });
+  onUnmounted(() => {
+    unlistenFocus();
+  });
+});
+
+async function loadAll() {
   tasks.value = await invoke<Task[]>('get_tasks');
   allTags.value = await invoke<string[]>('get_all_tags');
   await refreshDailyCompletions();
-});
+}
 
 function todayStr(): string {
   const today = new Date();

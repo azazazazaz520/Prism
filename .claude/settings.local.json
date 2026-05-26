@@ -20,7 +20,26 @@
       "Bash(convert --version)",
       "Bash(cargo test *)",
       "Bash(npx vue-tsc *)",
-      "Bash(npx tauri *)"
+      "Bash(npx tauri *)",
+      "Bash(git *)",
+      "Bash(cargo build *)",
+      "Bash(npx vite *)",
+      "Bash(start *)",
+      "Bash(cd /tmp)",
+      "Read(//c/Users/Lenovo/.cargo/registry/src/**)",
+      "Bash(cargo doc *)",
+      "Bash(Get-ChildItem -Recurse -Path \"C:\\\\Users\\\\Lenovo\\\\Desktop\\\\TODO\\\\src-tauri\\\\target\\\\doc\\\\tauri_plugin_notification\" -Name)",
+      "Bash(Select-Object -First 40)",
+      "Bash(Get-Content *)",
+      "Bash(npm run *)",
+      "Bash(Select-Object -First 30)",
+      "PowerShell(npm run *)",
+      "Bash(Select-Object -First 50)",
+      "PowerShell(npx vue-tsc --noEmit 2>&1 | Select-Object -First 50)",
+      "Bash(echo \"EXIT_CODE=$?\")",
+      "Bash(Set-Location \"C:\\\\Users\\\\Lenovo\\\\Desktop\\\\TODO\\\\src-tauri\")",
+      "Bash(Select-Object -Index 105)",
+      "PowerShell($line = \\(Get-Content \"C:\\\\Users\\\\Lenovo\\\\Desktop\\\\TODO\\\\src\\\\components\\\\FloatingWindow.vue\"\\)[105]; $bytes = [System.Text.Encoding]::UTF8.GetBytes\\($line\\); Write-Host \\(\"Line: [\" + $line + \"]\"\\); Write-Host \\(\"First 10 bytes: \" + [string]::Join\\(\",\", $bytes[0..9]\\)\\))"
     ]
   }
 }

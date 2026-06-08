@@ -1,6 +1,7 @@
 // 仅在 Release 模式下隐藏 Windows 控制台窗口
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use serde::Deserialize;
 use std::collections::HashSet;
 use std::sync::Mutex;
 use store::TaskStore;
@@ -15,6 +16,19 @@ struct AppState {
     store: Mutex<TaskStore>,
     /// 当天已通知的任务 ID 集合，避免重复提醒
     notified_today: Mutex<HashSet<String>>,
+}
+
+/// 更新任务的请求参数（聚合为 struct 避免参数过多）
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateTaskArgs {
+    id: String,
+    title: String,
+    due_date: Option<String>,
+    tags: Vec<String>,
+    important: bool,
+    pinned: bool,
+    is_daily: bool,
 }
 
 // ── 任务 CRUD 命令 ──────────────────────────────
@@ -93,24 +107,15 @@ fn toggle_daily_task(
 
 /// 更新任务的所有字段
 #[tauri::command]
-fn update_task(
-    state: tauri::State<AppState>,
-    id: String,
-    title: String,
-    due_date: Option<String>,
-    tags: Vec<String>,
-    important: bool,
-    pinned: bool,
-    is_daily: bool,
-) -> Result<(), String> {
+fn update_task(state: tauri::State<AppState>, args: UpdateTaskArgs) -> Result<(), String> {
     let mut store = state.store.lock().unwrap();
-    if let Some(task) = store.tasks.iter_mut().find(|t| t.id == id) {
-        task.title = title;
-        task.due_date = due_date;
-        task.tags = tags;
-        task.important = important;
-        task.pinned = pinned;
-        task.is_daily = is_daily;
+    if let Some(task) = store.tasks.iter_mut().find(|t| t.id == args.id) {
+        task.title = args.title;
+        task.due_date = args.due_date;
+        task.tags = args.tags;
+        task.important = args.important;
+        task.pinned = args.pinned;
+        task.is_daily = args.is_daily;
     }
     store::save_tasks(&store)
 }

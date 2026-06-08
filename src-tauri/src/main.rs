@@ -1,3 +1,4 @@
+// 仅在 Release 模式下隐藏 Windows 控制台窗口
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::collections::HashSet;
@@ -8,16 +9,23 @@ use tauri_plugin_notification::NotificationExt;
 
 mod store;
 
+/// 应用全局状态，由 Tauri 托管，可在所有命令中访问
 struct AppState {
+    /// 任务数据存储（受 Mutex 保护，确保线程安全）
     store: Mutex<TaskStore>,
+    /// 当天已通知的任务 ID 集合，避免重复提醒
     notified_today: Mutex<HashSet<String>>,
 }
 
+// ── 任务 CRUD 命令 ──────────────────────────────
+
+/// 获取所有任务列表
 #[tauri::command]
 fn get_tasks(state: tauri::State<AppState>) -> Vec<store::Task> {
     state.store.lock().unwrap().tasks.clone()
 }
 
+/// 新增任务
 #[tauri::command]
 fn add_task(
     state: tauri::State<AppState>,
@@ -46,6 +54,7 @@ fn add_task(
     Ok(task)
 }
 
+/// 切换任务完成状态（自动记录完成/取消时间）
 #[tauri::command]
 fn toggle_task(state: tauri::State<AppState>, id: String) -> Result<(), String> {
     let mut store = state.store.lock().unwrap();
@@ -60,6 +69,7 @@ fn toggle_task(state: tauri::State<AppState>, id: String) -> Result<(), String> 
     store::save_tasks(&store)
 }
 
+/// 切换每日任务的完成状态（按日期记录，支持跨天追踪）
 #[tauri::command]
 fn toggle_daily_task(state: tauri::State<AppState>, id: String, date: String) -> Result<(), String> {
     let mut store = state.store.lock().unwrap();
@@ -74,6 +84,7 @@ fn toggle_daily_task(state: tauri::State<AppState>, id: String, date: String) ->
     store::save_tasks(&store)
 }
 
+/// 更新任务的所有字段
 #[tauri::command]
 fn update_task(
     state: tauri::State<AppState>,
@@ -97,6 +108,7 @@ fn update_task(
     store::save_tasks(&store)
 }
 
+/// 删除指定任务
 #[tauri::command]
 fn delete_task(state: tauri::State<AppState>, id: String) -> Result<(), String> {
     let mut store = state.store.lock().unwrap();
@@ -104,6 +116,7 @@ fn delete_task(state: tauri::State<AppState>, id: String) -> Result<(), String> 
     store::save_tasks(&store)
 }
 
+/// 一键清除所有已完成任务
 #[tauri::command]
 fn clear_completed(state: tauri::State<AppState>) -> Result<(), String> {
     let mut store = state.store.lock().unwrap();
@@ -111,6 +124,7 @@ fn clear_completed(state: tauri::State<AppState>) -> Result<(), String> {
     store::save_tasks(&store)
 }
 
+/// 按截止日期筛选任务
 #[tauri::command]
 fn get_tasks_by_date(state: tauri::State<AppState>, date: String) -> Vec<store::Task> {
     state.store.lock().unwrap()
@@ -121,6 +135,7 @@ fn get_tasks_by_date(state: tauri::State<AppState>, date: String) -> Vec<store::
         .collect()
 }
 
+/// 获取所有标签（去重排序）
 #[tauri::command]
 fn get_all_tags(state: tauri::State<AppState>) -> Vec<String> {
     let store = state.store.lock().unwrap();
@@ -132,6 +147,7 @@ fn get_all_tags(state: tauri::State<AppState>) -> Vec<String> {
     tags
 }
 
+/// 删除指定标签（从所有任务中移除该标签）
 #[tauri::command]
 fn delete_tag(state: tauri::State<AppState>, tag: String) -> Result<(), String> {
     let mut store = state.store.lock().unwrap();
@@ -141,6 +157,7 @@ fn delete_tag(state: tauri::State<AppState>, tag: String) -> Result<(), String> 
     store::save_tasks(&store)
 }
 
+/// 获取指定日期已完成的每日任务 ID 列表
 #[tauri::command]
 fn get_daily_completions(state: tauri::State<AppState>, date: String) -> Vec<String> {
     state.store.lock().unwrap()
@@ -151,6 +168,9 @@ fn get_daily_completions(state: tauri::State<AppState>, date: String) -> Vec<Str
         .collect()
 }
 
+// ── 窗口管理命令 ──────────────────────────────
+
+/// 切换到悬浮小窗模式（隐藏主窗口）
 #[tauri::command]
 fn show_floating_window(app: tauri::AppHandle) -> Result<(), String> {
     let float_win = app.get_webview_window("floating")
@@ -163,6 +183,7 @@ fn show_floating_window(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// 切换回主窗口模式（隐藏悬浮窗）
 #[tauri::command]
 fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
     let main_win = app.get_webview_window("main")
@@ -175,6 +196,9 @@ fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+// ── 提醒设置命令 ──────────────────────────────
+
+/// 设置任务到期提醒的提前分钟数（0 表示关闭提醒）
 #[tauri::command]
 fn set_reminder_minutes(state: tauri::State<AppState>, minutes: u32) -> Result<(), String> {
     let mut store = state.store.lock().unwrap();
@@ -182,11 +206,13 @@ fn set_reminder_minutes(state: tauri::State<AppState>, minutes: u32) -> Result<(
     store::save_tasks(&store)
 }
 
+/// 获取当前提醒设置（分钟数）
 #[tauri::command]
 fn get_reminder_minutes(state: tauri::State<AppState>) -> u32 {
     state.store.lock().unwrap().reminder_minutes
 }
 
+/// 应用入口：初始化存储、注册命令、启动后台提醒线程
 fn main() {
     let store = store::load_tasks();
     tauri::Builder::default()
@@ -195,6 +221,7 @@ fn main() {
             store: Mutex::new(store),
             notified_today: Mutex::new(HashSet::new()),
         })
+        // 注册所有前端可调用的命令
         .invoke_handler(tauri::generate_handler![
             get_tasks,
             add_task,
@@ -214,6 +241,7 @@ fn main() {
         ])
         .setup(|app| {
             let handle = app.handle().clone();
+            // 后台线程：每分钟检查一次到期任务并推送系统通知
             std::thread::spawn(move || {
                 loop {
                     std::thread::sleep(std::time::Duration::from_secs(60));
@@ -224,9 +252,11 @@ fn main() {
                         let state = handle.state::<AppState>();
                         let store = state.store.lock().unwrap();
                         reminder = store.reminder_minutes;
+                        // 提醒已关闭，跳过本轮检查
                         if reminder == 0 {
                             continue;
                         }
+                        // 快照当前未完成且有截止日期的任务（避免长时间持有锁）
                         tasks_snapshot = store
                             .tasks
                             .iter()
@@ -238,7 +268,7 @@ fn main() {
                     let local_now = chrono::Local::now();
                     let today = local_now.format("%Y-%m-%d").to_string();
 
-                    // Reset notified set at date change
+                    // 日期变更时重置已通知集合
                     {
                         let state = handle.state::<AppState>();
                         let mut notified = state.notified_today.lock().unwrap();
@@ -255,7 +285,7 @@ fn main() {
                             Some(d) => d,
                             None => continue,
                         };
-                        // Use local timezone for due date end-of-day, not hardcoded UTC
+                        // 使用本地时区构建截止日 23:59:59，而非硬编码 UTC
                         let due_str = format!("{}T23:59:59{}", due_date, local_offset);
                         let due_time = match chrono::DateTime::parse_from_rfc3339(&due_str) {
                             Ok(t) => t,
@@ -263,9 +293,11 @@ fn main() {
                         };
                         let diff_secs = due_time.timestamp() - local_now.timestamp();
                         let diff_min = diff_secs / 60;
+                        // 仅在距离截止时间还有剩余分钟数且小于等于提醒阈值时通知
                         if diff_min > 0 && diff_min <= reminder as i64 {
                             let state = handle.state::<AppState>();
                             let mut notified = state.notified_today.lock().unwrap();
+                            // 当天已通知过的任务不再重复提醒
                             if !notified.contains(task_id) {
                                 notified.insert(task_id.clone());
                                 drop(notified);

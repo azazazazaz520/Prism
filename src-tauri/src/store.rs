@@ -26,7 +26,9 @@ pub struct DailyCompletion {
     pub date: String,
 }
 
-fn default_reminder_minutes() -> u32 { 30 }
+fn default_reminder_minutes() -> u32 {
+    30
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TaskStore {

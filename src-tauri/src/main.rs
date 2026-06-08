@@ -71,15 +71,22 @@ fn toggle_task(state: tauri::State<AppState>, id: String) -> Result<(), String> 
 
 /// 切换每日任务的完成状态（按日期记录，支持跨天追踪）
 #[tauri::command]
-fn toggle_daily_task(state: tauri::State<AppState>, id: String, date: String) -> Result<(), String> {
+fn toggle_daily_task(
+    state: tauri::State<AppState>,
+    id: String,
+    date: String,
+) -> Result<(), String> {
     let mut store = state.store.lock().unwrap();
-    if let Some(pos) = store.daily_completions.iter().position(|dc| dc.task_id == id && dc.date == date) {
+    if let Some(pos) = store
+        .daily_completions
+        .iter()
+        .position(|dc| dc.task_id == id && dc.date == date)
+    {
         store.daily_completions.remove(pos);
     } else {
-        store.daily_completions.push(store::DailyCompletion {
-            task_id: id,
-            date,
-        });
+        store
+            .daily_completions
+            .push(store::DailyCompletion { task_id: id, date });
     }
     store::save_tasks(&store)
 }
@@ -127,7 +134,10 @@ fn clear_completed(state: tauri::State<AppState>) -> Result<(), String> {
 /// 按截止日期筛选任务
 #[tauri::command]
 fn get_tasks_by_date(state: tauri::State<AppState>, date: String) -> Vec<store::Task> {
-    state.store.lock().unwrap()
+    state
+        .store
+        .lock()
+        .unwrap()
         .tasks
         .iter()
         .filter(|t| t.due_date.as_deref() == Some(&date))
@@ -139,9 +149,7 @@ fn get_tasks_by_date(state: tauri::State<AppState>, date: String) -> Vec<store::
 #[tauri::command]
 fn get_all_tags(state: tauri::State<AppState>) -> Vec<String> {
     let store = state.store.lock().unwrap();
-    let mut tags: Vec<String> = store.tasks.iter()
-        .flat_map(|t| t.tags.clone())
-        .collect();
+    let mut tags: Vec<String> = store.tasks.iter().flat_map(|t| t.tags.clone()).collect();
     tags.sort();
     tags.dedup();
     tags
@@ -160,7 +168,10 @@ fn delete_tag(state: tauri::State<AppState>, tag: String) -> Result<(), String> 
 /// 获取指定日期已完成的每日任务 ID 列表
 #[tauri::command]
 fn get_daily_completions(state: tauri::State<AppState>, date: String) -> Vec<String> {
-    state.store.lock().unwrap()
+    state
+        .store
+        .lock()
+        .unwrap()
         .daily_completions
         .iter()
         .filter(|dc| dc.date == date)
@@ -173,7 +184,8 @@ fn get_daily_completions(state: tauri::State<AppState>, date: String) -> Vec<Str
 /// 切换到悬浮小窗模式（隐藏主窗口）
 #[tauri::command]
 fn show_floating_window(app: tauri::AppHandle) -> Result<(), String> {
-    let float_win = app.get_webview_window("floating")
+    let float_win = app
+        .get_webview_window("floating")
         .ok_or("floating window not found")?;
     if let Some(main_win) = app.get_webview_window("main") {
         main_win.hide().map_err(|e| e.to_string())?;
@@ -186,7 +198,8 @@ fn show_floating_window(app: tauri::AppHandle) -> Result<(), String> {
 /// 切换回主窗口模式（隐藏悬浮窗）
 #[tauri::command]
 fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
-    let main_win = app.get_webview_window("main")
+    let main_win = app
+        .get_webview_window("main")
         .ok_or("main window not found")?;
     if let Some(float_win) = app.get_webview_window("floating") {
         float_win.hide().map_err(|e| e.to_string())?;
@@ -306,10 +319,7 @@ fn main() {
                                     .notification()
                                     .builder()
                                     .title("⏰ 任务即将到期")
-                                    .body(format!(
-                                        "\"{}\" 将在 {} 分钟后到期",
-                                        title, minutes_left
-                                    ))
+                                    .body(format!("\"{}\" 将在 {} 分钟后到期", title, minutes_left))
                                     .show();
                             }
                         }

@@ -113,12 +113,14 @@ async function handleAdd(
   is_daily: boolean,
 ) {
   const task = await invoke<Task>('add_task', {
-    title,
-    dueDate: due_date,
-    tags,
-    important,
-    pinned,
-    isDaily: is_daily,
+    args: {
+      title,
+      dueDate: due_date,
+      tags,
+      important,
+      pinned,
+      isDaily: is_daily,
+    },
   });
   tasks.value.push(task);
   if (tags.length > 0) {
@@ -192,13 +194,15 @@ async function handleDecompose(parentId: string) {
     const subtasks = await invoke<SubTask[]>('ai_decompose', { taskId: parentId });
     for (const sub of subtasks) {
       const task = await invoke<Task>('add_task', {
-        title: sub.title,
-        dueDate: null,
-        tags: [],
-        important: false,
-        pinned: false,
-        isDaily: false,
-        parentId,
+        args: {
+          title: sub.title,
+          dueDate: null,
+          tags: [],
+          important: false,
+          pinned: false,
+          isDaily: false,
+          parentId,
+        },
       });
       tasks.value.push(task);
     }

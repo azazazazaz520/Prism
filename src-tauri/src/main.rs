@@ -32,6 +32,19 @@ struct UpdateTaskArgs {
     is_daily: bool,
 }
 
+/// 新增任务的请求参数（聚合为 struct 避免参数过多）
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AddTaskArgs {
+    title: String,
+    due_date: Option<String>,
+    tags: Option<Vec<String>>,
+    important: Option<bool>,
+    pinned: Option<bool>,
+    is_daily: Option<bool>,
+    parent_id: Option<String>,
+}
+
 // ── 任务 CRUD 命令 ──────────────────────────────
 
 /// 获取所有任务列表
@@ -42,29 +55,20 @@ fn get_tasks(state: tauri::State<AppState>) -> Vec<store::Task> {
 
 /// 新增任务
 #[tauri::command]
-fn add_task(
-    state: tauri::State<AppState>,
-    title: String,
-    due_date: Option<String>,
-    tags: Option<Vec<String>>,
-    important: Option<bool>,
-    pinned: Option<bool>,
-    is_daily: Option<bool>,
-    parent_id: Option<String>,
-) -> Result<store::Task, String> {
+fn add_task(state: tauri::State<AppState>, args: AddTaskArgs) -> Result<store::Task, String> {
     let mut store = state.store.lock().unwrap();
     let task = store::Task {
         id: uuid::Uuid::new_v4().to_string(),
-        title,
+        title: args.title,
         completed: false,
         created_at: chrono::Utc::now().to_rfc3339(),
         completed_at: None,
-        due_date,
-        tags: tags.unwrap_or_default(),
-        important: important.unwrap_or(false),
-        pinned: pinned.unwrap_or(false),
-        is_daily: is_daily.unwrap_or(false),
-        parent_id,
+        due_date: args.due_date,
+        tags: args.tags.unwrap_or_default(),
+        important: args.important.unwrap_or(false),
+        pinned: args.pinned.unwrap_or(false),
+        is_daily: args.is_daily.unwrap_or(false),
+        parent_id: args.parent_id,
     };
     store.tasks.push(task.clone());
     store::save_tasks(&store)?;
@@ -319,7 +323,7 @@ async fn ai_overdue_suggest(
         let overdue: Vec<store::Task> = store
             .tasks
             .iter()
-            .filter(|t| !t.completed && t.due_date.as_deref().map_or(false, |d| d < today.as_str()))
+            .filter(|t| !t.completed && t.due_date.as_deref().is_some_and(|d| d < today.as_str()))
             .cloned()
             .collect();
         (settings, overdue)

@@ -33,6 +33,31 @@ export interface AiSettings {
   model: string;
 }
 
+/** AI 供应商 */
+export interface Vendor {
+  id: string;
+  name: string;
+  provider: string;
+  api_key: string;
+  base_url: string;
+  api_path: string;
+  model: string;
+  enabled: boolean;
+  is_default: boolean;
+}
+
+/** 供应商预设 */
+export interface VendorPreset {
+  provider: string;
+  name: string;
+  base_url: string;
+  api_path: string;
+  model: string;
+}
+
+/** 设置页子模块 */
+export type SettingsSubModule = 'preferences' | 'vendors' | 'models';
+
 /** AI 自然语言解析后的结构化任务 */
 export interface ParsedTask {
   title: string;

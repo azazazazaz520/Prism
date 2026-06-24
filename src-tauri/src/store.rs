@@ -55,6 +55,29 @@ pub struct AiSettings {
     pub model: String,
 }
 
+/// AI 供应商（支持OpenAI等）
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Vendor {
+    pub id: String,
+    /// 显示名称
+    pub name: String,
+    /// 供应商类型
+    pub provider: String,
+    /// API 密钥
+    pub api_key: String,
+    /// API 基础地址
+    pub base_url: String,
+    /// API 路径
+    pub api_path: String,
+    /// 模型名称
+    pub model: String,
+    /// 是否启用
+    pub enabled: bool,
+    /// 是否为默认供应商
+    #[serde(default)]
+    pub is_default: bool,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TaskStore {
     pub version: u32,
@@ -63,9 +86,15 @@ pub struct TaskStore {
     pub daily_completions: Vec<DailyCompletion>,
     #[serde(default = "default_reminder_minutes")]
     pub reminder_minutes: u32,
-    /// AI 服务配置
+    /// AI 服务配置（兼容旧版，新逻辑优先用 vendors）
     #[serde(default = "default_ai_settings")]
     pub ai_settings: AiSettings,
+    /// AI 供应商列表
+    #[serde(default)]
+    pub vendors: Vec<Vendor>,
+    /// 当前激活的供应商 ID（None 表示用 ai_settings 或第一个启用的供应商）
+    #[serde(default)]
+    pub active_vendor_id: Option<String>,
 }
 
 fn get_store_path() -> PathBuf {
@@ -85,6 +114,8 @@ pub fn load_tasks() -> TaskStore {
             daily_completions: vec![],
             reminder_minutes: 30,
             ai_settings: default_ai_settings(),
+            vendors: vec![],
+            active_vendor_id: None,
         }),
         Err(_) => TaskStore {
             version: 1,
@@ -92,6 +123,8 @@ pub fn load_tasks() -> TaskStore {
             daily_completions: vec![],
             reminder_minutes: 30,
             ai_settings: default_ai_settings(),
+            vendors: vec![],
+            active_vendor_id: None,
         },
     }
 }
@@ -114,6 +147,8 @@ mod tests {
             daily_completions: vec![],
             reminder_minutes: 30,
             ai_settings: default_ai_settings(),
+            vendors: vec![],
+            active_vendor_id: None,
         };
         assert_eq!(store.tasks.len(), 0);
     }

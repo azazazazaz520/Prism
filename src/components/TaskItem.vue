@@ -5,6 +5,7 @@ import type { Task } from '../types';
 const props = defineProps<{
   task: Task;
   isDailyCompleted: boolean;
+  aiEnabled?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -13,6 +14,7 @@ const emit = defineEmits<{
   update: [id: string, title: string];
   delete: [id: string];
   updateMeta: [id: string, tags: string[], important: boolean, pinned: boolean];
+  decompose: [id: string];
 }>();
 
 const editing = ref(false);
@@ -180,6 +182,14 @@ const dueLabel = computed(() => {
     </div>
 
     <div v-if="!editing" class="task-actions">
+      <button
+        v-if="props.aiEnabled"
+        class="task-decompose-btn"
+        title="AI 拆解为子任务"
+        @click.stop="emit('decompose', task.id)"
+      >
+        🧩
+      </button>
       <div class="menu-wrapper">
         <button
           class="task-menu-btn"
@@ -355,6 +365,19 @@ const dueLabel = computed(() => {
 }
 
 .task-menu-btn:hover { color: #666; }
+
+.task-decompose-btn {
+  background: none;
+  border: none;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+
+.task-decompose-btn:hover { opacity: 1; }
 
 .task-menu {
   position: absolute;

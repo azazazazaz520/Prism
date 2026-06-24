@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { ref, nextTick } from 'vue';
+import { invoke } from '@tauri-apps/api/core';
+import type { ParsedTask } from '../types';
 import DatePicker from './DatePicker.vue';
+
+const props = defineProps<{
+  aiEnabled?: boolean;
+}>();
 
 const emit = defineEmits<{
   add: [title: string, due_date: string | null, tags: string[], important: boolean, pinned: boolean, is_daily: boolean];
@@ -18,6 +24,35 @@ const showTagInput = ref(false);
 const newTag = ref('');
 const tagInputRef = ref<HTMLInputElement | null>(null);
 
+// ── AI 解析状态 ──────────────────────────────
+/** 是否正在 AI 解析中 */
+const aiParsing = ref(false);
+/** AI 解析后的预览结果 */
+const aiPreview = ref<ParsedTask | null>(null);
+
+/** AI 自然语言解析 */
+async function handleAiParse() {
+  const trimmed = title.value.trim();
+  if (!trimmed) return;
+  aiParsing.value = true;
+  try {
+    const parsed = await invoke<ParsedTask>('ai_parse_input', { text: trimmed });
+    aiPreview.value = parsed;
+    // 自动填充到快捷开关
+    if (parsed.due_date) dueDate.value = parsed.due_date;
+    if (parsed.tags.length > 0) tags.value = parsed.tags;
+    important.value = parsed.important;
+    pinned.value = parsed.pinned;
+    isDaily.value = parsed.is_daily;
+    title.value = parsed.title;
+  } catch (e) {
+    showError.value = true;
+    setTimeout(() => { showError.value = false; }, 2000);
+  } finally {
+    aiParsing.value = false;
+  }
+}
+
 function handleSubmit() {
   const trimmed = title.value.trim();
   if (!trimmed) {
@@ -34,6 +69,7 @@ function handleSubmit() {
   isDaily.value = false;
   tags.value = [];
   showError.value = false;
+  aiPreview.value = null;
 }
 
 function onDateSelect(date: string | null) {
@@ -91,6 +127,15 @@ function formatDueDate(d: string): string {
           @select="onDateSelect"
         />
       </div>
+      <button
+        v-if="props.aiEnabled"
+        :class="['ai-btn', { parsing: aiParsing }]"
+        :disabled="aiParsing"
+        title="AI 解析自然语言"
+        @click="handleAiParse"
+      >
+        {{ aiParsing ? '…' : '✨' }}
+      </button>
       <button class="task-input-btn" @click="handleSubmit">添加</button>
     </div>
 
@@ -200,6 +245,20 @@ function formatDueDate(d: string): string {
 }
 
 .task-input-btn:hover { background: #555; }
+
+.ai-btn {
+  padding: 7px 8px;
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  transition: all 0.2s;
+}
+
+.ai-btn:hover { border-color: #4a90d9; background: #f0f6ff; }
+.ai-btn.parsing { opacity: 0.5; cursor: wait; }
 
 .quick-actions {
   display: flex;

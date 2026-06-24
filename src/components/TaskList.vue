@@ -6,6 +6,7 @@ import TaskItem from './TaskItem.vue';
 const props = defineProps<{
   tasks: Task[];
   dailyCompletionsMap: Record<string, boolean>;
+  aiEnabled?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -14,6 +15,7 @@ const emit = defineEmits<{
   update: [id: string, title: string];
   delete: [id: string];
   updateMeta: [id: string, tags: string[], important: boolean, pinned: boolean];
+  decompose: [id: string];
 }>();
 
 const sortedTasks = computed(() => {
@@ -44,11 +46,13 @@ const normalTasks = computed(() => sortedTasks.value.filter(t => !t.pinned || t.
           :key="task.id"
           :task="task"
           :is-daily-completed="dailyCompletionsMap[task.id] ?? false"
+          :ai-enabled="props.aiEnabled"
           @toggle="(id) => emit('toggle', id)"
           @toggle-daily="(id, date) => emit('toggleDaily', id, date)"
           @update="(id, title) => emit('update', id, title)"
           @delete="(id) => emit('delete', id)"
           @update-meta="(id, tags, important, pinned) => emit('updateMeta', id, tags, important, pinned)"
+          @decompose="(id) => emit('decompose', id)"
         />
       </div>
       <div v-if="pinnedTasks.length > 0 && normalTasks.filter(t => !t.completed).length > 0" class="section-divider"></div>
@@ -57,11 +61,13 @@ const normalTasks = computed(() => sortedTasks.value.filter(t => !t.pinned || t.
         :key="task.id"
         :task="task"
         :is-daily-completed="dailyCompletionsMap[task.id] ?? false"
+        :ai-enabled="props.aiEnabled"
         @toggle="(id) => emit('toggle', id)"
         @toggle-daily="(id, date) => emit('toggleDaily', id, date)"
         @update="(id, title) => emit('update', id, title)"
         @delete="(id) => emit('delete', id)"
         @update-meta="(id, tags, important, pinned) => emit('updateMeta', id, tags, important, pinned)"
+        @decompose="(id) => emit('decompose', id)"
       />
     </template>
   </div>

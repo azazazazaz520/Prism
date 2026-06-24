@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import type { Task, AppModule, AiSettings } from './types';
+import type { Task, AppModule, AiSettings, SubTask } from './types';
 import Sidebar from './components/Sidebar.vue';
 import TaskInput from './components/TaskInput.vue';
 import TaskList from './components/TaskList.vue';
@@ -10,6 +10,8 @@ import TaskStats from './components/TaskStats.vue';
 import MiniCalendar from './components/MiniCalendar.vue';
 import TagFilterBar from './components/TagFilterBar.vue';
 import SettingsPanel from './components/SettingsPanel.vue';
+import AiFocusBar from './components/AiFocusBar.vue';
+import AiAssistant from './components/AiAssistant.vue';
 
 // ── 全局状态 ──────────────────────────────
 
@@ -183,6 +185,29 @@ async function handleClearCompleted() {
   tasks.value = tasks.value.filter(t => !t.completed);
 }
 
+// ── AI 操作 ──────────────────────────────
+
+/** AI 拆解任务：调用后端获取子任务，逐个创建并关联父任务 */
+async function handleDecompose(parentId: string) {
+  try {
+    const subtasks = await invoke<SubTask[]>('ai_decompose', { taskId: parentId });
+    for (const sub of subtasks) {
+      const task = await invoke<Task>('add_task', {
+        title: sub.title,
+        dueDate: null,
+        tags: [],
+        important: false,
+        pinned: false,
+        isDaily: false,
+        parentId,
+      });
+      tasks.value.push(task);
+    }
+  } catch (e) {
+    console.error('任务拆解失败:', e);
+  }
+}
+
 // ── 筛选操作 ──────────────────────────────
 
 function handleSelectDate(date: string | null) {
@@ -259,15 +284,21 @@ function handleSwitchModule(module: AppModule) {
 
           <!-- 右侧任务区：输入 + 列表 + 统计 -->
           <div class="task-main">
-            <TaskInput @add="handleAdd" />
+            <AiFocusBar
+              v-if="aiEnabled"
+              :tasks="tasks"
+            />
+            <TaskInput :ai-enabled="aiEnabled" @add="handleAdd" />
             <TaskList
               :tasks="filteredTasks"
               :daily-completions-map="dailyCompletionsMap"
+              :ai-enabled="aiEnabled"
               @toggle="handleToggle"
               @toggle-daily="handleToggleDaily"
               @update="handleUpdate"
               @delete="handleDelete"
               @update-meta="handleUpdateMeta"
+              @decompose="handleDecompose"
             />
             <TaskStats
               :tasks="tasks"
@@ -277,10 +308,9 @@ function handleSwitchModule(module: AppModule) {
         </div>
       </div>
 
-      <!-- AI 助手模块（Phase 4 实现） -->
-      <div v-else-if="activeModule === 'ai-assistant'" class="module-placeholder">
-        <h2 class="module-title">AI 助手</h2>
-        <p class="placeholder-text">AI 助手功能将在 Phase 4 中实现</p>
+      <!-- AI 助手模块（Phase 4） -->
+      <div v-else-if="activeModule === 'ai-assistant'" class="module-ai">
+        <AiAssistant />
       </div>
 
       <!-- 日历视图模块（Phase 5 实现） -->
@@ -316,7 +346,8 @@ function handleSwitchModule(module: AppModule) {
 /* 模块容器通用样式 */
 .module-tasks,
 .module-settings,
-.module-placeholder {
+.module-placeholder,
+.module-ai {
   flex: 1;
   display: flex;
   flex-direction: column;

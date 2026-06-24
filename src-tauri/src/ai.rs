@@ -243,7 +243,10 @@ pub async fn decompose(
     let subtask_hint = if existing_subtasks.is_empty() {
         String::new()
     } else {
-        format!("\n已有的子任务（不要重复）：\n{}", existing_subtasks.join("\n"))
+        format!(
+            "\n已有的子任务（不要重复）：\n{}",
+            existing_subtasks.join("\n")
+        )
     };
 
     let system_prompt = format!(
@@ -325,7 +328,12 @@ pub async fn chat(
         .filter(|t| !t.completed)
         .map(|t| {
             let due = t.due_date.as_deref().unwrap_or("无");
-            format!("- [{}] {} (截止:{})", if t.important { "!" } else { " " }, t.title, due)
+            format!(
+                "- [{}] {} (截止:{})",
+                if t.important { "!" } else { " " },
+                t.title,
+                due
+            )
         })
         .collect();
 

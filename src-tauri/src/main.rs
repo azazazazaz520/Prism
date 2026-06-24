@@ -8,8 +8,8 @@ use store::TaskStore;
 use tauri::Manager;
 use tauri_plugin_notification::NotificationExt;
 
-mod store;
 mod ai;
+mod store;
 
 /// 应用全局状态，由 Tauri 托管，可在所有命令中访问
 struct AppState {
@@ -329,10 +329,7 @@ async fn ai_overdue_suggest(
 
 /// AI 助手自由对话
 #[tauri::command]
-async fn ai_chat(
-    state: tauri::State<'_, AppState>,
-    message: String,
-) -> Result<String, String> {
+async fn ai_chat(state: tauri::State<'_, AppState>, message: String) -> Result<String, String> {
     let (settings, tasks) = {
         let store = state.store.lock().unwrap();
         let settings = store.ai_settings.clone();

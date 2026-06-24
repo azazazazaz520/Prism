@@ -146,13 +146,15 @@ async function handleUpdate(id: string, title: string) {
   const task = tasks.value.find((t) => t.id === id);
   if (!task) return;
   await invoke('update_task', {
-    id,
-    title,
-    dueDate: task.due_date,
-    tags: task.tags,
-    important: task.important,
-    pinned: task.pinned,
-    isDaily: task.is_daily,
+    args: {
+      id,
+      title,
+      dueDate: task.due_date,
+      tags: task.tags,
+      important: task.important,
+      pinned: task.pinned,
+      isDaily: task.is_daily,
+    },
   });
   task.title = title;
 }
@@ -161,13 +163,15 @@ async function handleUpdateMeta(id: string, tags: string[], important: boolean, 
   const task = tasks.value.find((t) => t.id === id);
   if (!task) return;
   await invoke('update_task', {
-    id,
-    title: task.title,
-    dueDate: task.due_date,
-    tags,
-    important,
-    pinned,
-    isDaily: task.is_daily,
+    args: {
+      id,
+      title: task.title,
+      dueDate: task.due_date,
+      tags,
+      important,
+      pinned,
+      isDaily: task.is_daily,
+    },
   });
   task.tags = tags;
   task.important = important;

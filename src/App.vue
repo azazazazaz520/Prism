@@ -365,7 +365,7 @@ function handleSwitchModule(module: AppModule) {
 
 /* 左侧工具栏：日历 + 标签筛选，固定宽度 */
 .task-sidebar {
-  width: 180px;
+  width: 210px;
   flex-shrink: 0;
   overflow-y: auto;
   display: flex;

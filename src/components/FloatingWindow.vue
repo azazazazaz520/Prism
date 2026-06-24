@@ -15,7 +15,7 @@ let timer: ReturnType<typeof setInterval> | null = null;
 let pollInterval: ReturnType<typeof setInterval> | null = null;
 let unlistenFocus: (() => void) | null = null;
 
-const incompleteTasks = computed(() => tasks.value.filter(t => !t.completed));
+const incompleteTasks = computed(() => tasks.value.filter((t) => !t.completed));
 
 const currentTask = computed(() => {
   const list = incompleteTasks.value;
@@ -172,19 +172,14 @@ function onPointerUp() {
         <span>项</span>
       </div>
       <div class="topbar-btns">
-        <button
-          :class="['topbar-btn', { active: showPanel }]"
-          @click="showPanel = !showPanel"
-        >
+        <button :class="['topbar-btn', { active: showPanel }]" @click="showPanel = !showPanel">
           ⚙️ 控制
         </button>
       </div>
     </div>
 
     <div class="card-area">
-      <div v-if="incompleteTasks.length === 0" class="no-tasks">
-        🎉 全部完成！
-      </div>
+      <div v-if="incompleteTasks.length === 0" class="no-tasks">🎉 全部完成！</div>
       <div v-else-if="currentTask" class="card" :key="currentTask.id">
         <div class="card-title">
           <span v-if="currentTask.pinned" class="card-pin">📌</span>
@@ -253,31 +248,41 @@ function onPointerUp() {
 </template>
 
 <style scoped>
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
 
 .floating-window {
   width: 320px;
   min-height: 100vh;
   border-radius: 14px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
   overflow-y: scroll;
   scrollbar-width: none;
   user-select: none;
   cursor: grab;
-  font-family: -apple-system, BlinkMacSystemFont, "Microsoft YaHei", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Microsoft YaHei', sans-serif;
 }
 
-.floating-window::-webkit-scrollbar { display: none; }
+.floating-window::-webkit-scrollbar {
+  display: none;
+}
 
-.floating-window.dragging { cursor: grabbing; }
+.floating-window.dragging {
+  cursor: grabbing;
+}
 
 .topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
-  background: rgba(255,255,255,0.05);
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   cursor: move;
   -webkit-app-region: drag;
 }
@@ -296,10 +301,13 @@ function onPointerUp() {
   font-size: 13px;
 }
 
-.topbar-btns { display: flex; gap: 6px; }
+.topbar-btns {
+  display: flex;
+  gap: 6px;
+}
 
 .topbar-btn {
-  background: rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.08);
   border: none;
   color: #999;
   font-size: 11px;
@@ -310,8 +318,14 @@ function onPointerUp() {
   -webkit-app-region: no-drag;
 }
 
-.topbar-btn:hover { background: rgba(255,255,255,0.15); color: #ddd; }
-.topbar-btn.active { background: rgba(74,144,217,0.2); color: #4a90d9; }
+.topbar-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ddd;
+}
+.topbar-btn.active {
+  background: rgba(74, 144, 217, 0.2);
+  color: #4a90d9;
+}
 
 .card-area {
   padding: 16px;
@@ -323,16 +337,22 @@ function onPointerUp() {
 
 .card {
   width: 100%;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
   padding: 14px 16px;
   animation: fadeIn 0.35s ease;
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .card-title {
@@ -345,7 +365,10 @@ function onPointerUp() {
   gap: 6px;
 }
 
-.card-pin { flex-shrink: 0; font-size: 13px; }
+.card-pin {
+  flex-shrink: 0;
+  font-size: 13px;
+}
 
 .card-meta {
   display: flex;
@@ -356,7 +379,7 @@ function onPointerUp() {
 
 .card-tag {
   font-size: 10px;
-  background: rgba(74,144,217,0.2);
+  background: rgba(74, 144, 217, 0.2);
   color: #6db3f2;
   padding: 2px 7px;
   border-radius: 8px;
@@ -369,13 +392,29 @@ function onPointerUp() {
   font-weight: 500;
 }
 
-.card-due.overdue { background: rgba(231,76,60,0.2); color: #f07070; }
-.card-due.today { background: rgba(243,156,18,0.2); color: #f5b642; }
-.card-due.upcoming { background: rgba(74,144,217,0.15); color: #6db3f2; }
+.card-due.overdue {
+  background: rgba(231, 76, 60, 0.2);
+  color: #f07070;
+}
+.card-due.today {
+  background: rgba(243, 156, 18, 0.2);
+  color: #f5b642;
+}
+.card-due.upcoming {
+  background: rgba(74, 144, 217, 0.15);
+  color: #6db3f2;
+}
 
-.card-important { font-size: 11px; color: #f5b642; }
+.card-important {
+  font-size: 11px;
+  color: #f5b642;
+}
 
-.no-tasks { text-align: center; color: #666; font-size: 14px; }
+.no-tasks {
+  text-align: center;
+  color: #666;
+  font-size: 14px;
+}
 
 .carousel-controls {
   display: flex;
@@ -386,7 +425,7 @@ function onPointerUp() {
 }
 
 .arrow-btn {
-  background: rgba(255,255,255,0.06);
+  background: rgba(255, 255, 255, 0.06);
   border: none;
   color: #888;
   font-size: 16px;
@@ -400,26 +439,32 @@ function onPointerUp() {
   transition: all 0.15s;
 }
 
-.arrow-btn:hover { background: rgba(255,255,255,0.15); color: #ddd; }
+.arrow-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ddd;
+}
 
-.dots { display: flex; gap: 6px; }
+.dots {
+  display: flex;
+  gap: 6px;
+}
 
 .dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.2);
+  background: rgba(255, 255, 255, 0.2);
   transition: all 0.2s;
   cursor: pointer;
 }
 
 .dot.active {
   background: #4a90d9;
-  box-shadow: 0 0 6px rgba(74,144,217,0.5);
+  box-shadow: 0 0 6px rgba(74, 144, 217, 0.5);
 }
 
 .panel {
-  border-top: 1px solid rgba(255,255,255,0.06);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
@@ -434,9 +479,12 @@ function onPointerUp() {
   color: #999;
 }
 
-.panel-row label { flex-shrink: 0; margin-right: 10px; }
+.panel-row label {
+  flex-shrink: 0;
+  margin-right: 10px;
+}
 
-.panel-row input[type="range"] {
+.panel-row input[type='range'] {
   flex: 1;
   accent-color: #4a90d9;
   height: 4px;
@@ -450,8 +498,8 @@ function onPointerUp() {
 }
 
 .panel-row select {
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   color: #ccc;
   padding: 3px 8px;
   border-radius: 6px;
@@ -460,13 +508,16 @@ function onPointerUp() {
   cursor: pointer;
 }
 
-.panel-row select option { background: #2d2d2d; color: #ccc; }
+.panel-row select option {
+  background: #2d2d2d;
+  color: #ccc;
+}
 
 .exit-btn {
   width: 100%;
   margin-top: 4px;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   color: #999;
   padding: 6px;
   border-radius: 8px;
@@ -476,8 +527,8 @@ function onPointerUp() {
 }
 
 .exit-btn:hover {
-  background: rgba(231,76,60,0.15);
+  background: rgba(231, 76, 60, 0.15);
   color: #e74c3c;
-  border-color: rgba(231,76,60,0.3);
+  border-color: rgba(231, 76, 60, 0.3);
 }
 </style>

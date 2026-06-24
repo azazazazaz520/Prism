@@ -29,19 +29,30 @@ const sortedTasks = computed(() => {
   return arr;
 });
 
-const pinnedTasks = computed(() => sortedTasks.value.filter(t => t.pinned && !t.completed));
-const normalTasks = computed(() => sortedTasks.value.filter(t => !t.pinned || t.completed));
+const pinnedTasks = computed(() => sortedTasks.value.filter((t) => t.pinned && !t.completed));
+const normalTasks = computed(() => sortedTasks.value.filter((t) => !t.pinned || t.completed));
 </script>
 
 <template>
   <div class="task-list">
-    <div v-if="tasks.length === 0" class="task-empty">
-      暂无任务，添加一个吧
-    </div>
+    <div v-if="tasks.length === 0" class="task-empty">暂无任务，添加一个吧</div>
     <template v-else>
       <div v-if="pinnedTasks.length > 0" class="pinned-section">
         <div class="pinned-header">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v-7"/><path d="M8 10l4-4 4 4"/><path d="M5 21h14"/></svg>
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M12 17v-7" />
+            <path d="M8 10l4-4 4 4" />
+            <path d="M5 21h14" />
+          </svg>
           已置顶
         </div>
         <TaskItem
@@ -54,11 +65,16 @@ const normalTasks = computed(() => sortedTasks.value.filter(t => !t.pinned || t.
           @toggle-daily="(id, date) => emit('toggleDaily', id, date)"
           @update="(id, title) => emit('update', id, title)"
           @delete="(id) => emit('delete', id)"
-          @update-meta="(id, tags, important, pinned) => emit('updateMeta', id, tags, important, pinned)"
+          @update-meta="
+            (id, tags, important, pinned) => emit('updateMeta', id, tags, important, pinned)
+          "
           @decompose="(id) => emit('decompose', id)"
         />
       </div>
-      <div v-if="pinnedTasks.length > 0 && normalTasks.filter(t => !t.completed).length > 0" class="section-divider"></div>
+      <div
+        v-if="pinnedTasks.length > 0 && normalTasks.filter((t) => !t.completed).length > 0"
+        class="section-divider"
+      ></div>
       <TaskItem
         v-for="task in normalTasks"
         :key="task.id"
@@ -69,7 +85,9 @@ const normalTasks = computed(() => sortedTasks.value.filter(t => !t.pinned || t.
         @toggle-daily="(id, date) => emit('toggleDaily', id, date)"
         @update="(id, title) => emit('update', id, title)"
         @delete="(id) => emit('delete', id)"
-        @update-meta="(id, tags, important, pinned) => emit('updateMeta', id, tags, important, pinned)"
+        @update-meta="
+          (id, tags, important, pinned) => emit('updateMeta', id, tags, important, pinned)
+        "
         @decompose="(id) => emit('decompose', id)"
       />
     </template>

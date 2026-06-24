@@ -2,9 +2,9 @@ name: Rust
 
 on:
   push:
-    branches: ["master"]
+    branches: ['master']
   pull_request:
-    branches: ["master"]
+    branches: ['master']
 
 env:
   CARGO_TERM_COLOR: always
@@ -21,16 +21,40 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: "npm"
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Prettier format check
+        run: npm run format:check
 
       - name: Type check (vue-tsc)
         run: npx vue-tsc --noEmit
 
       - name: Build frontend
         run: npm run build
+
+  # =========================================================================
+  # Commit 信息校验
+  # =========================================================================
+  commitlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint commits
+        run: npx commitlint --from HEAD~1 --to HEAD --verbose
 
   # =========================================================================
   # Rust 后端：格式检查、编译、测试

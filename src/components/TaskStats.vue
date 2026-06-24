@@ -11,17 +11,13 @@ const emit = defineEmits<{
 }>();
 
 const total = computed(() => props.tasks.length);
-const completedCount = computed(() => props.tasks.filter(t => t.completed).length);
+const completedCount = computed(() => props.tasks.filter((t) => t.completed).length);
 </script>
 
 <template>
   <div v-if="total > 0" class="task-stats">
     <span class="stats-text">共 {{ total }} 项 | {{ completedCount }} 项已完成</span>
-    <button
-      v-if="completedCount > 0"
-      class="clear-btn"
-      @click="emit('clearCompleted')"
-    >
+    <button v-if="completedCount > 0" class="clear-btn" @click="emit('clearCompleted')">
       清除已完成
     </button>
   </div>

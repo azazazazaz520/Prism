@@ -29,7 +29,7 @@ async function refresh() {
 
 /** 将 task_id 映射为标题 */
 function taskTitle(taskId: string): string {
-  const task = props.tasks.find(t => t.id === taskId);
+  const task = props.tasks.find((t) => t.id === taskId);
   return task ? task.title : taskId;
 }
 
@@ -40,9 +40,20 @@ const hasItems = computed(() => (suggestion.value?.items?.length ?? 0) > 0);
   <div class="focus-bar" v-if="suggestion || error">
     <!-- 错误提示 -->
     <div v-if="error" class="focus-error" @click="error = ''">
-      <svg class="error-icon" width="14" height="14" viewBox="0 0 24 24" fill="none"
-        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+      <svg
+        class="error-icon"
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="8" x2="12" y2="12" />
+        <line x1="12" y1="16" x2="12.01" y2="16" />
       </svg>
       {{ error }}
     </div>
@@ -50,20 +61,34 @@ const hasItems = computed(() => (suggestion.value?.items?.length ?? 0) > 0);
     <!-- 聚焦建议内容 -->
     <div v-if="suggestion" class="focus-content">
       <div class="focus-header" @click="expanded = !expanded">
-        <svg class="focus-icon" width="14" height="14" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        <svg
+          class="focus-icon"
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" />
         </svg>
         <span class="focus-summary">{{ suggestion.summary }}</span>
-        <button
-          class="focus-refresh"
-          :disabled="loading"
-          title="刷新建议"
-          @click.stop="refresh"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+        <button class="focus-refresh" :disabled="loading" title="刷新建议" @click.stop="refresh">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="23 4 23 10 17 10" />
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
           </svg>
         </button>
       </div>
@@ -82,9 +107,19 @@ const hasItems = computed(() => (suggestion.value?.items?.length ?? 0) > 0);
   <div v-else class="focus-trigger" @click="refresh">
     <span v-if="loading"> AI 分析中...</span>
     <span v-else>
-      <svg class="trigger-icon" width="14" height="14" viewBox="0 0 24 24" fill="none"
-        stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      <svg
+        class="trigger-icon"
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="11" cy="11" r="8" />
+        <line x1="21" y1="21" x2="16.65" y2="16.65" />
       </svg>
       今日聚焦建议
     </span>
@@ -170,8 +205,13 @@ const hasItems = computed(() => (suggestion.value?.items?.length ?? 0) > 0);
   transition: color 0.15s;
   flex-shrink: 0;
 }
-.focus-refresh:hover { color: #4a90d9; }
-.focus-refresh:disabled { opacity: 0.4; cursor: wait; }
+.focus-refresh:hover {
+  color: #4a90d9;
+}
+.focus-refresh:disabled {
+  opacity: 0.4;
+  cursor: wait;
+}
 
 .focus-items {
   padding: 0 12px 8px;

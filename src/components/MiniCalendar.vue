@@ -18,7 +18,7 @@ const currentMonth = ref(today.getMonth());
 const weekDays = ['一', '二', '三', '四', '五', '六', '日'];
 
 const daysInMonth = computed(() =>
-  new Date(currentYear.value, currentMonth.value + 1, 0).getDate()
+  new Date(currentYear.value, currentMonth.value + 1, 0).getDate(),
 );
 
 const firstDayOfWeek = computed(() => {
@@ -48,13 +48,17 @@ function dateKey(day: number): string {
 }
 
 function prevMonth() {
-  if (currentMonth.value === 0) { currentMonth.value = 11; currentYear.value--; }
-  else currentMonth.value--;
+  if (currentMonth.value === 0) {
+    currentMonth.value = 11;
+    currentYear.value--;
+  } else currentMonth.value--;
 }
 
 function nextMonth() {
-  if (currentMonth.value === 11) { currentMonth.value = 0; currentYear.value++; }
-  else currentMonth.value++;
+  if (currentMonth.value === 11) {
+    currentMonth.value = 0;
+    currentYear.value++;
+  } else currentMonth.value++;
 }
 
 function selectDay(day: number) {
@@ -69,9 +73,11 @@ function selectDay(day: number) {
 }
 
 function isToday(day: number): boolean {
-  return currentYear.value === today.getFullYear() &&
+  return (
+    currentYear.value === today.getFullYear() &&
     currentMonth.value === today.getMonth() &&
-    day === today.getDate();
+    day === today.getDate()
+  );
 }
 
 function isSelected(day: number): boolean {
@@ -99,8 +105,8 @@ function isSelected(day: number): boolean {
             empty: cell === null,
             today: cell !== null && isToday(cell),
             selected: cell !== null && isSelected(cell),
-            'has-task': cell !== null && datesWithTasks.has(dateKey(cell))
-          }
+            'has-task': cell !== null && datesWithTasks.has(dateKey(cell)),
+          },
         ]"
         :disabled="cell === null"
         @click="cell !== null && selectDay(cell)"
@@ -142,7 +148,9 @@ function isSelected(day: number): boolean {
   border-radius: 3px;
 }
 
-.mc-nav:hover { background: #f0f0f0; }
+.mc-nav:hover {
+  background: #f0f0f0;
+}
 
 .mc-weekdays {
   display: grid;
@@ -178,9 +186,13 @@ function isSelected(day: number): boolean {
   position: relative;
 }
 
-.mc-day.empty { cursor: default; }
+.mc-day.empty {
+  cursor: default;
+}
 
-.mc-day:hover:not(.empty) { background: #e8f0fe; }
+.mc-day:hover:not(.empty) {
+  background: #e8f0fe;
+}
 
 .mc-day.today {
   font-weight: 700;

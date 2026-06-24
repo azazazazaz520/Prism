@@ -85,23 +85,21 @@ const dailyCompletionsMap = computed(() => {
 const filteredTasks = computed(() => {
   let result = tasks.value;
   if (filterDate.value) {
-    result = result.filter(t => t.due_date === filterDate.value);
+    result = result.filter((t) => t.due_date === filterDate.value);
   }
   if (selectedTags.value.length > 0) {
-    result = result.filter(t =>
-      selectedTags.value.some(tag => t.tags.includes(tag))
-    );
+    result = result.filter((t) => selectedTags.value.some((tag) => t.tags.includes(tag)));
   }
   return result;
 });
 
 const overdueCount = computed(() => {
   const ts = todayStr();
-  return tasks.value.filter(t => t.due_date && t.due_date < ts && !t.completed).length;
+  return tasks.value.filter((t) => t.due_date && t.due_date < ts && !t.completed).length;
 });
 
 const pendingCount = computed(() => {
-  return tasks.value.filter(t => !t.completed).length;
+  return tasks.value.filter((t) => !t.completed).length;
 });
 
 // ── 任务操作（保持原有逻辑） ──────────────────────────────
@@ -130,7 +128,7 @@ async function handleAdd(
 
 async function handleToggle(id: string) {
   await invoke('toggle_task', { id });
-  const task = tasks.value.find(t => t.id === id);
+  const task = tasks.value.find((t) => t.id === id);
   if (task) {
     task.completed = !task.completed;
     task.completed_at = task.completed ? new Date().toISOString() : null;
@@ -143,7 +141,7 @@ async function handleToggleDaily(id: string, date: string) {
 }
 
 async function handleUpdate(id: string, title: string) {
-  const task = tasks.value.find(t => t.id === id);
+  const task = tasks.value.find((t) => t.id === id);
   if (!task) return;
   await invoke('update_task', {
     id,
@@ -158,7 +156,7 @@ async function handleUpdate(id: string, title: string) {
 }
 
 async function handleUpdateMeta(id: string, tags: string[], important: boolean, pinned: boolean) {
-  const task = tasks.value.find(t => t.id === id);
+  const task = tasks.value.find((t) => t.id === id);
   if (!task) return;
   await invoke('update_task', {
     id,
@@ -177,13 +175,13 @@ async function handleUpdateMeta(id: string, tags: string[], important: boolean, 
 
 async function handleDelete(id: string) {
   await invoke('delete_task', { id });
-  tasks.value = tasks.value.filter(t => t.id !== id);
+  tasks.value = tasks.value.filter((t) => t.id !== id);
   allTags.value = await invoke<string[]>('get_all_tags');
 }
 
 async function handleClearCompleted() {
   await invoke('clear_completed');
-  tasks.value = tasks.value.filter(t => !t.completed);
+  tasks.value = tasks.value.filter((t) => !t.completed);
 }
 
 // ── AI 操作 ──────────────────────────────
@@ -258,23 +256,21 @@ function handleSwitchModule(module: AppModule) {
 
     <!-- 主内容区（根据选中模块切换显示） -->
     <main class="main-content">
-
       <!-- 任务看板模块 -->
       <div v-if="activeModule === 'tasks'" class="module-tasks">
         <div class="module-header">
           <div>
             <h2 class="module-title">任务看板</h2>
-            <span class="module-subtitle">{{ pendingCount }} 项待办 · {{ overdueCount }} 项已过期</span>
+            <span class="module-subtitle"
+              >{{ pendingCount }} 项待办 · {{ overdueCount }} 项已过期</span
+            >
           </div>
           <span v-if="aiEnabled" class="ai-status">AI 已连接</span>
         </div>
         <div class="module-body">
           <!-- 左侧工具栏：日历 + 标签筛选 -->
           <aside class="task-sidebar">
-            <MiniCalendar
-              :tasks="tasks"
-              @select-date="handleSelectDate"
-            />
+            <MiniCalendar :tasks="tasks" @select-date="handleSelectDate" />
             <TagFilterBar
               :tags="allTags"
               :selected="selectedTags"
@@ -285,10 +281,7 @@ function handleSwitchModule(module: AppModule) {
 
           <!-- 右侧任务区：输入 + 列表 + 统计 -->
           <div class="task-main">
-            <AiFocusBar
-              v-if="aiEnabled"
-              :tasks="tasks"
-            />
+            <AiFocusBar v-if="aiEnabled" :tasks="tasks" />
             <TaskInput :ai-enabled="aiEnabled" @add="handleAdd" />
             <TaskList
               :tasks="filteredTasks"
@@ -301,10 +294,7 @@ function handleSwitchModule(module: AppModule) {
               @update-meta="handleUpdateMeta"
               @decompose="handleDecompose"
             />
-            <TaskStats
-              :tasks="tasks"
-              @clear-completed="handleClearCompleted"
-            />
+            <TaskStats :tasks="tasks" @clear-completed="handleClearCompleted" />
           </div>
         </div>
       </div>

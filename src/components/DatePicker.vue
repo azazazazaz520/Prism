@@ -98,10 +98,7 @@ function isToday(day: number): boolean {
       <button
         v-for="(cell, i) in days"
         :key="i"
-        :class="[
-          'dp-day',
-          { empty: cell === null, today: cell !== null && isToday(cell) }
-        ]"
+        :class="['dp-day', { empty: cell === null, today: cell !== null && isToday(cell) }]"
         :disabled="cell === null"
         @click="cell !== null && selectDay(cell)"
       >

@@ -53,13 +53,7 @@ function handleAddTag() {
       >
         {{ tag }}
       </button>
-      <button
-        v-if="!showInput"
-        class="tag-chip add"
-        @click="openAddTag"
-      >
-        +
-      </button>
+      <button v-if="!showInput" class="tag-chip add" @click="openAddTag">+</button>
       <input
         v-else
         v-model="newTagName"

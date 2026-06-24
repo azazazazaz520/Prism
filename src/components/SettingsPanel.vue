@@ -34,7 +34,9 @@ async function saveAiSettings() {
     aiSettings.value.enabled = true;
     await invoke('set_ai_settings', { settings: aiSettings.value });
     saved.value = true;
-    setTimeout(() => { saved.value = false; }, 2000);
+    setTimeout(() => {
+      saved.value = false;
+    }, 2000);
   } catch (e) {
     console.error('保存 AI 设置失败:', e);
   } finally {
@@ -64,18 +66,19 @@ async function saveReminder() {
         <div class="group-title">AI 设置</div>
         <div class="setting-row">
           <label>API 端点</label>
-          <input v-model="aiSettings.api_endpoint" type="text"
-            placeholder="https://api.openai.com/v1" />
+          <input
+            v-model="aiSettings.api_endpoint"
+            type="text"
+            placeholder="https://api.openai.com/v1"
+          />
         </div>
         <div class="setting-row">
           <label>API Key</label>
-          <input v-model="aiSettings.api_key" type="password"
-            placeholder="sk-..." />
+          <input v-model="aiSettings.api_key" type="password" placeholder="sk-..." />
         </div>
         <div class="setting-row">
           <label>模型</label>
-          <input v-model="aiSettings.model" type="text"
-            placeholder="gpt-4o-mini" />
+          <input v-model="aiSettings.model" type="text" placeholder="gpt-4o-mini" />
         </div>
         <button class="save-btn" @click="saveAiSettings" :disabled="saving">
           {{ saved ? '已保存' : '保存' }}
@@ -88,15 +91,16 @@ async function saveReminder() {
         <div class="setting-row">
           <label>提前提醒</label>
           <div class="number-input">
-            <input v-model.number="reminderMinutes" type="number" min="0"
-              @change="saveReminder" />
+            <input v-model.number="reminderMinutes" type="number" min="0" @change="saveReminder" />
             <span class="unit">分钟</span>
           </div>
         </div>
         <div class="setting-row">
           <label>系统通知</label>
-          <div :class="['toggle', { on: notificationEnabled }]"
-            @click="notificationEnabled = !notificationEnabled">
+          <div
+            :class="['toggle', { on: notificationEnabled }]"
+            @click="notificationEnabled = !notificationEnabled"
+          >
             <div class="toggle-knob" />
           </div>
         </div>
@@ -162,8 +166,8 @@ async function saveReminder() {
   color: #444;
 }
 
-.setting-row input[type="text"],
-.setting-row input[type="password"] {
+.setting-row input[type='text'],
+.setting-row input[type='password'] {
   width: 220px;
   padding: 6px 10px;
   border: 1px solid #e5e7eb;

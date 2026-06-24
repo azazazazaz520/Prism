@@ -53,7 +53,7 @@ function addMenuTag() {
 }
 
 function removeMenuTag(tag: string) {
-  menuTags.value = menuTags.value.filter(tg => tg !== tag);
+  menuTags.value = menuTags.value.filter((tg) => tg !== tag);
   emit('updateMeta', props.task.id, [...menuTags.value], props.task.important, props.task.pinned);
 }
 
@@ -87,7 +87,9 @@ function confirmEdit() {
   editing.value = false;
 }
 
-function cancelEdit() { editing.value = false; }
+function cancelEdit() {
+  editing.value = false;
+}
 
 function formatTime(isoString: string): string {
   const date = new Date(isoString);
@@ -142,11 +144,14 @@ const dueLabel = computed(() => {
 
 <template>
   <div
-    :class="['task-item', {
-      completed: displayCompleted,
-      editing: editing,
-      [dueStatus || '']: !displayCompleted && dueStatus
-    }]"
+    :class="[
+      'task-item',
+      {
+        completed: displayCompleted,
+        editing: editing,
+        [dueStatus || '']: !displayCompleted && dueStatus,
+      },
+    ]"
   >
     <input
       type="checkbox"
@@ -159,18 +164,44 @@ const dueLabel = computed(() => {
       <template v-if="!editing">
         <div class="task-title-row">
           <span :class="['task-title', { done: displayCompleted }]">{{ task.title }}</span>
-          <svg v-if="task.important && !displayCompleted" class="icon-star" width="12" height="12" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+          <svg
+            v-if="task.important && !displayCompleted"
+            class="icon-star"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polygon
+              points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+            />
           </svg>
-          <svg v-if="task.is_daily" class="icon-daily" :class="{ done: displayCompleted }" width="12" height="12" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+          <svg
+            v-if="task.is_daily"
+            class="icon-daily"
+            :class="{ done: displayCompleted }"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="23 4 23 10 17 10" />
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
           </svg>
         </div>
         <div class="task-meta">
           <span class="task-time">{{ formatTime(task.created_at) }}</span>
-          <span v-if="dueLabel && !displayCompleted" :class="['due-badge', dueStatus]">{{ dueLabel }}</span>
+          <span v-if="dueLabel && !displayCompleted" :class="['due-badge', dueStatus]">{{
+            dueLabel
+          }}</span>
           <span v-for="tag in task.tags" :key="tag" class="tag-badge">{{ tag }}</span>
         </div>
       </template>
@@ -197,27 +228,51 @@ const dueLabel = computed(() => {
         🧩
       </button>
       <div class="menu-wrapper">
-        <button
-          class="task-menu-btn"
-          title="更多操作"
-          @click.stop="openMenu"
-        >
-          ⋯
-        </button>
+        <button class="task-menu-btn" title="更多操作" @click.stop="openMenu">⋯</button>
         <div v-if="showMenu" class="task-menu" @click.stop>
           <div class="menu-item" @click="toggleMenuImportant">
             <span>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polygon
+                  points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+                />
+              </svg>
               重要
             </span>
-            <span :class="['menu-toggle', { on: task.important }]">{{ task.important ? '开' : '关' }}</span>
+            <span :class="['menu-toggle', { on: task.important }]">{{
+              task.important ? '开' : '关'
+            }}</span>
           </div>
           <div class="menu-item" @click="toggleMenuPinned">
             <span>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v-7"/><path d="M8 10l4-4 4 4"/><path d="M5 21h14"/></svg>
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 17v-7" />
+                <path d="M8 10l4-4 4 4" />
+                <path d="M5 21h14" />
+              </svg>
               置顶
             </span>
-            <span :class="['menu-toggle', { on: task.pinned }]">{{ task.pinned ? '开' : '关' }}</span>
+            <span :class="['menu-toggle', { on: task.pinned }]">{{
+              task.pinned ? '开' : '关'
+            }}</span>
           </div>
           <div class="menu-divider"></div>
           <div class="menu-tags">
@@ -241,13 +296,7 @@ const dueLabel = computed(() => {
           </div>
         </div>
       </div>
-      <button
-        class="task-delete-btn"
-        title="删除"
-        @click="emit('delete', task.id)"
-      >
-        ×
-      </button>
+      <button class="task-delete-btn" title="删除" @click="emit('delete', task.id)">×</button>
     </div>
   </div>
 </template>
@@ -261,8 +310,12 @@ const dueLabel = computed(() => {
   transition: background 0.15s;
 }
 
-.task-item:hover { background: #f8f8f8; }
-.task-item.completed { background: #fafafa; }
+.task-item:hover {
+  background: #f8f8f8;
+}
+.task-item.completed {
+  background: #fafafa;
+}
 
 .task-checkbox {
   width: 16px;
@@ -295,11 +348,22 @@ const dueLabel = computed(() => {
   white-space: nowrap;
 }
 
-.task-title.done { text-decoration: line-through; color: #bbb; }
+.task-title.done {
+  text-decoration: line-through;
+  color: #bbb;
+}
 
-.icon-star { flex-shrink: 0; color: #e6a817; }
-.icon-daily { flex-shrink: 0; color: #e67e22; }
-.icon-daily.done { opacity: 0.4; }
+.icon-star {
+  flex-shrink: 0;
+  color: #e6a817;
+}
+.icon-daily {
+  flex-shrink: 0;
+  color: #e67e22;
+}
+.icon-daily.done {
+  opacity: 0.4;
+}
 
 .task-meta {
   display: flex;
@@ -321,9 +385,15 @@ const dueLabel = computed(() => {
   font-weight: 500;
 }
 
-.due-badge.overdue { color: #d44; }
-.due-badge.today { color: #e67e22; }
-.due-badge.upcoming { color: #888; }
+.due-badge.overdue {
+  color: #d44;
+}
+.due-badge.today {
+  color: #e67e22;
+}
+.due-badge.upcoming {
+  color: #888;
+}
 
 .tag-badge {
   font-size: 10px;
@@ -352,7 +422,9 @@ const dueLabel = computed(() => {
   transition: color 0.15s;
 }
 
-.task-delete-btn:hover { color: #d44; }
+.task-delete-btn:hover {
+  color: #d44;
+}
 
 .task-actions {
   display: flex;
@@ -376,7 +448,9 @@ const dueLabel = computed(() => {
   transition: color 0.15s;
 }
 
-.task-menu-btn:hover { color: #666; }
+.task-menu-btn:hover {
+  color: #666;
+}
 
 .task-decompose-btn {
   background: none;
@@ -389,7 +463,9 @@ const dueLabel = computed(() => {
   transition: opacity 0.15s;
 }
 
-.task-decompose-btn:hover { opacity: 1; }
+.task-decompose-btn:hover {
+  opacity: 1;
+}
 
 .task-menu {
   position: absolute;
@@ -415,7 +491,9 @@ const dueLabel = computed(() => {
   font-size: 12px;
 }
 
-.menu-item:hover { background: #f5f5f5; }
+.menu-item:hover {
+  background: #f5f5f5;
+}
 
 .menu-toggle {
   font-size: 10px;
@@ -489,7 +567,9 @@ const dueLabel = computed(() => {
   outline: none;
 }
 
-.menu-tag-input:focus { border-color: #888; }
+.menu-tag-input:focus {
+  border-color: #888;
+}
 
 .menu-tag-add {
   background: #333;

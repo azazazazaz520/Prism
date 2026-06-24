@@ -23,7 +23,8 @@ interface QuickAction {
 const quickActions: QuickAction[] = [
   {
     label: '今天该做什么',
-    iconPath: 'M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z',
+    iconPath:
+      'M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z',
     command: 'ai_daily_focus',
   },
   {
@@ -121,7 +122,7 @@ function formatOverdue(suggestions: OverdueSuggestion[]): string {
     abandon: '建议放弃',
     decompose: '建议拆解',
   };
-  const lines = suggestions.map(s => `- ${labels[s.action] || s.action}：${s.reason}`);
+  const lines = suggestions.map((s) => `- ${labels[s.action] || s.action}：${s.reason}`);
   return `发现 ${suggestions.length} 个过期任务：\n\n${lines.join('\n')}`;
 }
 
@@ -140,17 +141,32 @@ const hasMessages = computed(() => messages.value.length > 0);
 
       <!-- 消息列表 -->
       <div v-for="(msg, idx) in messages" :key="idx" :class="['msg-row', msg.role]">
-        <svg v-if="msg.role === 'assistant'" class="msg-avatar" width="20" height="20" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8.01" y2="16"/><line x1="16" y1="16" x2="16.01" y2="16"/>
+        <svg
+          v-if="msg.role === 'assistant'"
+          class="msg-avatar"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect x="3" y="11" width="18" height="10" rx="2" />
+          <circle cx="12" cy="5" r="2" />
+          <path d="M12 7v4" />
+          <line x1="8" y1="16" x2="8.01" y2="16" />
+          <line x1="16" y1="16" x2="16.01" y2="16" />
         </svg>
         <div class="msg-bubble">
           <template v-for="(line, li) in msg.content.split('\n')" :key="li">
             <span
               v-if="line"
-              v-html="line
-                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                .replace(/`(.+?)`/g, '<code>$1</code>')
+              v-html="
+                line
+                  .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                  .replace(/`(.+?)`/g, '<code>$1</code>')
               "
             />
             <br v-if="line === '' && li < msg.content.split('\n').length - 1" />
@@ -160,9 +176,22 @@ const hasMessages = computed(() => messages.value.length > 0);
 
       <!-- 打字指示器 -->
       <div v-if="loading" class="msg-row assistant">
-        <svg class="msg-avatar" width="20" height="20" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8.01" y2="16"/><line x1="16" y1="16" x2="16.01" y2="16"/>
+        <svg
+          class="msg-avatar"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect x="3" y="11" width="18" height="10" rx="2" />
+          <circle cx="12" cy="5" r="2" />
+          <path d="M12 7v4" />
+          <line x1="8" y1="16" x2="8.01" y2="16" />
+          <line x1="16" y1="16" x2="16.01" y2="16" />
         </svg>
         <div class="msg-bubble typing">
           <span class="dot" /><span class="dot" /><span class="dot" />
@@ -181,9 +210,18 @@ const hasMessages = computed(() => messages.value.length > 0);
           :disabled="loading"
           @click="runQuickAction(action)"
         >
-          <svg class="quick-icon" width="14" height="14" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path :d="action.iconPath"/>
+          <svg
+            class="quick-icon"
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path :d="action.iconPath" />
           </svg>
           <span>{{ action.label }}</span>
         </button>
@@ -192,9 +230,17 @@ const hasMessages = computed(() => messages.value.length > 0);
       <!-- 输入框 -->
       <div class="input-row">
         <button class="input-plus" title="添加附件">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
           </svg>
         </button>
         <input
@@ -205,13 +251,17 @@ const hasMessages = computed(() => messages.value.length > 0);
           :disabled="loading"
           @keydown.enter="sendMessage"
         />
-        <button
-          class="send-btn"
-          :disabled="!inputText.trim() || loading"
-          @click="sendMessage"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <button class="send-btn" :disabled="!inputText.trim() || loading" @click="sendMessage">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
             <line x1="12" y1="19" x2="12" y2="5" />
             <polyline points="5 12 12 5 19 12" />
           </svg>
@@ -332,12 +382,24 @@ const hasMessages = computed(() => messages.value.length > 0);
   animation: bounce 1.2s infinite ease-in-out;
 }
 
-.dot:nth-child(2) { animation-delay: 0.2s; }
-.dot:nth-child(3) { animation-delay: 0.4s; }
+.dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
 
 @keyframes bounce {
-  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
-  40% { opacity: 1; transform: scale(1); }
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* ── 底部输入区 ─────────────────────── */

@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.0",
@@ -15,10 +18,18 @@
     "vue": "^3.5.34"
   },
   "devDependencies": {
+    "@commitlint/cli": "^21.1.0",
+    "@commitlint/config-conventional": "^21.1.0",
     "@tauri-apps/cli": "^2.11.2",
     "@vitejs/plugin-vue": "^5.2.4",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.8",
+    "prettier": "^3.8.4",
     "typescript": "^5.9.3",
     "vite": "^5.4.21",
     "vue-tsc": "^2.2.12"
+  },
+  "lint-staged": {
+    "*.{js,ts,vue,css,json,md}": "prettier --write"
   }
 }

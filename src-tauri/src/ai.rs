@@ -139,6 +139,19 @@ fn extract_json(text: &str) -> Result<String, String> {
     Ok(trimmed.to_string())
 }
 
+/// 将任务序列化为安全的 JSON 字符串（防止注入）
+fn task_to_summary(t: &store::Task) -> String {
+    serde_json::json!({
+        "id": t.id,
+        "title": t.title,
+        "due": t.due_date,
+        "tags": t.tags,
+        "important": t.important,
+        "is_daily": t.is_daily,
+    })
+    .to_string()
+}
+
 // ═══════════════════════════════════════════════════════════════
 //  功能 1：自然语言快速录入
 // ═══════════════════════════════════════════════════════════════
@@ -193,16 +206,7 @@ pub async fn daily_focus(
     let task_summaries: Vec<String> = tasks
         .iter()
         .filter(|t| !t.completed)
-        .map(|t| {
-            format!(
-                "id={}, title=\"{}\", due={}, tags=[{}], important={}",
-                t.id,
-                t.title,
-                t.due_date.as_deref().unwrap_or("无"),
-                t.tags.join(","),
-                t.important
-            )
-        })
+        .map(task_to_summary)
         .collect();
 
     if task_summaries.is_empty() {
@@ -276,19 +280,7 @@ pub async fn overdue_suggest(
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
 
     // 构建过期任务摘要
-    let task_infos: Vec<String> = overdue_tasks
-        .iter()
-        .map(|t| {
-            format!(
-                "id={}, title=\"{}\", due={}, tags=[{}], important={}",
-                t.id,
-                t.title,
-                t.due_date.as_deref().unwrap_or("无"),
-                t.tags.join(","),
-                t.important
-            )
-        })
-        .collect();
+    let task_infos: Vec<String> = overdue_tasks.iter().map(task_to_summary).collect();
 
     if task_infos.is_empty() {
         return Ok(vec![]);
@@ -327,13 +319,12 @@ pub async fn chat(
         .iter()
         .filter(|t| !t.completed)
         .map(|t| {
-            let due = t.due_date.as_deref().unwrap_or("无");
-            format!(
-                "- [{}] {} (截止:{})",
-                if t.important { "!" } else { " " },
-                t.title,
-                due
-            )
+            serde_json::json!({
+                "title": t.title,
+                "due": t.due_date,
+                "important": t.important,
+            })
+            .to_string()
         })
         .collect();
 

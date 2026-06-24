@@ -127,19 +127,34 @@ fn update_task(state: tauri::State<AppState>, args: UpdateTaskArgs) -> Result<()
     store::save_tasks(&store)
 }
 
-/// 删除指定任务
+/// 删除指定任务（同时清理子任务和每日完成记录）
 #[tauri::command]
 fn delete_task(state: tauri::State<AppState>, id: String) -> Result<(), String> {
     let mut store = state.store.lock().unwrap();
+    // 删除目标任务
     store.tasks.retain(|t| t.id != id);
+    // 级联删除子任务（parent_id 指向被删任务的）
+    store.tasks.retain(|t| t.parent_id.as_deref() != Some(&id));
+    // 清理孤儿 daily_completions
+    store.daily_completions.retain(|dc| dc.task_id != id);
     store::save_tasks(&store)
 }
 
-/// 一键清除所有已完成任务
+/// 一键清除所有已完成任务（同时清理对应的每日完成记录）
 #[tauri::command]
 fn clear_completed(state: tauri::State<AppState>) -> Result<(), String> {
     let mut store = state.store.lock().unwrap();
+    let completed_ids: Vec<String> = store
+        .tasks
+        .iter()
+        .filter(|t| t.completed)
+        .map(|t| t.id.clone())
+        .collect();
     store.tasks.retain(|t| !t.completed);
+    // 清理已删除任务的 daily_completions
+    for id in &completed_ids {
+        store.daily_completions.retain(|dc| &dc.task_id != id);
+    }
     store::save_tasks(&store)
 }
 

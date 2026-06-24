@@ -264,64 +264,66 @@ function handleSwitchModule(module: AppModule) {
 
     <!-- 主内容区（根据选中模块切换显示） -->
     <main class="main-content">
-      <!-- 任务看板模块 -->
-      <div v-if="activeModule === 'tasks'" class="module-tasks">
-        <div class="module-header">
-          <div>
-            <h2 class="module-title">任务看板</h2>
-            <span class="module-subtitle"
-              >{{ pendingCount }} 项待办 · {{ overdueCount }} 项已过期</span
-            >
+      <Transition name="module-fade" mode="out-in">
+        <!-- 任务看板模块 -->
+        <div v-if="activeModule === 'tasks'" key="tasks" class="module-tasks">
+          <div class="module-header">
+            <div>
+              <h2 class="module-title">任务看板</h2>
+              <span class="module-subtitle"
+                >{{ pendingCount }} 项待办 · {{ overdueCount }} 项已过期</span
+              >
+            </div>
+            <span v-if="aiEnabled" class="ai-status">AI 已连接</span>
           </div>
-          <span v-if="aiEnabled" class="ai-status">AI 已连接</span>
-        </div>
-        <div class="module-body">
-          <!-- 左侧工具栏：日历 + 标签筛选 -->
-          <aside class="task-sidebar">
-            <MiniCalendar :tasks="tasks" @select-date="handleSelectDate" />
-            <TagFilterBar
-              :tags="allTags"
-              :selected="selectedTags"
-              @toggle-tag="handleToggleTag"
-              @add-tag="handleAddTag"
-            />
-          </aside>
+          <div class="module-body">
+            <!-- 左侧工具栏：日历 + 标签筛选 -->
+            <aside class="task-sidebar">
+              <MiniCalendar :tasks="tasks" @select-date="handleSelectDate" />
+              <TagFilterBar
+                :tags="allTags"
+                :selected="selectedTags"
+                @toggle-tag="handleToggleTag"
+                @add-tag="handleAddTag"
+              />
+            </aside>
 
-          <!-- 右侧任务区：输入 + 列表 + 统计 -->
-          <div class="task-main">
-            <AiFocusBar v-if="aiEnabled" :tasks="tasks" />
-            <TaskInput :ai-enabled="aiEnabled" @add="handleAdd" />
-            <TaskList
-              :tasks="filteredTasks"
-              :daily-completions-map="dailyCompletionsMap"
-              :ai-enabled="aiEnabled"
-              @toggle="handleToggle"
-              @toggle-daily="handleToggleDaily"
-              @update="handleUpdate"
-              @delete="handleDelete"
-              @update-meta="handleUpdateMeta"
-              @decompose="handleDecompose"
-            />
-            <TaskStats :tasks="tasks" @clear-completed="handleClearCompleted" />
+            <!-- 右侧任务区：输入 + 列表 + 统计 -->
+            <div class="task-main">
+              <AiFocusBar v-if="aiEnabled" :tasks="tasks" />
+              <TaskInput :ai-enabled="aiEnabled" @add="handleAdd" />
+              <TaskList
+                :tasks="filteredTasks"
+                :daily-completions-map="dailyCompletionsMap"
+                :ai-enabled="aiEnabled"
+                @toggle="handleToggle"
+                @toggle-daily="handleToggleDaily"
+                @update="handleUpdate"
+                @delete="handleDelete"
+                @update-meta="handleUpdateMeta"
+                @decompose="handleDecompose"
+              />
+              <TaskStats :tasks="tasks" @clear-completed="handleClearCompleted" />
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- AI 助手模块（Phase 4） -->
-      <div v-else-if="activeModule === 'ai-assistant'" class="module-ai">
-        <AiAssistant />
-      </div>
+        <!-- AI 助手模块（Phase 4） -->
+        <div v-else-if="activeModule === 'ai-assistant'" key="ai" class="module-ai">
+          <AiAssistant />
+        </div>
 
-      <!-- 日历视图模块（Phase 5 实现） -->
-      <div v-else-if="activeModule === 'calendar'" class="module-placeholder">
-        <h2 class="module-title">日历视图</h2>
-        <p class="placeholder-text">日历视图功能将在 Phase 5 中实现</p>
-      </div>
+        <!-- 日历视图模块（Phase 5 实现） -->
+        <div v-else-if="activeModule === 'calendar'" key="calendar" class="module-placeholder">
+          <h2 class="module-title">日历视图</h2>
+          <p class="placeholder-text">日历视图功能将在 Phase 5 中实现</p>
+        </div>
 
-      <!-- 设置模块 -->
-      <div v-else-if="activeModule === 'settings'" class="module-settings">
-        <SettingsPanel />
-      </div>
+        <!-- 设置模块 -->
+        <div v-else key="settings" class="module-settings">
+          <SettingsPanel />
+        </div>
+      </Transition>
     </main>
   </div>
 </template>
@@ -391,6 +393,9 @@ function handleSwitchModule(module: AppModule) {
   overflow: hidden;
   display: flex;
   gap: var(--space-sm);
+  max-width: 760px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 /* 左侧工具栏：日历 + 标签筛选，固定宽度 */
@@ -420,5 +425,15 @@ function handleSwitchModule(module: AppModule) {
 .placeholder-text {
   color: var(--text-disabled);
   font-size: var(--text-base);
+}
+
+/* ── 模块切换过渡 ────────────────────── */
+.module-fade-enter-active,
+.module-fade-leave-active {
+  transition: opacity var(--transition-normal) var(--easing-standard);
+}
+.module-fade-enter-from,
+.module-fade-leave-to {
+  opacity: 0;
 }
 </style>

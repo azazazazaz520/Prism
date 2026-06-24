@@ -54,10 +54,10 @@ async function saveReminder() {
   }
 }
 
-const subModules: { key: SettingsSubModule; label: string; icon: string }[] = [
-  { key: 'preferences', label: '偏好设置', icon: '🖥' },
-  { key: 'vendors', label: '供应商', icon: '🔗' },
-  { key: 'models', label: '默认模型', icon: '🤖' },
+const subModules: { key: SettingsSubModule; label: string }[] = [
+  { key: 'preferences', label: '偏好设置' },
+  { key: 'vendors', label: '供应商' },
+  { key: 'models', label: '默认模型' },
 ];
 </script>
 
@@ -76,7 +76,33 @@ const subModules: { key: SettingsSubModule; label: string; icon: string }[] = [
           :class="['nav-item', { active: activeSub === m.key }]"
           @click="activeSub = m.key"
         >
-          <span class="nav-icon">{{ m.icon }}</span>
+          <!-- SVG 图标 -->
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <template v-if="m.key === 'preferences'">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+              <line x1="8" y1="21" x2="16" y2="21" />
+              <line x1="12" y1="17" x2="12" y2="21" />
+            </template>
+            <template v-else-if="m.key === 'vendors'">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+            </template>
+            <template v-else>
+              <path d="M12 2a4 4 0 0 1 4 4v1h4v14H4V7h4V6a4 4 0 0 1 4-4z" />
+              <circle cx="9" cy="13" r="1" />
+              <circle cx="15" cy="13" r="1" />
+              <line x1="9" y1="17" x2="15" y2="17" />
+            </template>
+          </svg>
           <span>{{ m.label }}</span>
         </button>
       </nav>
@@ -195,10 +221,6 @@ const subModules: { key: SettingsSubModule; label: string; icon: string }[] = [
   background: #f0f0f0;
   color: #333;
   font-weight: 500;
-}
-
-.nav-icon {
-  font-size: 14px;
 }
 
 .settings-main {

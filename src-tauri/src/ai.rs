@@ -66,7 +66,7 @@ pub struct OverdueSuggestion {
 // ═══════════════════════════════════════════════════════════════
 
 /// 向 OpenAI 兼容 API 发送一次聊天完成请求，返回 LLM 文本回复。
-fn chat_completion(
+async fn chat_completion(
     settings: &store::AiSettings,
     system_prompt: &str,
     user_message: &str,
@@ -80,45 +80,41 @@ fn chat_completion(
 
     let url = format!("{}/chat/completions", api_endpoint.trim_end_matches('/'));
 
-    let rt = tokio::runtime::Runtime::new().map_err(|e| format!("创建异步运行时失败: {}", e))?;
+    let client = reqwest::Client::new();
+    let body = serde_json::json!({
+        "model": settings.model,
+        "messages": [
+            { "role": "system", "content": system_prompt },
+            { "role": "user", "content": user_message }
+        ],
+        "temperature": 0.3,
+        "max_tokens": 1024
+    });
 
-    rt.block_on(async {
-        let client = reqwest::Client::new();
-        let body = serde_json::json!({
-            "model": settings.model,
-            "messages": [
-                { "role": "system", "content": system_prompt },
-                { "role": "user", "content": user_message }
-            ],
-            "temperature": 0.3,
-            "max_tokens": 1024
-        });
+    let resp = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {}", api_key))
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("API 请求失败: {}", e))?;
 
-        let resp = client
-            .post(&url)
-            .header("Authorization", format!("Bearer {}", api_key))
-            .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| format!("API 请求失败: {}", e))?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let err_body = resp.text().await.unwrap_or_default();
+        return Err(format!("API 返回错误 ({}): {}", status, err_body));
+    }
 
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let err_body = resp.text().await.unwrap_or_default();
-            return Err(format!("API 返回错误 ({}): {}", status, err_body));
-        }
+    let json: ChatResponse = resp
+        .json()
+        .await
+        .map_err(|e| format!("解析 API 响应失败: {}", e))?;
 
-        let json: ChatResponse = resp
-            .json()
-            .await
-            .map_err(|e| format!("解析 API 响应失败: {}", e))?;
-
-        json.choices
-            .first()
-            .map(|c| c.message.content.clone())
-            .ok_or_else(|| "API 返回空响应".into())
-    })
+    json.choices
+        .first()
+        .map(|c| c.message.content.clone())
+        .ok_or_else(|| "API 返回空响应".into())
 }
 
 /// 从 LLM 文本中提取 JSON 对象（容错：允许 markdown 代码块包裹）
@@ -147,7 +143,7 @@ fn extract_json(text: &str) -> Result<String, String> {
 //  功能 1：自然语言快速录入
 // ═══════════════════════════════════════════════════════════════
 
-pub fn parse_input(
+pub async fn parse_input(
     settings: &store::AiSettings,
     text: &str,
     existing_tags: &[String],
@@ -178,7 +174,7 @@ pub fn parse_input(
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
     let user_message = format!("今天是 {}。用户输入：{}", today, text);
 
-    let response = chat_completion(settings, &system_prompt, &user_message)?;
+    let response = chat_completion(settings, &system_prompt, &user_message).await?;
     let json_str = extract_json(&response)?;
 
     serde_json::from_str::<ParsedTask>(&json_str)
@@ -189,7 +185,7 @@ pub fn parse_input(
 //  功能 2：智能今日聚焦
 // ═══════════════════════════════════════════════════════════════
 
-pub fn daily_focus(
+pub async fn daily_focus(
     settings: &store::AiSettings,
     tasks: &[store::Task],
 ) -> Result<FocusSuggestion, String> {
@@ -228,7 +224,7 @@ pub fn daily_focus(
         today
     );
 
-    let response = chat_completion(settings, &system_prompt, &task_summaries.join("\n"))?;
+    let response = chat_completion(settings, &system_prompt, &task_summaries.join("\n")).await?;
     let json_str = extract_json(&response)?;
 
     serde_json::from_str::<FocusSuggestion>(&json_str)
@@ -239,7 +235,7 @@ pub fn daily_focus(
 //  功能 3：任务智能拆解
 // ═══════════════════════════════════════════════════════════════
 
-pub fn decompose(
+pub async fn decompose(
     settings: &store::AiSettings,
     task_title: &str,
     existing_subtasks: &[String],
@@ -259,7 +255,7 @@ pub fn decompose(
         subtask_hint
     );
 
-    let response = chat_completion(settings, &system_prompt, task_title)?;
+    let response = chat_completion(settings, &system_prompt, task_title).await?;
     let json_str = extract_json(&response)?;
 
     serde_json::from_str::<Vec<SubTask>>(&json_str)
@@ -270,7 +266,7 @@ pub fn decompose(
 //  功能 4：过期任务智能处理建议
 // ═══════════════════════════════════════════════════════════════
 
-pub fn overdue_suggest(
+pub async fn overdue_suggest(
     settings: &store::AiSettings,
     overdue_tasks: &[store::Task],
 ) -> Result<Vec<OverdueSuggestion>, String> {
@@ -307,7 +303,7 @@ pub fn overdue_suggest(
         today
     );
 
-    let response = chat_completion(settings, &system_prompt, &task_infos.join("\n"))?;
+    let response = chat_completion(settings, &system_prompt, &task_infos.join("\n")).await?;
     let json_str = extract_json(&response)?;
 
     serde_json::from_str::<Vec<OverdueSuggestion>>(&json_str)
@@ -318,7 +314,7 @@ pub fn overdue_suggest(
 //  功能 5：AI 助手自由对话
 // ═══════════════════════════════════════════════════════════════
 
-pub fn chat(
+pub async fn chat(
     settings: &store::AiSettings,
     message: &str,
     tasks: &[store::Task],
@@ -349,7 +345,7 @@ pub fn chat(
         context
     );
 
-    chat_completion(settings, &system_prompt, message)
+    chat_completion(settings, &system_prompt, message).await
 }
 
 #[cfg(test)]

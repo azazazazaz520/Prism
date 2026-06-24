@@ -254,83 +254,92 @@ fn set_ai_settings(
 
 // ── AI 功能命令 ──────────────────────────────
 
-/// 自然语言解析输入（AI 功能 1）
+/// 自然语言解析输入
 #[tauri::command]
-fn ai_parse_input(
-    state: tauri::State<AppState>,
+async fn ai_parse_input(
+    state: tauri::State<'_, AppState>,
     text: String,
 ) -> Result<ai::ParsedTask, String> {
-    let store = state.store.lock().unwrap();
-    let existing_tags: Vec<String> = store.tasks.iter().flat_map(|t| t.tags.clone()).collect();
-    let settings = store.ai_settings.clone();
-    drop(store);
-    ai::parse_input(&settings, &text, &existing_tags)
+    let (settings, existing_tags) = {
+        let store = state.store.lock().unwrap();
+        let settings = store.ai_settings.clone();
+        let existing_tags: Vec<String> = store.tasks.iter().flat_map(|t| t.tags.clone()).collect();
+        (settings, existing_tags)
+    };
+    ai::parse_input(&settings, &text, &existing_tags).await
 }
 
-/// 今日聚焦建议（AI 功能 2）
+/// 今日聚焦建议
 #[tauri::command]
-fn ai_daily_focus(state: tauri::State<AppState>) -> Result<ai::FocusSuggestion, String> {
-    let store = state.store.lock().unwrap();
-    let settings = store.ai_settings.clone();
-    let tasks = store.tasks.clone();
-    drop(store);
-    ai::daily_focus(&settings, &tasks)
+async fn ai_daily_focus(state: tauri::State<'_, AppState>) -> Result<ai::FocusSuggestion, String> {
+    let (settings, tasks) = {
+        let store = state.store.lock().unwrap();
+        let settings = store.ai_settings.clone();
+        let tasks = store.tasks.clone();
+        (settings, tasks)
+    };
+    ai::daily_focus(&settings, &tasks).await
 }
 
-/// 任务智能拆解（AI 功能 3）
+/// 任务智能拆解
 #[tauri::command]
-fn ai_decompose(
-    state: tauri::State<AppState>,
+async fn ai_decompose(
+    state: tauri::State<'_, AppState>,
     task_id: String,
 ) -> Result<Vec<ai::SubTask>, String> {
-    let store = state.store.lock().unwrap();
-    let settings = store.ai_settings.clone();
-    // 获取任务标题和已有子任务标题
-    let task_title = store
-        .tasks
-        .iter()
-        .find(|t| t.id == task_id)
-        .map(|t| t.title.clone())
-        .ok_or("任务不存在")?;
-    let existing_subtasks: Vec<String> = store
-        .tasks
-        .iter()
-        .filter(|t| t.parent_id.as_deref() == Some(&task_id))
-        .map(|t| t.title.clone())
-        .collect();
-    drop(store);
-    ai::decompose(&settings, &task_title, &existing_subtasks)
+    let (settings, task_title, existing_subtasks) = {
+        let store = state.store.lock().unwrap();
+        let settings = store.ai_settings.clone();
+        let task_title = store
+            .tasks
+            .iter()
+            .find(|t| t.id == task_id)
+            .map(|t| t.title.clone())
+            .ok_or("任务不存在")?;
+        let existing_subtasks: Vec<String> = store
+            .tasks
+            .iter()
+            .filter(|t| t.parent_id.as_deref() == Some(&task_id))
+            .map(|t| t.title.clone())
+            .collect();
+        (settings, task_title, existing_subtasks)
+    };
+    ai::decompose(&settings, &task_title, &existing_subtasks).await
 }
 
-/// 过期任务处理建议（AI 功能 4）
+/// 过期任务处理建议
 #[tauri::command]
-fn ai_overdue_suggest(
-    state: tauri::State<AppState>,
+async fn ai_overdue_suggest(
+    state: tauri::State<'_, AppState>,
 ) -> Result<Vec<ai::OverdueSuggestion>, String> {
-    let store = state.store.lock().unwrap();
-    let settings = store.ai_settings.clone();
-    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-    let overdue: Vec<store::Task> = store
-        .tasks
-        .iter()
-        .filter(|t| !t.completed && t.due_date.as_deref().map_or(false, |d| d < today.as_str()))
-        .cloned()
-        .collect();
-    drop(store);
-    ai::overdue_suggest(&settings, &overdue)
+    let (settings, overdue) = {
+        let store = state.store.lock().unwrap();
+        let settings = store.ai_settings.clone();
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        let overdue: Vec<store::Task> = store
+            .tasks
+            .iter()
+            .filter(|t| !t.completed && t.due_date.as_deref().map_or(false, |d| d < today.as_str()))
+            .cloned()
+            .collect();
+        (settings, overdue)
+    };
+    ai::overdue_suggest(&settings, &overdue).await
 }
 
-/// AI 助手自由对话（AI 功能 5）
+/// AI 助手自由对话
 #[tauri::command]
-fn ai_chat(
-    state: tauri::State<AppState>,
+async fn ai_chat(
+    state: tauri::State<'_, AppState>,
     message: String,
 ) -> Result<String, String> {
-    let store = state.store.lock().unwrap();
-    let settings = store.ai_settings.clone();
-    let tasks = store.tasks.clone();
-    drop(store);
-    ai::chat(&settings, &message, &tasks)
+    let (settings, tasks) = {
+        let store = state.store.lock().unwrap();
+        let settings = store.ai_settings.clone();
+        let tasks = store.tasks.clone();
+        (settings, tasks)
+    };
+    ai::chat(&settings, &message, &tasks).await
 }
 
 /// 应用入口：初始化存储、注册命令、启动后台提醒线程

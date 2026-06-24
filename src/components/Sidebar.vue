@@ -64,10 +64,6 @@ function handleClick(item: NavItem) {
     emit('switchModule', 'floating');
     return;
   }
-  // AI 未启用时禁止进入 AI 助手模块
-  if (item.module === 'ai-assistant' && !props.aiEnabled) {
-    return;
-  }
   emit('switchModule', item.module);
 }
 </script>
@@ -81,7 +77,6 @@ function handleClick(item: NavItem) {
         :key="item.module"
         :class="['sidebar-item', {
           active: activeModule === item.module,
-          disabled: item.module === 'ai-assistant' && !aiEnabled,
         }]"
         :title="item.label"
         @click="handleClick(item)"
@@ -156,10 +151,5 @@ function handleClick(item: NavItem) {
 
 .sidebar-item.active {
   background: #e8e8e8;
-}
-
-.sidebar-item.disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 </style>

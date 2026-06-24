@@ -34,6 +34,7 @@ onMounted(async () => {
   const appWindow = getCurrentWindow();
   const unlistenFocus = await appWindow.listen('tauri://focus', () => {
     loadAll();
+    loadAiSettings();
   });
   onUnmounted(() => {
     unlistenFocus();

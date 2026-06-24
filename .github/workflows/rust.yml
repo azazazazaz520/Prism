@@ -40,6 +40,7 @@ jobs:
   # =========================================================================
   commitlint:
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -53,8 +54,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint commits
-        run: npx commitlint --from HEAD~1 --to HEAD --verbose
+      - name: "Lint commits (PR: base->head)"
+        run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
 
   # =========================================================================
   # Rust 后端：格式检查、编译、测试

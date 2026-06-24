@@ -151,11 +151,11 @@ function handleClick(item: NavItem) {
 }
 
 .sidebar-item:hover {
-  background: #f5f5f5;
+  background: #f0f0f0;
 }
 
 .sidebar-item.active {
-  background: #f0f0f0;
+  background: #e8e8e8;
 }
 
 .sidebar-item.disabled {

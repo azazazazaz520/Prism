@@ -88,25 +88,25 @@ function handleAddTag() {
 }
 
 .tag-chip {
-  font-size: 12px;
-  padding: 4px 12px;
-  border-radius: 12px;
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 4px;
   border: 1px solid #e0e0e0;
-  background: white;
-  color: #666;
+  background: none;
+  color: #888;
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .tag-chip:hover {
-  border-color: #4a90d9;
-  color: #4a90d9;
+  border-color: #888;
+  color: #555;
 }
 
 .tag-chip.active {
-  background: #4a90d9;
+  background: #333;
   color: white;
-  border-color: #4a90d9;
+  border-color: #333;
 }
 
 .tag-chip.add {
@@ -115,11 +115,11 @@ function handleAddTag() {
 }
 
 .tag-input-inline {
-  font-size: 12px;
-  padding: 4px 8px;
-  border: 1px solid #4a90d9;
-  border-radius: 12px;
+  font-size: 11px;
+  padding: 3px 6px;
+  border: 1px solid #888;
+  border-radius: 4px;
   outline: none;
-  min-width: 80px;
+  min-width: 70px;
 }
 </style>

@@ -70,28 +70,27 @@ const normalTasks = computed(() => sortedTasks.value.filter(t => !t.pinned || t.
 <style scoped>
 .task-list {
   background: white;
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid #eee;
+  border-radius: 6px;
 }
 
 .task-empty {
-  padding: 40px 20px;
+  padding: 32px 16px;
   text-align: center;
-  color: #bbb;
-  font-size: 15px;
+  color: #ccc;
+  font-size: 13px;
 }
 
 .pinned-section {
-  background: #fffdf5;
+  background: #fafafa;
 }
 
 .pinned-header {
-  padding: 8px 16px;
-  font-size: 12px;
+  padding: 6px 12px;
+  font-size: 11px;
   font-weight: 600;
-  color: #b7950b;
-  background: #fef9e7;
-  border-bottom: 1px solid #f0c060;
+  color: #999;
+  border-bottom: 1px solid #eee;
 }
 
 .section-divider {

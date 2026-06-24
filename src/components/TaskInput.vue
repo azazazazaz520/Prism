@@ -152,105 +152,105 @@ function formatDueDate(d: string): string {
 </template>
 
 <style scoped>
-.task-input { margin-bottom: 16px; }
+.task-input { margin-bottom: 12px; }
 
 .input-row {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .task-input-field {
   flex: 1;
-  padding: 10px 14px;
-  border: 2px solid #e0e0e0;
-  border-radius: 8px;
-  font-size: 15px;
+  padding: 7px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
   outline: none;
   transition: border-color 0.2s;
 }
 
-.task-input-field:focus { border-color: #4a90d9; }
+.task-input-field:focus { border-color: #888; }
 .task-input-field.error { border-color: #e74c3c; }
 
 .date-btn-wrapper { position: relative; }
 
 .date-btn {
-  padding: 10px;
+  padding: 7px 8px;
   background: none;
-  border: 2px solid #e0e0e0;
-  border-radius: 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
   cursor: pointer;
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1;
   transition: border-color 0.2s;
 }
 
-.date-btn:hover, .date-btn.active { border-color: #4a90d9; }
+.date-btn:hover, .date-btn.active { border-color: #888; }
 
 .task-input-btn {
-  padding: 10px 20px;
-  background: #4a90d9;
+  padding: 7px 16px;
+  background: #333;
   color: white;
   border: none;
-  border-radius: 8px;
-  font-size: 15px;
+  border-radius: 6px;
+  font-size: 13px;
   cursor: pointer;
   transition: background 0.2s;
   white-space: nowrap;
 }
 
-.task-input-btn:hover { background: #357abd; }
+.task-input-btn:hover { background: #555; }
 
 .quick-actions {
   display: flex;
-  gap: 6px;
-  margin-top: 8px;
+  gap: 4px;
+  margin-top: 6px;
   flex-wrap: wrap;
 }
 
 .qa-btn {
-  padding: 4px 10px;
-  background: white;
+  padding: 3px 8px;
+  background: none;
   border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  font-size: 12px;
+  border-radius: 4px;
+  font-size: 11px;
   cursor: pointer;
   transition: all 0.15s;
   color: #999;
 }
 
-.qa-btn:hover { border-color: #4a90d9; color: #4a90d9; }
+.qa-btn:hover { border-color: #888; color: #555; }
 
 .qa-btn.active {
-  background: #e8f0fe;
-  border-color: #4a90d9;
-  color: #4a90d9;
+  background: #f5f5f5;
+  border-color: #888;
+  color: #333;
 }
 
 .tag-input-row {
   display: flex;
-  gap: 6px;
-  margin-top: 8px;
+  gap: 4px;
+  margin-top: 6px;
 }
 
 .tag-input {
   flex: 1;
-  padding: 5px 10px;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  font-size: 13px;
+  padding: 4px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 12px;
   outline: none;
 }
 
-.tag-input:focus { border-color: #4a90d9; }
+.tag-input:focus { border-color: #888; }
 
 .tag-add-btn {
-  padding: 5px 12px;
-  background: #4a90d9;
+  padding: 4px 10px;
+  background: #333;
   color: white;
   border: none;
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: 4px;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -258,38 +258,38 @@ function formatDueDate(d: string): string {
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .tag-chip {
-  font-size: 11px;
-  background: #e8f0fe;
-  color: #4a90d9;
-  padding: 2px 8px;
-  border-radius: 10px;
+  font-size: 10px;
+  background: #f0f0f0;
+  color: #666;
+  padding: 1px 6px;
+  border-radius: 3px;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
 }
 
 .tag-chip-x {
   background: none;
   border: none;
-  color: #4a90d9;
+  color: #999;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 12px;
   padding: 0;
   line-height: 1;
 }
 
 .summary {
-  margin-top: 8px;
-  padding-top: 8px;
+  margin-top: 6px;
+  padding-top: 6px;
   border-top: 1px solid #f0f0f0;
-  font-size: 12px;
+  font-size: 11px;
   color: #999;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 </style>

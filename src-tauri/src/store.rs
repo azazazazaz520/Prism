@@ -86,13 +86,13 @@ pub struct TaskStore {
     pub daily_completions: Vec<DailyCompletion>,
     #[serde(default = "default_reminder_minutes")]
     pub reminder_minutes: u32,
-    /// AI 服务配置（兼容旧版，新逻辑优先用 vendors）
+    /// AI 服务配置
     #[serde(default = "default_ai_settings")]
     pub ai_settings: AiSettings,
     /// AI 供应商列表
     #[serde(default)]
     pub vendors: Vec<Vendor>,
-    /// 当前激活的供应商 ID（None 表示用 ai_settings 或第一个启用的供应商）
+    /// 当前激活的供应商 ID（None 表示使用 ai_settings 或第一个启用的供应商）
     #[serde(default)]
     pub active_vendor_id: Option<String>,
 }

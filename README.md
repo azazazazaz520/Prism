@@ -16,19 +16,19 @@
 
 ## 🖼️ 界面
 
-| 主窗口（480×640）                          | 悬浮窗（320×360）                              |
-| ------------------------------------------ | ---------------------------------------------- |
+| 主窗口（480×640） | 悬浮窗（320×360） |
+|---|---|
 | 完整任务管理：输入、列表、筛选、日历、统计 | 透明置顶小窗：轮播未完成任务、快速切换回主窗口 |
 
 ## 🛠️ 技术栈
 
-| 层       | 技术                                          |
-| -------- | --------------------------------------------- |
-| 桌面框架 | [Tauri v2](https://v2.tauri.app/)             |
-| 前端     | Vue 3 + TypeScript + Vite                     |
-| 后端     | Rust                                          |
-| 存储     | 本地 JSON 文件（`dirs` 自动定位系统数据目录） |
-| 通知     | `tauri-plugin-notification`（系统原生通知）   |
+| 层 | 技术 |
+|---|---|
+| 桌面框架 | [Tauri v2](https://v2.tauri.app/) |
+| 前端 | Vue 3 + TypeScript + Vite |
+| 后端 | Rust |
+| 存储 | 本地 JSON 文件（`dirs` 自动定位系统数据目录） |
+| 通知 | `tauri-plugin-notification`（系统原生通知） |
 
 ## 📋 环境要求
 
@@ -127,7 +127,6 @@ TODO/
 - **悬浮窗**（`floating`）：320×360，无边框、透明背景、始终置顶、可拖拽
 
 悬浮窗支持：
-
 - 轮播间隔调节（1s / 3s / 5s / 暂停）
 - 透明度滑块
 - 鼠标悬停暂停轮播
@@ -136,11 +135,11 @@ TODO/
 
 任务数据自动保存在系统标准数据目录下的 `tasks.json`：
 
-| 系统    | 路径                                                             |
-| ------- | ---------------------------------------------------------------- |
+| 系统 | 路径 |
+|---|---|
 | Windows | `C:\Users\<用户名>\AppData\Roaming\com.todo.app\data\tasks.json` |
-| macOS   | `~/Library/Application Support/com.todo.app/data/tasks.json`     |
-| Linux   | `~/.local/share/com.todo.app/data/tasks.json`                    |
+| macOS | `~/Library/Application Support/com.todo.app/data/tasks.json` |
+| Linux | `~/.local/share/com.todo.app/data/tasks.json` |
 
 ## 🧪 CI/CD
 

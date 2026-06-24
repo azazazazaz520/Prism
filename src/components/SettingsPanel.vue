@@ -27,10 +27,11 @@ onMounted(async () => {
   }
 });
 
-/** 保存 AI 配置到后端（持久化到 tasks.json） */
+/** 保存 AI 配置到后端（持久化到 tasks.json），自动启用 AI */
 async function saveAiSettings() {
   saving.value = true;
   try {
+    aiSettings.value.enabled = true;
     await invoke('set_ai_settings', { settings: aiSettings.value });
     saved.value = true;
     setTimeout(() => { saved.value = false; }, 2000);
@@ -75,13 +76,6 @@ async function saveReminder() {
           <label>模型</label>
           <input v-model="aiSettings.model" type="text"
             placeholder="gpt-4o-mini" />
-        </div>
-        <div class="setting-row">
-          <label>启用 AI 功能</label>
-          <div :class="['toggle', { on: aiSettings.enabled }]"
-            @click="aiSettings.enabled = !aiSettings.enabled">
-            <div class="toggle-knob" />
-          </div>
         </div>
         <button class="save-btn" @click="saveAiSettings" :disabled="saving">
           {{ saved ? '已保存' : '保存' }}

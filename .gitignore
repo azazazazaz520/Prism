@@ -41,3 +41,4 @@ docs/
 .agents/
 skills-lock.json
 AGENTS.md
+vision.js

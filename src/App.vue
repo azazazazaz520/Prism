@@ -23,7 +23,7 @@ const selectedTags = ref<string[]>([]);
 const allTags = ref<string[]>([]);
 const dailyCompletedIds = ref<string[]>([]);
 
-/** AI 功能是否可用（已配置 API Key 且用户启用） */
+/** AI 功能是否可用（已配置 API Key 即启用） */
 const aiEnabled = ref(false);
 
 // ── 生命周期 ──────────────────────────────
@@ -45,7 +45,7 @@ onMounted(async () => {
 async function loadAiSettings() {
   try {
     const settings = await invoke<AiSettings>('get_ai_settings');
-    aiEnabled.value = settings.enabled && !!settings.api_key;
+    aiEnabled.value = !!settings.api_key;
   } catch {
     // 后端命令尚未注册时默认禁用
     aiEnabled.value = false;

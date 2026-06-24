@@ -62,6 +62,7 @@ fn add_task(
         important: important.unwrap_or(false),
         pinned: pinned.unwrap_or(false),
         is_daily: is_daily.unwrap_or(false),
+        parent_id: None,
     };
     store.tasks.push(task.clone());
     store::save_tasks(&store)?;
@@ -230,6 +231,25 @@ fn get_reminder_minutes(state: tauri::State<AppState>) -> u32 {
     state.store.lock().unwrap().reminder_minutes
 }
 
+// ── AI 设置命令 ──────────────────────────────
+
+/// 获取 AI 服务配置
+#[tauri::command]
+fn get_ai_settings(state: tauri::State<AppState>) -> store::AiSettings {
+    state.store.lock().unwrap().ai_settings.clone()
+}
+
+/// 更新 AI 服务配置（持久化到 tasks.json）
+#[tauri::command]
+fn set_ai_settings(
+    state: tauri::State<AppState>,
+    settings: store::AiSettings,
+) -> Result<(), String> {
+    let mut store = state.store.lock().unwrap();
+    store.ai_settings = settings;
+    store::save_tasks(&store)
+}
+
 /// 应用入口：初始化存储、注册命令、启动后台提醒线程
 fn main() {
     let store = store::load_tasks();
@@ -254,6 +274,8 @@ fn main() {
             get_daily_completions,
             set_reminder_minutes,
             get_reminder_minutes,
+            get_ai_settings,
+            set_ai_settings,
             show_floating_window,
             show_main_window,
         ])

@@ -18,6 +18,9 @@ pub struct Task {
     pub pinned: bool,
     #[serde(default)]
     pub is_daily: bool,
+    /// 父任务 ID，拆解产生的子任务指向其父任务
+    #[serde(default)]
+    pub parent_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -30,6 +33,28 @@ fn default_reminder_minutes() -> u32 {
     30
 }
 
+fn default_ai_settings() -> AiSettings {
+    AiSettings {
+        enabled: false,
+        api_endpoint: String::new(),
+        api_key: String::new(),
+        model: "gpt-4o-mini".to_string(),
+    }
+}
+
+/// AI 服务配置（持久化到 tasks.json）
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AiSettings {
+    /// 是否启用 AI 功能
+    pub enabled: bool,
+    /// OpenAI 兼容 API 端点地址
+    pub api_endpoint: String,
+    /// API 密钥
+    pub api_key: String,
+    /// 使用的模型名称
+    pub model: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TaskStore {
     pub version: u32,
@@ -38,6 +63,9 @@ pub struct TaskStore {
     pub daily_completions: Vec<DailyCompletion>,
     #[serde(default = "default_reminder_minutes")]
     pub reminder_minutes: u32,
+    /// AI 服务配置
+    #[serde(default = "default_ai_settings")]
+    pub ai_settings: AiSettings,
 }
 
 fn get_store_path() -> PathBuf {
@@ -56,12 +84,14 @@ pub fn load_tasks() -> TaskStore {
             tasks: vec![],
             daily_completions: vec![],
             reminder_minutes: 30,
+            ai_settings: default_ai_settings(),
         }),
         Err(_) => TaskStore {
             version: 1,
             tasks: vec![],
             daily_completions: vec![],
             reminder_minutes: 30,
+            ai_settings: default_ai_settings(),
         },
     }
 }
@@ -83,6 +113,7 @@ mod tests {
             tasks: vec![],
             daily_completions: vec![],
             reminder_minutes: 30,
+            ai_settings: default_ai_settings(),
         };
         assert_eq!(store.tasks.len(), 0);
     }
@@ -100,6 +131,7 @@ mod tests {
             important: false,
             pinned: false,
             is_daily: false,
+            parent_id: None,
         };
         let json = serde_json::to_string(&task).unwrap();
         let parsed: Task = serde_json::from_str(&json).unwrap();

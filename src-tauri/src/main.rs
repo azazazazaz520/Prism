@@ -254,31 +254,14 @@ fn get_reminder_minutes(state: tauri::State<AppState>) -> u32 {
 
 // ── AI 设置命令 ──────────────────────────────
 
-/// 获取 AI 服务配置
-#[tauri::command]
-fn get_ai_settings(state: tauri::State<AppState>) -> store::AiSettings {
-    state.store.lock().unwrap().ai_settings.clone()
-}
-
-/// 获取完整 AI 配置（含 active_vendor_id）
+/// 获取 AI 配置状态（是否已配置可用供应商）
 #[tauri::command]
 fn get_ai_settings_all(state: tauri::State<AppState>) -> serde_json::Value {
     let store = state.store.lock().unwrap();
     serde_json::json!({
         "active_vendor_id": store.active_vendor_id,
-        "ai_settings": store.ai_settings,
+        "has_enabled_vendor": store.vendors.iter().any(|v| v.enabled),
     })
-}
-
-/// 更新 AI 服务配置（持久化到 tasks.json）
-#[tauri::command]
-fn set_ai_settings(
-    state: tauri::State<AppState>,
-    settings: store::AiSettings,
-) -> Result<(), String> {
-    let mut store = state.store.lock().unwrap();
-    store.ai_settings = settings;
-    store::save_tasks(&store)
 }
 
 // ── AI 供应商命令 ──────────────────────────────
@@ -331,8 +314,8 @@ fn set_active_vendor(state: tauri::State<AppState>, id: Option<String>) -> Resul
     store::save_tasks(&store)
 }
 
-/// 解析当前 AI 配置：优先用选中的供应商，否则用第一个启用的，兜底用旧 ai_settings
-fn resolve_ai_settings(store: &TaskStore) -> store::AiSettings {
+/// 解析当前 AI 配置：优先用选中的供应商，否则用第一个启用的
+fn resolve_ai_settings(store: &TaskStore) -> Result<ai::AiSettings, String> {
     // 1. 有 active_vendor_id 且供应商存在且启用
     if let Some(active_id) = &store.active_vendor_id {
         if let Some(v) = store
@@ -340,25 +323,25 @@ fn resolve_ai_settings(store: &TaskStore) -> store::AiSettings {
             .iter()
             .find(|v| v.id == *active_id && v.enabled)
         {
-            return store::AiSettings {
+            return Ok(ai::AiSettings {
                 enabled: true,
                 api_endpoint: format!("{}{}", v.base_url, v.api_path),
                 api_key: v.api_key.clone(),
                 model: v.model.clone(),
-            };
+            });
         }
     }
     // 2. 找第一个启用的供应商
     if let Some(v) = store.vendors.iter().find(|v| v.enabled) {
-        return store::AiSettings {
+        return Ok(ai::AiSettings {
             enabled: true,
             api_endpoint: format!("{}{}", v.base_url, v.api_path),
             api_key: v.api_key.clone(),
             model: v.model.clone(),
-        };
+        });
     }
-    // 3. 兜底用旧配置
-    store.ai_settings.clone()
+    // 3. 无可用供应商
+    Err("AI 未配置：请在设置中添加并启用供应商".into())
 }
 
 // ── AI 功能命令 ──────────────────────────────
@@ -371,7 +354,7 @@ async fn ai_parse_input(
 ) -> Result<ai::ParsedTask, String> {
     let (settings, existing_tags) = {
         let store = state.store.lock().unwrap();
-        let settings = resolve_ai_settings(&store);
+        let settings = resolve_ai_settings(&store)?;
         let existing_tags: Vec<String> = store.tasks.iter().flat_map(|t| t.tags.clone()).collect();
         (settings, existing_tags)
     };
@@ -383,7 +366,7 @@ async fn ai_parse_input(
 async fn ai_daily_focus(state: tauri::State<'_, AppState>) -> Result<ai::FocusSuggestion, String> {
     let (settings, tasks) = {
         let store = state.store.lock().unwrap();
-        let settings = resolve_ai_settings(&store);
+        let settings = resolve_ai_settings(&store)?;
         let tasks = store.tasks.clone();
         (settings, tasks)
     };
@@ -398,7 +381,7 @@ async fn ai_decompose(
 ) -> Result<Vec<ai::SubTask>, String> {
     let (settings, task_title, existing_subtasks) = {
         let store = state.store.lock().unwrap();
-        let settings = resolve_ai_settings(&store);
+        let settings = resolve_ai_settings(&store)?;
         let task_title = store
             .tasks
             .iter()
@@ -423,7 +406,7 @@ async fn ai_overdue_suggest(
 ) -> Result<Vec<ai::OverdueSuggestion>, String> {
     let (settings, overdue) = {
         let store = state.store.lock().unwrap();
-        let settings = resolve_ai_settings(&store);
+        let settings = resolve_ai_settings(&store)?;
         let today = chrono::Local::now().format("%Y-%m-%d").to_string();
         let overdue: Vec<store::Task> = store
             .tasks
@@ -441,7 +424,7 @@ async fn ai_overdue_suggest(
 async fn ai_chat(state: tauri::State<'_, AppState>, message: String) -> Result<String, String> {
     let (settings, tasks) = {
         let store = state.store.lock().unwrap();
-        let settings = resolve_ai_settings(&store);
+        let settings = resolve_ai_settings(&store)?;
         let tasks = store.tasks.clone();
         (settings, tasks)
     };
@@ -486,9 +469,7 @@ fn main() {
             get_daily_completions,
             set_reminder_minutes,
             get_reminder_minutes,
-            get_ai_settings,
             get_ai_settings_all,
-            set_ai_settings,
             get_vendors,
             add_vendor,
             update_vendor,

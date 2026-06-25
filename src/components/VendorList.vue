@@ -9,10 +9,6 @@ const showAddModal = ref(false);
 const editingVendor = ref<Vendor | null>(null);
 const activeVendorId = ref<string | null>(null);
 
-const emit = defineEmits<{
-  refresh: [];
-}>();
-
 onMounted(async () => {
   await loadVendors();
 });
@@ -45,13 +41,11 @@ async function handleSave(vendor: Vendor) {
   }
   showAddModal.value = false;
   await loadVendors();
-  emit('refresh');
 }
 
 async function handleDelete(id: string) {
   await invoke('delete_vendor', { id });
   await loadVendors();
-  emit('refresh');
 }
 
 async function toggleEnabled(vendor: Vendor) {
@@ -62,7 +56,6 @@ async function toggleEnabled(vendor: Vendor) {
 async function setActive(id: string | null) {
   await invoke('set_active_vendor', { id });
   activeVendorId.value = id;
-  emit('refresh');
 }
 </script>
 

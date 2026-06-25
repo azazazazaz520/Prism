@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import type { Task, AppModule, AiSettings, SubTask } from './types';
+import type { Task, AppModule, Vendor, SubTask } from './types';
 import Sidebar from './components/Sidebar.vue';
 import TaskInput from './components/TaskInput.vue';
 import TaskList from './components/TaskList.vue';
@@ -41,11 +41,11 @@ onMounted(async () => {
   });
 });
 
-/** 从后端加载 AI 配置，判断 AI 功能是否可用 */
+/** 检查是否配置了启用的 AI 供应商 */
 async function loadAiSettings() {
   try {
-    const settings = await invoke<AiSettings>('get_ai_settings');
-    aiEnabled.value = !!settings.api_key;
+    const vendors = await invoke<Vendor[]>('get_vendors');
+    aiEnabled.value = vendors.some((v) => v.enabled);
   } catch {
     // 后端命令尚未注册时默认禁用
     aiEnabled.value = false;

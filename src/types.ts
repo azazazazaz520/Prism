@@ -25,14 +25,6 @@ export type AppModule = 'tasks' | 'ai-assistant' | 'calendar' | 'floating' | 'se
 
 // ── AI 相关类型 ──────────────────────────────
 
-/** AI 服务配置（持久化到 tasks.json） */
-export interface AiSettings {
-  enabled: boolean;
-  api_endpoint: string;
-  api_key: string;
-  model: string;
-}
-
 /** AI 供应商 */
 export interface Vendor {
   id: string;

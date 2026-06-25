@@ -37,28 +37,6 @@ fn default_theme() -> String {
     "auto".to_string()
 }
 
-fn default_ai_settings() -> AiSettings {
-    AiSettings {
-        enabled: false,
-        api_endpoint: String::new(),
-        api_key: String::new(),
-        model: "gpt-4o-mini".to_string(),
-    }
-}
-
-/// AI 服务配置（持久化到 tasks.json）
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct AiSettings {
-    /// 是否启用 AI 功能
-    pub enabled: bool,
-    /// OpenAI 兼容 API 端点地址
-    pub api_endpoint: String,
-    /// API 密钥
-    pub api_key: String,
-    /// 使用的模型名称
-    pub model: String,
-}
-
 /// AI 供应商（支持OpenAI等）
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Vendor {
@@ -90,9 +68,6 @@ pub struct TaskStore {
     pub daily_completions: Vec<DailyCompletion>,
     #[serde(default = "default_reminder_minutes")]
     pub reminder_minutes: u32,
-    /// AI 服务配置
-    #[serde(default = "default_ai_settings")]
-    pub ai_settings: AiSettings,
     /// AI 供应商列表
     #[serde(default)]
     pub vendors: Vec<Vendor>,
@@ -120,7 +95,6 @@ pub fn load_tasks() -> TaskStore {
             tasks: vec![],
             daily_completions: vec![],
             reminder_minutes: 30,
-            ai_settings: default_ai_settings(),
             vendors: vec![],
             active_vendor_id: None,
             theme: default_theme(),
@@ -130,7 +104,6 @@ pub fn load_tasks() -> TaskStore {
             tasks: vec![],
             daily_completions: vec![],
             reminder_minutes: 30,
-            ai_settings: default_ai_settings(),
             vendors: vec![],
             active_vendor_id: None,
             theme: default_theme(),
@@ -155,7 +128,6 @@ mod tests {
             tasks: vec![],
             daily_completions: vec![],
             reminder_minutes: 30,
-            ai_settings: default_ai_settings(),
             vendors: vec![],
             active_vendor_id: None,
             theme: default_theme(),

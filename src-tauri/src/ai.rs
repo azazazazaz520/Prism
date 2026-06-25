@@ -2,6 +2,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::store;
 
+/// AI 调用所需的配置（从供应商解析而来）
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AiSettings {
+    pub enabled: bool,
+    pub api_endpoint: String,
+    pub api_key: String,
+    pub model: String,
+}
+
 // ═══════════════════════════════════════════════════════════════
 //  LLM 响应解析用结构体
 // ═══════════════════════════════════════════════════════════════
@@ -67,7 +76,7 @@ pub struct OverdueSuggestion {
 
 /// 向 OpenAI 兼容 API 发送一次聊天完成请求，返回 LLM 文本回复。
 async fn chat_completion(
-    settings: &store::AiSettings,
+    settings: &AiSettings,
     system_prompt: &str,
     user_message: &str,
 ) -> Result<String, String> {
@@ -157,7 +166,7 @@ fn task_to_summary(t: &store::Task) -> String {
 // ═══════════════════════════════════════════════════════════════
 
 pub async fn parse_input(
-    settings: &store::AiSettings,
+    settings: &AiSettings,
     text: &str,
     existing_tags: &[String],
 ) -> Result<ParsedTask, String> {
@@ -199,7 +208,7 @@ pub async fn parse_input(
 // ═══════════════════════════════════════════════════════════════
 
 pub async fn daily_focus(
-    settings: &store::AiSettings,
+    settings: &AiSettings,
     tasks: &[store::Task],
 ) -> Result<FocusSuggestion, String> {
     // 仅发送未完成任务摘要（保护隐私）
@@ -240,7 +249,7 @@ pub async fn daily_focus(
 // ═══════════════════════════════════════════════════════════════
 
 pub async fn decompose(
-    settings: &store::AiSettings,
+    settings: &AiSettings,
     task_title: &str,
     existing_subtasks: &[String],
 ) -> Result<Vec<SubTask>, String> {
@@ -274,7 +283,7 @@ pub async fn decompose(
 // ═══════════════════════════════════════════════════════════════
 
 pub async fn overdue_suggest(
-    settings: &store::AiSettings,
+    settings: &AiSettings,
     overdue_tasks: &[store::Task],
 ) -> Result<Vec<OverdueSuggestion>, String> {
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
@@ -310,7 +319,7 @@ pub async fn overdue_suggest(
 // ═══════════════════════════════════════════════════════════════
 
 pub async fn chat(
-    settings: &store::AiSettings,
+    settings: &AiSettings,
     message: &str,
     tasks: &[store::Task],
 ) -> Result<String, String> {

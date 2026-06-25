@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import type { AiSettings, SettingsSubModule } from '../types';
+import type { SettingsSubModule } from '../types';
 import { useTheme, type ThemeMode } from '../composables/useTheme';
 import VendorList from './VendorList.vue';
 
@@ -9,45 +9,16 @@ const { theme, setTheme } = useTheme();
 
 const activeSub = ref<SettingsSubModule>('preferences');
 
-/** AI 服务配置（从后端加载，编辑后保存回后端） */
-const aiSettings = ref<AiSettings>({
-  enabled: false,
-  api_endpoint: '',
-  api_key: '',
-  model: 'gpt-4o-mini',
-});
-
 /** 提醒提前分钟数 */
 const reminderMinutes = ref(30);
-const notificationEnabled = ref(true);
-
-const saving = ref(false);
-const saved = ref(false);
 
 onMounted(async () => {
   try {
-    aiSettings.value = await invoke<AiSettings>('get_ai_settings');
     reminderMinutes.value = await invoke<number>('get_reminder_minutes');
   } catch {
     // 首次运行使用默认值
   }
 });
-
-async function saveAiSettings() {
-  saving.value = true;
-  try {
-    aiSettings.value.enabled = true;
-    await invoke('set_ai_settings', { settings: aiSettings.value });
-    saved.value = true;
-    setTimeout(() => {
-      saved.value = false;
-    }, 2000);
-  } catch (e) {
-    console.error('保存 AI 设置失败:', e);
-  } finally {
-    saving.value = false;
-  }
-}
 
 async function saveReminder() {
   try {
@@ -131,29 +102,6 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
           </div>
 
           <div class="settings-group">
-            <div class="group-title">AI 设置</div>
-            <div class="setting-row">
-              <label>API 端点</label>
-              <input
-                v-model="aiSettings.api_endpoint"
-                type="text"
-                placeholder="https://api.openai.com/v1"
-              />
-            </div>
-            <div class="setting-row">
-              <label>API Key</label>
-              <input v-model="aiSettings.api_key" type="password" placeholder="sk-..." />
-            </div>
-            <div class="setting-row">
-              <label>模型</label>
-              <input v-model="aiSettings.model" type="text" placeholder="gpt-4o-mini" />
-            </div>
-            <button class="save-btn" @click="saveAiSettings" :disabled="saving">
-              {{ saved ? '已保存' : '保存' }}
-            </button>
-          </div>
-
-          <div class="settings-group">
             <div class="group-title">提醒设置</div>
             <div class="setting-row">
               <label>提前提醒</label>
@@ -172,7 +120,7 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
 
         <!-- 供应商管理 -->
         <div v-else-if="activeSub === 'vendors'" class="sub-page">
-          <VendorList @refresh="saved = true" />
+          <VendorList />
         </div>
 
         <!-- 默认模型（占位） -->
@@ -320,25 +268,6 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
 .unit {
   font-size: var(--text-sm);
   color: var(--text-muted);
-}
-
-.save-btn {
-  margin-top: var(--space-md);
-  padding: var(--space-sm) var(--space-xl);
-  background: var(--accent);
-  color: white;
-  border: none;
-  border-radius: var(--radius-md);
-  font-size: var(--text-base);
-  cursor: pointer;
-  transition: background var(--transition-fast);
-}
-.save-btn:hover {
-  background: var(--accent-hover);
-}
-.save-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 .theme-select {

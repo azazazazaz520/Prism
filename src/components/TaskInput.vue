@@ -388,29 +388,29 @@ function formatDueDate(d: string): string {
 
 <style scoped>
 .task-input {
-  margin-bottom: 12px;
+  margin-bottom: var(--space-md);
 }
 
 .input-row {
   display: flex;
-  gap: 6px;
+  gap: var(--space-xs);
 }
 
 .task-input-field {
   flex: 1;
-  padding: 7px 12px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 13px;
+  padding: 7px var(--space-md);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color var(--transition-normal);
 }
 
 .task-input-field:focus {
-  border-color: #888;
+  border-color: var(--gray-600);
 }
 .task-input-field.error {
-  border-color: #e74c3c;
+  border-color: var(--danger);
 }
 
 .date-btn-wrapper {
@@ -418,51 +418,51 @@ function formatDueDate(d: string): string {
 }
 
 .date-btn {
-  padding: 7px 8px;
+  padding: 7px var(--space-sm);
   background: none;
-  border: 1px solid #ddd;
-  border-radius: 6px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--text-sm);
   line-height: 1;
-  transition: border-color 0.2s;
+  transition: border-color var(--transition-normal);
 }
 
 .date-btn:hover,
 .date-btn.active {
-  border-color: #888;
+  border-color: var(--gray-600);
 }
 
 .task-input-btn {
-  padding: 7px 16px;
-  background: #333;
+  padding: 7px var(--space-lg);
+  background: var(--gray-900);
   color: white;
   border: none;
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background var(--transition-normal);
   white-space: nowrap;
 }
 
 .task-input-btn:hover {
-  background: #555;
+  background: var(--gray-800);
 }
 
 .ai-btn {
-  padding: 7px 8px;
+  padding: 7px var(--space-sm);
   background: none;
-  border: 1px solid #ddd;
-  border-radius: 6px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--text-sm);
   line-height: 1;
-  transition: all 0.2s;
+  transition: all var(--transition-normal);
 }
 
 .ai-btn:hover {
-  border-color: #4a90d9;
-  background: #f0f6ff;
+  border-color: var(--accent);
+  background: var(--accent-light);
 }
 .ai-btn.parsing {
   opacity: 0.5;
@@ -471,8 +471,8 @@ function formatDueDate(d: string): string {
 
 .quick-actions {
   display: flex;
-  gap: 4px;
-  margin-top: 6px;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
   flex-wrap: wrap;
 }
 
@@ -480,69 +480,69 @@ function formatDueDate(d: string): string {
   display: flex;
   align-items: center;
   gap: 3px;
-  padding: 3px 8px;
+  padding: 3px var(--space-sm);
   background: none;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  font-size: 11px;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
   cursor: pointer;
-  transition: all 0.15s;
-  color: #999;
+  transition: all var(--transition-fast);
+  color: var(--text-muted);
 }
 
 .qa-btn:hover {
-  border-color: #888;
-  color: #555;
+  border-color: var(--gray-600);
+  color: var(--text-secondary);
 }
 
 .qa-btn.active {
-  background: #f5f5f5;
-  border-color: #888;
-  color: #333;
+  background: var(--bg-hover);
+  border-color: var(--gray-600);
+  color: var(--text-primary);
 }
 
 .tag-input-row {
   display: flex;
-  gap: 4px;
-  margin-top: 6px;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
 }
 
 .tag-input {
   flex: 1;
-  padding: 4px 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 12px;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
   outline: none;
 }
 
 .tag-input:focus {
-  border-color: #888;
+  border-color: var(--gray-600);
 }
 
 .tag-add-btn {
-  padding: 4px 10px;
-  background: #333;
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--gray-900);
   color: white;
   border: none;
-  border-radius: 4px;
-  font-size: 12px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
 .tag-preview {
   display: flex;
-  gap: 4px;
+  gap: var(--space-xs);
   flex-wrap: wrap;
-  margin-top: 6px;
+  margin-top: var(--space-xs);
 }
 
 .tag-chip {
-  font-size: 10px;
-  background: #f0f0f0;
-  color: #666;
+  font-size: var(--text-xs);
+  background: var(--bg-tertiary);
+  color: var(--gray-700);
   padding: 1px 6px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   gap: 3px;
@@ -551,22 +551,22 @@ function formatDueDate(d: string): string {
 .tag-chip-x {
   background: none;
   border: none;
-  color: #999;
+  color: var(--text-muted);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--text-sm);
   padding: 0;
   line-height: 1;
 }
 
 .summary {
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid #f0f0f0;
-  font-size: 11px;
-  color: #999;
+  margin-top: var(--space-xs);
+  padding-top: var(--space-xs);
+  border-top: 1px solid var(--border-light);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-xs);
 }
 
 .summary-item {

@@ -119,37 +119,37 @@ function isSelected(day: number): boolean {
 
 <style scoped>
 .mini-calendar {
-  background: white;
-  border-radius: 8px;
-  border: 1px solid #eee;
-  padding: 8px 10px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  padding: var(--space-sm) var(--space-sm);
 }
 
 .mc-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-xs);
 }
 
 .mc-month {
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .mc-nav {
   background: none;
   border: none;
-  font-size: 12px;
+  font-size: var(--text-sm);
   cursor: pointer;
-  color: #888;
+  color: var(--gray-600);
   padding: 1px 6px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
 }
 
 .mc-nav:hover {
-  background: #f0f0f0;
+  background: var(--bg-tertiary);
 }
 
 .mc-weekdays {
@@ -161,8 +161,8 @@ function isSelected(day: number): boolean {
 
 .mc-wd {
   text-align: center;
-  font-size: 10px;
-  color: #aaa;
+  font-size: var(--text-xs);
+  color: var(--gray-400);
   padding: 1px 0;
 }
 
@@ -176,10 +176,10 @@ function isSelected(day: number): boolean {
   aspect-ratio: 1;
   border: none;
   background: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 11px;
-  color: #333;
+  font-size: var(--text-xs);
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -191,16 +191,16 @@ function isSelected(day: number): boolean {
 }
 
 .mc-day:hover:not(.empty) {
-  background: #e8f0fe;
+  background: var(--accent-light);
 }
 
 .mc-day.today {
   font-weight: 700;
-  color: #4a90d9;
+  color: var(--accent);
 }
 
 .mc-day.selected {
-  background: #4a90d9;
+  background: var(--accent);
   color: white;
 }
 
@@ -211,7 +211,7 @@ function isSelected(day: number): boolean {
   width: 3px;
   height: 3px;
   border-radius: 50%;
-  background: #4a90d9;
+  background: var(--accent);
 }
 
 .mc-day.selected.has-task::after {

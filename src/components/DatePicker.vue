@@ -114,11 +114,11 @@ function isToday(day: number): boolean {
   position: absolute;
   top: 100%;
   right: 0;
-  margin-top: 4px;
-  background: white;
-  border-radius: 10px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-  padding: 12px;
+  margin-top: var(--space-xs);
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 var(--space-xs) var(--space-lg) rgba(0, 0, 0, 0.12);
+  padding: var(--space-md);
   z-index: 10;
   width: 260px;
 }
@@ -127,41 +127,41 @@ function isToday(day: number): boolean {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-sm);
 }
 
 .dp-month {
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .dp-nav {
   background: none;
   border: none;
-  font-size: 16px;
+  font-size: var(--text-md);
   cursor: pointer;
-  color: #666;
-  padding: 2px 8px;
-  border-radius: 4px;
+  color: var(--gray-700);
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-sm);
 }
 
 .dp-nav:hover {
-  background: #f0f0f0;
+  background: var(--bg-tertiary);
 }
 
 .dp-weekdays {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 2px;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-xs);
 }
 
 .dp-wd {
   text-align: center;
-  font-size: 12px;
-  color: #999;
-  padding: 4px 0;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  padding: var(--space-xs) 0;
 }
 
 .dp-grid {
@@ -174,10 +174,10 @@ function isToday(day: number): boolean {
   aspect-ratio: 1;
   border: none;
   background: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: 13px;
-  color: #333;
+  font-size: var(--text-base);
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -188,27 +188,27 @@ function isToday(day: number): boolean {
 }
 
 .dp-day:hover:not(.empty) {
-  background: #e8f0fe;
+  background: var(--accent-light);
 }
 
 .dp-day.today {
-  background: #4a90d9;
+  background: var(--accent);
   color: white;
 }
 
 .dp-clear {
   width: 100%;
-  margin-top: 8px;
+  margin-top: var(--space-sm);
   padding: 6px;
   background: none;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  font-size: 13px;
-  color: #999;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  color: var(--text-muted);
   cursor: pointer;
 }
 
 .dp-clear:hover {
-  background: #f5f5f5;
+  background: var(--bg-hover);
 }
 </style>

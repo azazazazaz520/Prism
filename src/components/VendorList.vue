@@ -118,44 +118,44 @@ async function setActive(id: string | null) {
   align-items: center;
   justify-content: center;
   height: 200px;
-  color: #999;
+  color: var(--text-muted);
 }
 
 .empty-text {
-  font-size: 14px;
-  margin: 0 0 4px;
+  font-size: var(--text-sm);
+  margin: 0 0 var(--space-xs);
 }
 
 .empty-hint {
-  font-size: 12px;
-  margin: 0 0 16px;
-  color: #bbb;
+  font-size: var(--text-sm);
+  margin: 0 0 var(--space-lg);
+  color: var(--text-disabled);
 }
 
 .add-btn {
-  padding: 8px 24px;
-  background: #333;
+  padding: var(--space-sm) var(--space-2xl);
+  background: var(--gray-900);
   color: white;
   border: none;
-  border-radius: 20px;
-  font-size: 13px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-base);
   cursor: pointer;
 }
 
 .vendor-card {
-  border: 1px solid #eee;
-  border-radius: 8px;
-  padding: 12px;
-  margin-bottom: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: var(--space-md);
+  margin-bottom: var(--space-sm);
   cursor: pointer;
-  transition: border-color 0.15s;
+  transition: border-color var(--transition-fast);
 }
 .vendor-card:hover {
-  border-color: #ccc;
+  border-color: var(--gray-400);
 }
 .vendor-card.active {
-  border-color: #4a90d9;
-  background: #f0f6ff;
+  border-color: var(--accent);
+  background: var(--accent-light);
 }
 
 .vendor-header {
@@ -165,14 +165,14 @@ async function setActive(id: string | null) {
 }
 
 .vendor-name {
-  font-size: 13px;
+  font-size: var(--text-base);
   font-weight: 500;
 }
 
 .vendor-badge {
-  font-size: 10px;
+  font-size: var(--text-xs);
   padding: 1px 6px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   text-transform: uppercase;
 }
 .vendor-badge.openai {
@@ -189,33 +189,33 @@ async function setActive(id: string | null) {
 }
 
 .vendor-model {
-  font-size: 11px;
-  color: #999;
-  margin-top: 4px;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-top: var(--space-xs);
 }
 
 .vendor-actions {
   display: flex;
-  gap: 4px;
-  margin-top: 8px;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
 }
 
 .action-btn {
-  padding: 3px 10px;
-  background: #f5f5f5;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  font-size: 11px;
+  padding: 3px var(--space-sm);
+  background: var(--bg-hover);
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
   cursor: pointer;
-  color: #666;
+  color: var(--gray-700);
 }
 .action-btn:hover {
-  background: #eee;
+  background: var(--border-subtle);
 }
 .action-btn.danger {
-  color: #d44;
+  color: var(--danger);
 }
 .action-btn.danger:hover {
-  background: #fef0f0;
+  background: var(--danger-light);
 }
 </style>

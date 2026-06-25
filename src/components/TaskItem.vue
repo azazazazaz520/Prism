@@ -305,24 +305,24 @@ const dueLabel = computed(() => {
 .task-item {
   display: flex;
   align-items: center;
-  padding: 8px 12px;
-  border-bottom: 1px solid #f0f0f0;
-  transition: background 0.15s;
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--border-light);
+  transition: background var(--transition-fast);
 }
 
 .task-item:hover {
-  background: #f8f8f8;
+  background: var(--bg-secondary);
 }
 .task-item.completed {
-  background: #fafafa;
+  background: var(--bg-secondary);
 }
 
 .task-checkbox {
   width: 16px;
   height: 16px;
-  margin-right: 10px;
+  margin-right: var(--space-sm);
   cursor: pointer;
-  accent-color: #333;
+  accent-color: var(--gray-900);
   flex-shrink: 0;
 }
 
@@ -337,12 +337,12 @@ const dueLabel = computed(() => {
 .task-title-row {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 
 .task-title {
-  font-size: 13px;
-  color: #333;
+  font-size: var(--text-base);
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -350,16 +350,16 @@ const dueLabel = computed(() => {
 
 .task-title.done {
   text-decoration: line-through;
-  color: #bbb;
+  color: var(--text-disabled);
 }
 
 .icon-star {
   flex-shrink: 0;
-  color: #e6a817;
+  color: var(--warning);
 }
 .icon-daily {
   flex-shrink: 0;
-  color: #e67e22;
+  color: var(--warning);
 }
 .icon-daily.done {
   opacity: 0.4;
@@ -368,44 +368,44 @@ const dueLabel = computed(() => {
 .task-meta {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
   margin-top: 2px;
   flex-wrap: wrap;
 }
 
 .task-time {
-  font-size: 11px;
-  color: #bbb;
+  font-size: var(--text-xs);
+  color: var(--text-disabled);
 }
 
 .due-badge {
-  font-size: 10px;
+  font-size: var(--text-xs);
   padding: 0 5px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   font-weight: 500;
 }
 
 .due-badge.overdue {
-  color: #d44;
+  color: var(--danger);
 }
 .due-badge.today {
-  color: #e67e22;
+  color: var(--warning);
 }
 .due-badge.upcoming {
-  color: #888;
+  color: var(--gray-600);
 }
 
 .tag-badge {
-  font-size: 10px;
-  color: #999;
-  padding: 0 4px;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  padding: 0 var(--space-xs);
 }
 
 .task-edit-input {
-  font-size: 13px;
+  font-size: var(--text-base);
   padding: 3px 6px;
-  border: 1px solid #888;
-  border-radius: 4px;
+  border: 1px solid var(--gray-600);
+  border-radius: var(--radius-sm);
   outline: none;
   width: 100%;
 }
@@ -413,17 +413,17 @@ const dueLabel = computed(() => {
 .task-delete-btn {
   background: none;
   border: none;
-  color: #ccc;
+  color: var(--gray-400);
   font-size: 18px;
   cursor: pointer;
   padding: 0 2px;
   line-height: 1;
   flex-shrink: 0;
-  transition: color 0.15s;
+  transition: color var(--transition-fast);
 }
 
 .task-delete-btn:hover {
-  color: #d44;
+  color: var(--danger);
 }
 
 .task-actions {
@@ -440,16 +440,16 @@ const dueLabel = computed(() => {
 .task-menu-btn {
   background: none;
   border: none;
-  color: #ccc;
+  color: var(--gray-400);
   font-size: 14px;
   cursor: pointer;
   padding: 0 2px;
   line-height: 1;
-  transition: color 0.15s;
+  transition: color var(--transition-fast);
 }
 
 .task-menu-btn:hover {
-  color: #666;
+  color: var(--gray-700);
 }
 
 .task-decompose-btn {
@@ -460,7 +460,7 @@ const dueLabel = computed(() => {
   padding: 0 2px;
   line-height: 1;
   opacity: 0.5;
-  transition: opacity 0.15s;
+  transition: opacity var(--transition-fast);
 }
 
 .task-decompose-btn:hover {
@@ -471,12 +471,12 @@ const dueLabel = computed(() => {
   position: absolute;
   top: 100%;
   right: 0;
-  margin-top: 4px;
-  background: white;
-  border-radius: 6px;
-  border: 1px solid #eee;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  padding: 4px;
+  margin-top: var(--space-xs);
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 2px var(--space-sm) rgba(0, 0, 0, 0.08);
+  padding: var(--space-xs);
   z-index: 10;
   width: 180px;
 }
@@ -485,42 +485,42 @@ const dueLabel = computed(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 8px;
-  border-radius: 4px;
+  padding: 6px var(--space-sm);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 .menu-item:hover {
-  background: #f5f5f5;
+  background: var(--bg-hover);
 }
 
 .menu-toggle {
-  font-size: 10px;
+  font-size: var(--text-xs);
   padding: 1px 6px;
-  border-radius: 4px;
-  background: #f0f0f0;
-  color: #999;
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
 }
 
 .menu-toggle.on {
-  background: #333;
+  background: var(--gray-900);
   color: white;
 }
 
 .menu-divider {
   height: 1px;
-  background: #f0f0f0;
+  background: var(--border-light);
   margin: 2px 0;
 }
 
 .menu-tags {
-  padding: 4px 8px;
+  padding: var(--space-xs) var(--space-sm);
 }
 
 .menu-tags-header {
-  font-size: 11px;
-  color: #999;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
   margin-bottom: 3px;
 }
 
@@ -528,15 +528,15 @@ const dueLabel = computed(() => {
   display: flex;
   gap: 3px;
   flex-wrap: wrap;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-xs);
 }
 
 .menu-tag-chip {
-  font-size: 10px;
-  background: #f0f0f0;
-  color: #666;
+  font-size: var(--text-xs);
+  background: var(--bg-tertiary);
+  color: var(--gray-700);
   padding: 1px 5px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   gap: 2px;
@@ -545,9 +545,9 @@ const dueLabel = computed(() => {
 .menu-tag-x {
   background: none;
   border: none;
-  color: #999;
+  color: var(--text-muted);
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 0;
   line-height: 1;
 }
@@ -561,22 +561,22 @@ const dueLabel = computed(() => {
   flex: 1;
   min-width: 0;
   padding: 3px 6px;
-  border: 1px solid #ddd;
-  border-radius: 3px;
-  font-size: 11px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
   outline: none;
 }
 
 .menu-tag-input:focus {
-  border-color: #888;
+  border-color: var(--gray-600);
 }
 
 .menu-tag-add {
-  background: #333;
+  background: var(--gray-900);
   color: white;
   border: none;
-  border-radius: 3px;
-  font-size: 11px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
   padding: 3px 6px;
   cursor: pointer;
 }

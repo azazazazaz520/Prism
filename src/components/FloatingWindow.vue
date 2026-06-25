@@ -257,15 +257,15 @@ function onPointerUp() {
 .floating-window {
   width: 320px;
   min-height: 100vh;
-  border-radius: 14px;
+  border-radius: var(--radius-sm);
   box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.4),
+    0 var(--space-sm) 32px rgba(0, 0, 0, 0.4),
     0 0 0 1px rgba(255, 255, 255, 0.08);
   overflow-y: scroll;
   scrollbar-width: none;
   user-select: none;
   cursor: grab;
-  font-family: -apple-system, BlinkMacSystemFont, 'Microsoft YaHei', sans-serif;
+  font-family: var(--font-sans);
 }
 
 .floating-window::-webkit-scrollbar {
@@ -280,7 +280,7 @@ function onPointerUp() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  padding: var(--space-sm) var(--space-sm);
   background: rgba(255, 255, 255, 0.05);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   cursor: move;
@@ -288,17 +288,17 @@ function onPointerUp() {
 }
 
 .topbar-left {
-  font-size: 12px;
-  color: #aaa;
+  font-size: var(--text-sm);
+  color: var(--text-disabled);
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
 .count {
-  color: #4a90d9;
+  color: var(--accent);
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--text-base);
 }
 
 .topbar-btns {
@@ -309,26 +309,26 @@ function onPointerUp() {
 .topbar-btn {
   background: rgba(255, 255, 255, 0.08);
   border: none;
-  color: #999;
-  font-size: 11px;
-  padding: 4px 10px;
-  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--transition-fast);
   -webkit-app-region: no-drag;
 }
 
 .topbar-btn:hover {
   background: rgba(255, 255, 255, 0.15);
-  color: #ddd;
+  color: var(--text-secondary);
 }
 .topbar-btn.active {
-  background: rgba(74, 144, 217, 0.2);
-  color: #4a90d9;
+  background: var(--accent-muted);
+  color: var(--accent);
 }
 
 .card-area {
-  padding: 16px;
+  padding: var(--space-lg);
   min-height: 80px;
   display: flex;
   align-items: center;
@@ -339,8 +339,8 @@ function onPointerUp() {
   width: 100%;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  padding: 14px 16px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-sm) var(--space-lg);
   animation: fadeIn 0.35s ease;
 }
 
@@ -356,9 +356,9 @@ function onPointerUp() {
 }
 
 .card-title {
-  font-size: 15px;
-  color: #eee;
-  margin-bottom: 10px;
+  font-size: var(--text-md);
+  color: var(--text-primary);
+  margin-bottom: var(--space-sm);
   line-height: 1.4;
   display: flex;
   align-items: flex-start;
@@ -367,7 +367,7 @@ function onPointerUp() {
 
 .card-pin {
   flex-shrink: 0;
-  font-size: 13px;
+  font-size: var(--text-base);
 }
 
 .card-meta {
@@ -378,57 +378,57 @@ function onPointerUp() {
 }
 
 .card-tag {
-  font-size: 10px;
-  background: rgba(74, 144, 217, 0.2);
-  color: #6db3f2;
+  font-size: var(--text-xs);
+  background: var(--accent-muted);
+  color: var(--accent);
   padding: 2px 7px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
 }
 
 .card-due {
-  font-size: 10px;
+  font-size: var(--text-xs);
   padding: 2px 7px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   font-weight: 500;
 }
 
 .card-due.overdue {
-  background: rgba(231, 76, 60, 0.2);
-  color: #f07070;
+  background: var(--danger-light);
+  color: var(--danger);
 }
 .card-due.today {
-  background: rgba(243, 156, 18, 0.2);
-  color: #f5b642;
+  background: var(--warning-light);
+  color: var(--warning);
 }
 .card-due.upcoming {
-  background: rgba(74, 144, 217, 0.15);
-  color: #6db3f2;
+  background: var(--accent-muted);
+  color: var(--accent);
 }
 
 .card-important {
-  font-size: 11px;
-  color: #f5b642;
+  font-size: var(--text-xs);
+  color: var(--warning);
 }
 
 .no-tasks {
   text-align: center;
-  color: #666;
-  font-size: 14px;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
 }
 
 .carousel-controls {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 16px 12px;
-  gap: 14px;
+  padding: 0 var(--space-lg) var(--space-md);
+  gap: var(--space-sm);
 }
 
 .arrow-btn {
   background: rgba(255, 255, 255, 0.06);
   border: none;
-  color: #888;
-  font-size: 16px;
+  color: var(--text-muted);
+  font-size: var(--text-md);
   width: 28px;
   height: 28px;
   border-radius: 50%;
@@ -436,12 +436,12 @@ function onPointerUp() {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s;
+  transition: all var(--transition-fast);
 }
 
 .arrow-btn:hover {
   background: rgba(255, 255, 255, 0.15);
-  color: #ddd;
+  color: var(--text-primary);
 }
 
 .dots {
@@ -454,39 +454,39 @@ function onPointerUp() {
   height: 6px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.2);
-  transition: all 0.2s;
+  transition: all var(--transition-normal);
   cursor: pointer;
 }
 
 .dot.active {
-  background: #4a90d9;
+  background: var(--accent);
   box-shadow: 0 0 6px rgba(74, 144, 217, 0.5);
 }
 
 .panel {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
-  padding: 12px 14px;
+  padding: var(--space-md) var(--space-sm);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-sm);
 }
 
 .panel-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 12px;
-  color: #999;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
 }
 
 .panel-row label {
   flex-shrink: 0;
-  margin-right: 10px;
+  margin-right: var(--space-sm);
 }
 
 .panel-row input[type='range'] {
   flex: 1;
-  accent-color: #4a90d9;
+  accent-color: var(--accent);
   height: 4px;
 }
 
@@ -494,41 +494,41 @@ function onPointerUp() {
   min-width: 32px;
   text-align: right;
   font-family: monospace;
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 .panel-row select {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #ccc;
-  padding: 3px 8px;
-  border-radius: 6px;
-  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 3px var(--space-sm);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   outline: none;
   cursor: pointer;
 }
 
 .panel-row select option {
   background: #2d2d2d;
-  color: #ccc;
+  color: var(--text-secondary);
 }
 
 .exit-btn {
   width: 100%;
-  margin-top: 4px;
+  margin-top: var(--space-xs);
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #999;
+  color: var(--text-muted);
   padding: 6px;
-  border-radius: 8px;
-  font-size: 12px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--transition-fast);
 }
 
 .exit-btn:hover {
-  background: rgba(231, 76, 60, 0.15);
-  color: #e74c3c;
+  background: var(--danger-light);
+  color: var(--danger);
   border-color: rgba(231, 76, 60, 0.3);
 }
 </style>

@@ -37,9 +37,10 @@ npm-debug.log*
 .superpowers/
 .mcp.json
 .codegraph/
+
 docs/
 .agents/
 skills-lock.json
 AGENTS.md
-vision.cjs
+scripts/vision.cjs
 WORKFLOW_TEMPLATE.md

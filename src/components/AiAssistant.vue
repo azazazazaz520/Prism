@@ -277,7 +277,7 @@ const hasMessages = computed(() => messages.value.length > 0);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #fff;
+  background: var(--bg-primary);
 }
 
 /* ── 消息区 ─────────────────────── */
@@ -285,7 +285,7 @@ const hasMessages = computed(() => messages.value.length > 0);
 .chat-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 40px 16px;
+  padding: var(--space-2xl) 40px var(--space-lg);
   display: flex;
   flex-direction: column;
 }
@@ -300,9 +300,9 @@ const hasMessages = computed(() => messages.value.length > 0);
 }
 
 .empty-title {
-  font-size: 20px;
+  font-size: var(--text-lg);
   font-weight: 500;
-  color: #222;
+  color: var(--text-primary);
   letter-spacing: 0.5px;
 }
 
@@ -310,8 +310,8 @@ const hasMessages = computed(() => messages.value.length > 0);
 
 .msg-row {
   display: flex;
-  gap: 10px;
-  margin-bottom: 16px;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
   max-width: 80%;
 }
 
@@ -331,26 +331,26 @@ const hasMessages = computed(() => messages.value.length > 0);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #999;
+  color: var(--text-muted);
 }
 
 .msg-bubble {
-  padding: 10px 14px;
-  border-radius: 12px;
-  font-size: 13px;
+  padding: var(--space-sm) 14px;
+  border-radius: var(--space-md);
+  font-size: var(--text-base);
   line-height: 1.7;
   word-break: break-word;
 }
 
 .msg-row.user .msg-bubble {
-  background: #222;
-  color: #fff;
+  background: var(--text-primary);
+  color: var(--bg-primary);
   border-bottom-right-radius: 3px;
 }
 
 .msg-row.assistant .msg-bubble {
-  background: #f5f5f5;
-  color: #333;
+  background: var(--bg-hover);
+  color: var(--text-primary);
   border-bottom-left-radius: 3px;
 }
 
@@ -360,9 +360,9 @@ const hasMessages = computed(() => messages.value.length > 0);
 
 .msg-bubble :deep(code) {
   background: rgba(0, 0, 0, 0.06);
-  padding: 1px 4px;
-  border-radius: 3px;
-  font-size: 12px;
+  padding: 1px var(--space-xs);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
 }
 
 /* ── 打字动画 ────────────────────── */
@@ -370,14 +370,14 @@ const hasMessages = computed(() => messages.value.length > 0);
 .typing {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 12px 18px;
+  gap: var(--space-xs);
+  padding: var(--space-md) 18px;
 }
 
 .dot {
   width: 6px;
   height: 6px;
-  background: #999;
+  background: var(--text-muted);
   border-radius: 50%;
   animation: bounce 1.2s infinite ease-in-out;
 }
@@ -405,7 +405,7 @@ const hasMessages = computed(() => messages.value.length > 0);
 /* ── 底部输入区 ─────────────────────── */
 
 .input-area {
-  padding: 0 40px 24px;
+  padding: 0 40px var(--space-2xl);
   flex-shrink: 0;
 }
 
@@ -414,8 +414,8 @@ const hasMessages = computed(() => messages.value.length > 0);
 .quick-actions {
   display: flex;
   justify-content: center;
-  gap: 10px;
-  margin-bottom: 16px;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
   flex-wrap: wrap;
 }
 
@@ -423,20 +423,20 @@ const hasMessages = computed(() => messages.value.length > 0);
   display: flex;
   align-items: center;
   gap: 5px;
-  padding: 7px 16px;
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 20px;
-  font-size: 13px;
-  color: #555;
+  padding: 7px var(--space-lg);
+  background: var(--bg-primary);
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius-full);
+  font-size: var(--text-base);
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--transition-fast);
 }
 
 .quick-btn:hover {
-  border-color: #333;
-  color: #222;
-  background: #fafafa;
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+  background: var(--bg-secondary);
 }
 
 .quick-btn:disabled {
@@ -446,7 +446,7 @@ const hasMessages = computed(() => messages.value.length > 0);
 
 .quick-icon {
   flex-shrink: 0;
-  color: #999;
+  color: var(--text-muted);
 }
 
 /* ─ 输入框 ────────────────────── */
@@ -454,15 +454,15 @@ const hasMessages = computed(() => messages.value.length > 0);
 .input-row {
   display: flex;
   align-items: center;
-  background: #fff;
-  border: 1px solid #ddd;
-  border-radius: 28px;
-  padding: 4px 6px 4px 16px;
-  transition: border-color 0.2s;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-full);
+  padding: var(--space-xs) 6px var(--space-xs) var(--space-lg);
+  transition: border-color var(--transition-normal);
 }
 
 .input-row:focus-within {
-  border-color: #333;
+  border-color: var(--text-primary);
 }
 
 .input-plus {
@@ -470,39 +470,39 @@ const hasMessages = computed(() => messages.value.length > 0);
   height: 28px;
   background: none;
   border: none;
-  color: #999;
+  color: var(--text-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: color 0.15s;
+  transition: color var(--transition-fast);
   padding: 0;
 }
 
 .input-plus:hover {
-  color: #333;
+  color: var(--text-primary);
 }
 
 .chat-input {
   flex: 1;
   border: none;
   outline: none;
-  font-size: 14px;
-  padding: 8px 12px;
+  font-size: var(--text-sm);
+  padding: var(--space-sm) var(--space-md);
   background: transparent;
-  color: #222;
+  color: var(--text-primary);
 }
 
 .chat-input::placeholder {
-  color: #bbb;
+  color: var(--text-disabled);
 }
 
 .send-btn {
   width: 36px;
   height: 36px;
-  background: #222;
-  color: #fff;
+  background: var(--text-primary);
+  color: var(--bg-primary);
   border: none;
   border-radius: 50%;
   cursor: pointer;
@@ -510,16 +510,16 @@ const hasMessages = computed(() => messages.value.length > 0);
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: background 0.15s;
+  transition: background var(--transition-fast);
 }
 
 .send-btn:hover {
-  background: #444;
+  background: var(--text-secondary);
 }
 
 .send-btn:disabled {
-  background: #ddd;
-  color: #fff;
+  background: var(--border-default);
+  color: var(--bg-primary);
   cursor: not-allowed;
 }
 </style>

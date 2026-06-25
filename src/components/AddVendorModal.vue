@@ -160,59 +160,59 @@ function handleSave() {
 }
 
 .modal-card {
-  background: white;
-  border-radius: 10px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
   width: 420px;
   max-height: 80vh;
   overflow-y: auto;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 var(--space-xs) var(--space-xl) rgba(0, 0, 0, 0.15);
 }
 
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px 12px;
-  border-bottom: 1px solid #eee;
+  padding: var(--space-lg) var(--space-xl) var(--space-md);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .modal-header h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--text-md);
   font-weight: 600;
 }
 
 .close-btn {
   background: none;
   border: none;
-  font-size: 20px;
+  font-size: var(--text-lg);
   cursor: pointer;
-  color: #999;
+  color: var(--text-muted);
 }
 
 .modal-body {
-  padding: 16px 20px;
+  padding: var(--space-lg) var(--space-xl);
 }
 
 .preset-row {
   display: flex;
-  gap: 6px;
-  margin-bottom: 14px;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-sm);
 }
 
 .preset-btn {
   flex: 1;
-  padding: 8px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  background: white;
+  padding: var(--space-sm);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
   cursor: pointer;
-  font-size: 12px;
-  transition: all 0.15s;
+  font-size: var(--text-sm);
+  transition: all var(--transition-fast);
 }
 .preset-btn.selected {
-  border-color: #333;
-  background: #f5f5f5;
+  border-color: var(--text-primary);
+  background: var(--bg-hover);
   font-weight: 500;
 }
 
@@ -220,41 +220,41 @@ function handleSave() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid #f5f5f5;
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--bg-hover);
 }
 
 .field-row label {
-  font-size: 12px;
-  color: #666;
+  font-size: var(--text-sm);
+  color: var(--gray-700);
   flex-shrink: 0;
   width: 80px;
 }
 
 .field-row input {
   flex: 1;
-  padding: 5px 8px;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  font-size: 12px;
+  padding: 5px var(--space-sm);
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
   outline: none;
   text-align: right;
 }
 .field-row input:focus {
-  border-color: #888;
+  border-color: var(--gray-600);
 }
 
 .toggle {
   width: 40px;
   height: 22px;
-  background: #ccc;
+  background: var(--gray-400);
   border-radius: 11px;
   position: relative;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background var(--transition-normal);
 }
 .toggle.on {
-  background: #333;
+  background: var(--gray-900);
 }
 .toggle-knob {
   width: 18px;
@@ -264,28 +264,28 @@ function handleSave() {
   position: absolute;
   top: 2px;
   left: 2px;
-  transition: transform 0.2s;
+  transition: transform var(--transition-normal);
 }
 .toggle.on .toggle-knob {
   transform: translateX(18px);
 }
 
 .modal-footer {
-  padding: 12px 20px 16px;
+  padding: var(--space-md) var(--space-xl) var(--space-lg);
   display: flex;
   justify-content: flex-end;
 }
 
 .save-btn {
-  padding: 8px 24px;
-  background: #333;
+  padding: var(--space-sm) var(--space-2xl);
+  background: var(--gray-900);
   color: white;
   border: none;
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
   cursor: pointer;
 }
 .save-btn:hover {
-  background: #555;
+  background: var(--gray-800);
 }
 </style>

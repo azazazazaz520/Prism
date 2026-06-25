@@ -135,9 +135,11 @@ TODO/
 ├── docs/                         # 项目文档
 │   ├── agents/                   # Agent 配置文档
 │   └── superpowers/              # 开发计划与设计文档
+├── scripts/
+│   └── vision.cjs                # 识图脚本
 ├── .github/workflows/
 │   └── rust.yml                  # CI 流水线
-├── package.json
+├── package.json                  # 项目配置（含 Prettier、Commitlint）
 ├── vite.config.ts
 └── README.md
 ```

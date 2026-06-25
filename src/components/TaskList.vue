@@ -96,35 +96,35 @@ const normalTasks = computed(() => sortedTasks.value.filter((t) => !t.pinned || 
 
 <style scoped>
 .task-list {
-  background: white;
-  border: 1px solid #eee;
-  border-radius: 6px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
 }
 
 .task-empty {
-  padding: 32px 16px;
+  padding: 32px var(--space-lg);
   text-align: center;
-  color: #ccc;
-  font-size: 13px;
+  color: var(--gray-400);
+  font-size: var(--text-base);
 }
 
 .pinned-section {
-  background: #fafafa;
+  background: var(--bg-secondary);
 }
 
 .pinned-header {
-  padding: 6px 12px;
-  font-size: 11px;
+  padding: 6px var(--space-md);
+  font-size: var(--text-xs);
   font-weight: 600;
-  color: #999;
-  border-bottom: 1px solid #eee;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 
 .section-divider {
   height: 1px;
-  background: #f0f0f0;
+  background: var(--border-light);
 }
 </style>

@@ -448,6 +448,20 @@ async fn ai_chat(state: tauri::State<'_, AppState>, message: String) -> Result<S
     ai::chat(&settings, &message, &tasks).await
 }
 
+/// 获取当前主题设置
+#[tauri::command]
+fn get_theme(state: tauri::State<AppState>) -> String {
+    state.store.lock().unwrap().theme.clone()
+}
+
+/// 设置主题模式并持久化
+#[tauri::command]
+fn set_theme(state: tauri::State<AppState>, theme: String) -> Result<(), String> {
+    let mut store = state.store.lock().unwrap();
+    store.theme = theme;
+    store::save_tasks(&store)
+}
+
 /// 应用入口：初始化存储、注册命令、启动后台提醒线程
 fn main() {
     let store = store::load_tasks();
@@ -480,6 +494,8 @@ fn main() {
             update_vendor,
             delete_vendor,
             set_active_vendor,
+            get_theme,
+            set_theme,
             show_floating_window,
             show_main_window,
             ai_parse_input,

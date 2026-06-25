@@ -128,36 +128,36 @@ const hasItems = computed(() => (suggestion.value?.items?.length ?? 0) > 0);
 
 <style scoped>
 .focus-bar {
-  margin-bottom: 6px;
+  margin-bottom: var(--space-xs);
 }
 
 .focus-trigger {
-  font-size: 12px;
-  color: #999;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
   padding: 6px 0;
   cursor: pointer;
-  transition: color 0.15s;
+  transition: color var(--transition-fast);
   user-select: none;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 
 .trigger-icon {
   flex-shrink: 0;
 }
 .focus-trigger:hover {
-  color: #4a90d9;
+  color: var(--accent);
 }
 
 .focus-error {
-  font-size: 11px;
-  color: #e74c3c;
+  font-size: var(--text-xs);
+  color: var(--danger);
   padding: 6px 0;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 
 .error-icon {
@@ -165,30 +165,30 @@ const hasItems = computed(() => (suggestion.value?.items?.length ?? 0) > 0);
 }
 
 .focus-content {
-  background: #f8f9fb;
-  border: 1px solid #e8eaed;
-  border-radius: 8px;
+  background: var(--accent-light);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
 .focus-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
   cursor: pointer;
   user-select: none;
 }
 
 .focus-icon {
   flex-shrink: 0;
-  color: #999;
+  color: var(--text-muted);
 }
 
 .focus-summary {
   flex: 1;
-  font-size: 12px;
-  color: #333;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -197,16 +197,16 @@ const hasItems = computed(() => (suggestion.value?.items?.length ?? 0) > 0);
 .focus-refresh {
   background: none;
   border: none;
-  color: #999;
-  font-size: 14px;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
   cursor: pointer;
   padding: 2px;
   line-height: 1;
-  transition: color 0.15s;
+  transition: color var(--transition-fast);
   flex-shrink: 0;
 }
 .focus-refresh:hover {
-  color: #4a90d9;
+  color: var(--accent);
 }
 .focus-refresh:disabled {
   opacity: 0.4;
@@ -214,31 +214,31 @@ const hasItems = computed(() => (suggestion.value?.items?.length ?? 0) > 0);
 }
 
 .focus-items {
-  padding: 0 12px 8px;
+  padding: 0 var(--space-md) var(--space-sm);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 
 .focus-item {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  padding: 4px 0;
-  border-top: 1px solid #eef0f2;
+  gap: var(--space-sm);
+  padding: var(--space-xs) 0;
+  border-top: 1px solid var(--border-light);
 }
 
 .focus-index {
-  font-size: 11px;
-  color: #4a90d9;
+  font-size: var(--text-xs);
+  color: var(--accent);
   font-weight: 600;
   min-width: 16px;
   flex-shrink: 0;
 }
 
 .focus-title {
-  font-size: 12px;
-  color: #222;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
   flex-shrink: 0;
   max-width: 140px;
   overflow: hidden;
@@ -247,8 +247,8 @@ const hasItems = computed(() => (suggestion.value?.items?.length ?? 0) > 0);
 }
 
 .focus-reason {
-  font-size: 11px;
-  color: #999;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;

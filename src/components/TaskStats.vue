@@ -28,27 +28,27 @@ const completedCount = computed(() => props.tasks.filter((t) => t.completed).len
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 2px;
-  margin-top: 8px;
+  padding: var(--space-sm) 2px;
+  margin-top: var(--space-sm);
 }
 
 .stats-text {
-  font-size: 12px;
-  color: #bbb;
+  font-size: var(--text-sm);
+  color: var(--text-disabled);
 }
 
 .clear-btn {
   background: none;
   border: none;
-  color: #999;
-  font-size: 12px;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
   cursor: pointer;
   padding: 2px 6px;
-  border-radius: 3px;
-  transition: color 0.15s;
+  border-radius: var(--radius-sm);
+  transition: color var(--transition-fast);
 }
 
 .clear-btn:hover {
-  color: #d44;
+  color: var(--danger);
 }
 </style>

@@ -90,7 +90,7 @@ function handleClick(item: NavItem) {
           height="20"
           viewBox="0 0 24 24"
           fill="none"
-          :stroke="activeModule === item.module ? '#222' : '#bbb'"
+          :stroke="activeModule === item.module ? 'var(--text-primary)' : 'var(--text-disabled)'"
           stroke-width="1.5"
           stroke-linecap="round"
           stroke-linejoin="round"
@@ -119,7 +119,7 @@ function handleClick(item: NavItem) {
           height="20"
           viewBox="0 0 24 24"
           fill="none"
-          :stroke="activeModule === item.module ? '#222' : '#bbb'"
+          :stroke="activeModule === item.module ? 'var(--text-primary)' : 'var(--text-disabled)'"
           stroke-width="1.5"
           stroke-linecap="round"
           stroke-linejoin="round"
@@ -134,12 +134,12 @@ function handleClick(item: NavItem) {
 <style scoped>
 .sidebar {
   width: 56px;
-  background: #fff;
-  border-right: 1px solid #eee;
+  background: var(--bg-primary);
+  border-right: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 16px 0;
+  padding: var(--space-lg) 0;
   flex-shrink: 0;
   user-select: none;
 }
@@ -148,7 +148,7 @@ function handleClick(item: NavItem) {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-md);
 }
 
 .sidebar-bottom {
@@ -158,19 +158,19 @@ function handleClick(item: NavItem) {
 .sidebar-item {
   width: 36px;
   height: 36px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background var(--transition-fast);
 }
 
 .sidebar-item:hover {
-  background: #f0f0f0;
+  background: var(--bg-tertiary);
 }
 
 .sidebar-item.active {
-  background: #e8e8e8;
+  background: var(--bg-active);
 }
 </style>

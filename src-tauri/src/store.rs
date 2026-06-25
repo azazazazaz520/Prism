@@ -33,6 +33,10 @@ fn default_reminder_minutes() -> u32 {
     30
 }
 
+fn default_theme() -> String {
+    "auto".to_string()
+}
+
 fn default_ai_settings() -> AiSettings {
     AiSettings {
         enabled: false,
@@ -95,6 +99,9 @@ pub struct TaskStore {
     /// 当前激活的供应商 ID（None 表示使用 ai_settings 或第一个启用的供应商）
     #[serde(default)]
     pub active_vendor_id: Option<String>,
+    /// 主题模式："auto" | "light" | "dark"
+    #[serde(default = "default_theme")]
+    pub theme: String,
 }
 
 fn get_store_path() -> PathBuf {
@@ -116,6 +123,7 @@ pub fn load_tasks() -> TaskStore {
             ai_settings: default_ai_settings(),
             vendors: vec![],
             active_vendor_id: None,
+            theme: default_theme(),
         }),
         Err(_) => TaskStore {
             version: 1,
@@ -125,6 +133,7 @@ pub fn load_tasks() -> TaskStore {
             ai_settings: default_ai_settings(),
             vendors: vec![],
             active_vendor_id: None,
+            theme: default_theme(),
         },
     }
 }
@@ -149,6 +158,7 @@ mod tests {
             ai_settings: default_ai_settings(),
             vendors: vec![],
             active_vendor_id: None,
+            theme: default_theme(),
         };
         assert_eq!(store.tasks.len(), 0);
     }

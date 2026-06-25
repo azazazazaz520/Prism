@@ -166,8 +166,7 @@ const hasItems = computed(() => (suggestion.value?.items?.length ?? 0) > 0);
 
 .focus-content {
   background: var(--accent-light);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 

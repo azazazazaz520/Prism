@@ -388,19 +388,19 @@ function formatDueDate(d: string): string {
 
 <style scoped>
 .task-input {
-  margin-bottom: var(--space-md);
+  margin-bottom: var(--space-lg);
 }
 
 .input-row {
   display: flex;
-  gap: var(--space-xs);
+  gap: var(--space-sm);
 }
 
 .task-input-field {
   flex: 1;
-  padding: 7px var(--space-md);
+  padding: 10px var(--space-lg);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   font-size: var(--text-base);
   outline: none;
   transition: border-color var(--transition-normal);
@@ -418,10 +418,10 @@ function formatDueDate(d: string): string {
 }
 
 .date-btn {
-  padding: 7px var(--space-sm);
+  padding: 10px var(--space-md);
   background: none;
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   cursor: pointer;
   font-size: var(--text-sm);
   line-height: 1;
@@ -434,11 +434,11 @@ function formatDueDate(d: string): string {
 }
 
 .task-input-btn {
-  padding: 7px var(--space-lg);
+  padding: 10px var(--space-xl);
   background: var(--gray-900);
   color: white;
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   font-size: var(--text-base);
   cursor: pointer;
   transition: background var(--transition-normal);
@@ -450,10 +450,10 @@ function formatDueDate(d: string): string {
 }
 
 .ai-btn {
-  padding: 7px var(--space-sm);
+  padding: 10px var(--space-md);
   background: none;
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   cursor: pointer;
   font-size: var(--text-sm);
   line-height: 1;
@@ -471,19 +471,19 @@ function formatDueDate(d: string): string {
 
 .quick-actions {
   display: flex;
-  gap: var(--space-xs);
-  margin-top: var(--space-xs);
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
   flex-wrap: wrap;
 }
 
 .qa-btn {
   display: flex;
   align-items: center;
-  gap: 3px;
-  padding: 3px var(--space-sm);
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-md);
   background: none;
   border: 1px solid var(--gray-300);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   font-size: var(--text-xs);
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -509,9 +509,9 @@ function formatDueDate(d: string): string {
 
 .tag-input {
   flex: 1;
-  padding: var(--space-xs) var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   font-size: var(--text-sm);
   outline: none;
 }
@@ -521,11 +521,11 @@ function formatDueDate(d: string): string {
 }
 
 .tag-add-btn {
-  padding: var(--space-xs) var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
   background: var(--gray-900);
   color: white;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   font-size: var(--text-sm);
   cursor: pointer;
 }
@@ -541,11 +541,11 @@ function formatDueDate(d: string): string {
   font-size: var(--text-xs);
   background: var(--bg-tertiary);
   color: var(--gray-700);
-  padding: 1px 6px;
-  border-radius: var(--radius-sm);
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--space-xs);
 }
 
 .tag-chip-x {
@@ -559,14 +559,13 @@ function formatDueDate(d: string): string {
 }
 
 .summary {
-  margin-top: var(--space-xs);
-  padding-top: var(--space-xs);
-  border-top: 1px solid var(--border-light);
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
   font-size: var(--text-xs);
   color: var(--text-muted);
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-xs);
+  gap: var(--space-sm);
 }
 
 .summary-item {

@@ -119,10 +119,9 @@ function isSelected(day: number): boolean {
 
 <style scoped>
 .mini-calendar {
-  background: var(--bg-primary);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-subtle);
-  padding: var(--space-sm) var(--space-sm);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
 }
 
 .mc-header {
@@ -176,7 +175,7 @@ function isSelected(day: number): boolean {
   aspect-ratio: 1;
   border: none;
   background: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   cursor: pointer;
   font-size: var(--text-xs);
   color: var(--text-primary);

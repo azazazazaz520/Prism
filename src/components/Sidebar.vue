@@ -25,20 +25,18 @@ const topItems: NavItem[] = [
   {
     module: 'tasks',
     label: '任务看板',
-    // 四宫格方块
-    iconPath: 'M3 3h7v7H3V3zm11 0h7v7h-7V3zM3 14h7v7H3v-7zm11 0h7v7h-7v-7z',
+    iconPath: 'M3 6h18M7 12h10M10 18h4', // 列表图标
   },
   {
     module: 'ai-assistant',
     label: 'AI 助手',
-    // 层叠菱形
-    iconPath: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5',
+    iconPath:
+      'M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z', // 星星/魔法棒
   },
   {
     module: 'calendar',
-    label: '日历',
-    // 日历图标
-    iconPath: 'M3 4h18v18H3V4zm13-2v4M8 2v4M3 10h18',
+    label: '日历视图',
+    iconPath: 'M3 4h18v18H3V4zm13-2v4M8 2v4M3 10h18', // 日历
   },
 ];
 
@@ -47,15 +45,13 @@ const bottomItems: NavItem[] = [
   {
     module: 'floating',
     label: '悬浮窗',
-    // 嵌套方框（画中画）
-    iconPath: 'M4 4h16v16H4V4zm4 4h8v8H8V8z',
+    iconPath: 'M4 4h16v16H4V4zm4 4h8v8H8V8z', // 画中画
   },
   {
     module: 'settings',
     label: '设置',
-    // 齿轮图标
     iconPath:
-      'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z',
+      'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z', // 齿轮
   },
 ];
 
@@ -77,26 +73,24 @@ function handleClick(item: NavItem) {
         v-for="item in topItems"
         :key="item.module"
         :class="[
-          'sidebar-item',
+          'nav-item',
           {
             active: activeModule === item.module,
           },
         ]"
-        :title="item.label"
         @click="handleClick(item)"
       >
         <svg
-          width="20"
-          height="20"
+          class="nav-icon"
           viewBox="0 0 24 24"
           fill="none"
-          :stroke="activeModule === item.module ? 'var(--text-primary)' : 'var(--text-disabled)'"
-          stroke-width="1.5"
+          stroke="currentColor"
           stroke-linecap="round"
           stroke-linejoin="round"
         >
           <path :d="item.iconPath" />
         </svg>
+        <span>{{ item.label }}</span>
       </div>
     </div>
 
@@ -106,26 +100,24 @@ function handleClick(item: NavItem) {
         v-for="item in bottomItems"
         :key="item.module"
         :class="[
-          'sidebar-item',
+          'nav-item',
           {
             active: activeModule === item.module,
           },
         ]"
-        :title="item.label"
         @click="handleClick(item)"
       >
         <svg
-          width="20"
-          height="20"
+          class="nav-icon"
           viewBox="0 0 24 24"
           fill="none"
-          :stroke="activeModule === item.module ? 'var(--text-primary)' : 'var(--text-disabled)'"
-          stroke-width="1.5"
+          stroke="currentColor"
           stroke-linecap="round"
           stroke-linejoin="round"
         >
           <path :d="item.iconPath" />
         </svg>
+        <span>{{ item.label }}</span>
       </div>
     </div>
   </nav>
@@ -133,13 +125,12 @@ function handleClick(item: NavItem) {
 
 <style scoped>
 .sidebar {
-  width: 56px;
-  background: var(--bg-primary);
-  border-right: 1px solid var(--border-subtle);
+  width: 240px;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-light);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: var(--space-lg) 0;
+  padding: var(--space-lg) var(--space-md);
   flex-shrink: 0;
   user-select: none;
 }
@@ -147,30 +138,40 @@ function handleClick(item: NavItem) {
 .sidebar-group {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: var(--space-md);
+  gap: var(--space-xs);
 }
 
 .sidebar-bottom {
   margin-top: auto;
 }
 
-.sidebar-item {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-sm);
+.nav-item {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background var(--transition-fast);
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
 }
 
-.sidebar-item:hover {
-  background: var(--bg-tertiary);
+.nav-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
-.sidebar-item.active {
-  background: var(--bg-active);
+.nav-item.active {
+  background: var(--bg-primary);
+  color: var(--accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.nav-icon {
+  width: 20px;
+  height: 20px;
+  stroke-width: 1.5;
 }
 </style>

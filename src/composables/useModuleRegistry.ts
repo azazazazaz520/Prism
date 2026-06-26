@@ -34,11 +34,11 @@ const ALL_MODULES: ModuleDescriptor[] = [
   },
 ];
 
+/** 模块启用状态的全局单例 ref —— 确保跨组件共享 */
+const enabledMap = ref<Record<string, boolean>>({});
+
 /** 模块注册表 composable：管理模块列表、启用状态、开关 */
 export function useModuleRegistry() {
-  /** 模块启用状态（key=moduleId, value=enabled） */
-  const enabledMap = ref<Record<string, boolean>>({});
-
   /** 判断模块是否启用（不在 map 中或值为 true 视为启用） */
   function isEnabled(id: string): boolean {
     return enabledMap.value[id] !== false;

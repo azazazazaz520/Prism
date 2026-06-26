@@ -85,22 +85,23 @@ function handleAddTag() {
   font-size: var(--text-xs);
   padding: var(--space-xs) var(--space-md);
   border-radius: var(--radius-md);
-  border: 1px solid var(--gray-300);
-  background: none;
-  color: var(--gray-600);
+  border: 1px solid var(--border-default);
+  background: transparent;
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all var(--transition-fast);
 }
 
 .tag-chip:hover {
-  border-color: var(--gray-600);
-  color: var(--text-secondary);
+  border-color: var(--accent-muted);
+  color: var(--text-primary);
+  background: var(--bg-hover);
 }
 
 .tag-chip.active {
-  background: var(--gray-900);
+  background: var(--accent);
   color: white;
-  border-color: var(--gray-900);
+  border-color: var(--accent);
 }
 
 .tag-chip.add {
@@ -111,9 +112,15 @@ function handleAddTag() {
 .tag-input-inline {
   font-size: var(--text-xs);
   padding: var(--space-xs) var(--space-sm);
-  border: 1px solid var(--gray-600);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   outline: none;
   min-width: 70px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.tag-input-inline:focus {
+  border-color: var(--accent);
 }
 </style>

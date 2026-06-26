@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, computed, nextTick } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import { open } from '@tauri-apps/plugin-dialog';
 import { marked } from 'marked';
 import type { FileEntry } from '../types';
 import InputDialog from './InputDialog.vue';
@@ -12,6 +13,9 @@ const selectedPath = ref<string | null>(null);
 const content = ref('');
 const viewMode = ref<'edit' | 'split' | 'preview'>('split');
 const saving = ref(false);
+
+/** 笔记目录路径 */
+const notesDir = ref('');
 
 /** 文件树中展开的文件夹路径集合 */
 const expanded = ref<Set<string>>(new Set(['inbox']));
@@ -36,6 +40,41 @@ const dialogLabel = ref('');
 const dialogPlaceholder = ref('');
 const dialogDefault = ref('');
 let dialogCallback: ((value: string | null) => void) | null = null;
+
+async function loadNotesDir() {
+  try {
+    notesDir.value = await invoke<string>('get_notes_directory');
+  } catch (e) {
+    console.error('获取笔记目录失败:', e);
+  }
+}
+
+async function changeNotesDir() {
+  try {
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      title: '选择笔记保存目录',
+    });
+    if (selected) {
+      await invoke('set_notes_directory', { dirPath: selected });
+      await loadNotesDir();
+      await loadTree();
+    }
+  } catch (e) {
+    console.error('设置笔记目录失败:', e);
+  }
+}
+
+/** 截断路径显示 */
+const notesDirShort = computed(() => {
+  const dir = notesDir.value;
+  if (!dir) return '';
+  // 只显示最后两段路径
+  const parts = dir.replace(/\\/g, '/').split('/');
+  if (parts.length <= 2) return dir;
+  return '...' + '/' + parts.slice(-2).join('/');
+});
 
 // ── 加载 ──────────────────────────────
 
@@ -75,8 +114,9 @@ watch(content, (val) => {
   }, 500);
 });
 
-// initially load tree
+// initially load tree and notes dir
 loadTree();
+loadNotesDir();
 
 // ── 自定义对话框 ──────────────────────────────
 
@@ -404,6 +444,17 @@ function getIcon(isDir: boolean) {
           </div>
         </template>
       </div>
+
+      <!-- 笔记目录设置 -->
+      <div class="tree-footer">
+        <div class="dir-info" :title="notesDir">
+          <span class="dir-label">目录:</span>
+          <span class="dir-path">{{ notesDirShort }}</span>
+        </div>
+        <button class="dir-change-btn" @click="changeNotesDir" title="更改笔记保存位置">
+          更改
+        </button>
+      </div>
     </aside>
 
     <!-- 右侧编辑区 -->
@@ -602,6 +653,55 @@ function getIcon(isDir: boolean) {
 .tree-inline-btn:hover {
   background: var(--bg-hover);
   color: var(--accent);
+}
+
+/* ── 文件树底部目录设置 ──────────── */
+
+.tree-footer {
+  border-top: 1px solid var(--border-light);
+  padding: var(--space-sm) var(--space-md);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+}
+
+.dir-info {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.dir-label {
+  flex-shrink: 0;
+}
+
+.dir-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dir-change-btn {
+  background: none;
+  border: 1px solid var(--border-light);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.dir-change-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 /* ── 编辑区 ────────────────────── */

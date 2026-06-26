@@ -478,6 +478,7 @@ fn main() {
     prompt::create_defaults();
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(AppState {
             data: Mutex::new(data),
             config: Mutex::new(config),
@@ -514,6 +515,8 @@ fn main() {
             notes::create_note_dir,
             notes::delete_note_entry,
             notes::rename_note_entry,
+            notes::get_notes_directory,
+            notes::set_notes_directory,
             show_floating_window,
             show_main_window,
             ai_parse_input,

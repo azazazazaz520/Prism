@@ -85,6 +85,9 @@ pub struct ConfigStore {
     /// 模块不在 map 中时默认启用
     #[serde(default)]
     pub module_enabled: std::collections::HashMap<String, bool>,
+    /// 自定义笔记目录路径（绝对路径，None 时使用默认 ~/.todo-app/notes）
+    #[serde(default)]
+    pub notes_dir: Option<PathBuf>,
 }
 
 /// 旧版单文件格式（仅用于迁移）
@@ -135,6 +138,15 @@ fn get_legacy_path() -> PathBuf {
     get_workspace_dir().join("tasks.json")
 }
 
+/// 获取笔记目录（优先使用自定义路径，否则使用默认）
+pub fn get_notes_dir(config: &ConfigStore) -> PathBuf {
+    if let Some(ref custom_dir) = config.notes_dir {
+        custom_dir.clone()
+    } else {
+        get_workspace_dir().join("notes")
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════
 //  Workspace 初始化
 // ═══════════════════════════════════════════════════════════════
@@ -171,6 +183,7 @@ fn default_config_store() -> ConfigStore {
         theme: default_theme(),
         reminder_minutes: default_reminder_minutes(),
         module_enabled: std::collections::HashMap::new(),
+        notes_dir: None,
     }
 }
 
@@ -233,6 +246,7 @@ pub fn migrate_legacy() -> Result<(), String> {
         theme: legacy.theme,
         reminder_minutes: legacy.reminder_minutes,
         module_enabled: std::collections::HashMap::new(),
+        notes_dir: None,
     };
     save_config(&config)?;
 
@@ -358,6 +372,7 @@ mod tests {
             theme: "dark".to_string(),
             reminder_minutes: 15,
             module_enabled: std::collections::HashMap::new(),
+            notes_dir: None,
         };
         let json = serde_json::to_string(&config).unwrap();
         let parsed: ConfigStore = serde_json::from_str(&json).unwrap();
@@ -432,6 +447,7 @@ mod tests {
                 theme: legacy.theme,
                 reminder_minutes: legacy.reminder_minutes,
                 module_enabled: std::collections::HashMap::new(),
+                notes_dir: None,
             };
 
             // 验证序列化可正常进行

@@ -1,8 +1,9 @@
 use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
+use tauri::State;
 
-use crate::store;
+use crate::{store, AppState};
 
 /// 文件树节点（前端渲染用）
 #[derive(Debug, Serialize, Clone)]
@@ -15,11 +16,6 @@ pub struct FileEntry {
     /// 目录的子节点（仅目录有，递归填充）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<FileEntry>>,
-}
-
-/// 获取 notes/ 目录的绝对路径
-fn notes_dir() -> PathBuf {
-    store::get_workspace_dir().join("notes")
 }
 
 /// 递归读取目录结构
@@ -70,19 +66,22 @@ fn read_dir_recursive(base: &PathBuf, rel: &str) -> Vec<FileEntry> {
 
 /// 列出 notes/ 目录的完整文件树
 #[tauri::command]
-pub fn list_note_tree() -> Vec<FileEntry> {
-    let base = notes_dir();
+pub fn list_note_tree(state: State<AppState>) -> Vec<FileEntry> {
+    let config = state.config.lock().unwrap();
+    let base = store::get_notes_dir(&config);
     fs::create_dir_all(base.join("inbox")).ok();
     read_dir_recursive(&base, "")
 }
 
 /// 读取笔记内容
 #[tauri::command]
-pub fn read_note(path: String) -> Result<String, String> {
-    let full = notes_dir().join(&path);
+pub fn read_note(path: String, state: State<AppState>) -> Result<String, String> {
+    let config = state.config.lock().unwrap();
+    let base = store::get_notes_dir(&config);
+    let full = base.join(&path);
     // 安全检查：防止路径穿越
     let canonical = full.canonicalize().map_err(|e| e.to_string())?;
-    let notes_root = notes_dir().canonicalize().unwrap_or_default();
+    let notes_root = base.canonicalize().unwrap_or_default();
     if !canonical.starts_with(&notes_root) {
         return Err("非法路径".into());
     }
@@ -91,8 +90,10 @@ pub fn read_note(path: String) -> Result<String, String> {
 
 /// 写入笔记内容（自动创建父目录）
 #[tauri::command]
-pub fn write_note(path: String, content: String) -> Result<(), String> {
-    let full = notes_dir().join(&path);
+pub fn write_note(path: String, content: String, state: State<AppState>) -> Result<(), String> {
+    let config = state.config.lock().unwrap();
+    let base = store::get_notes_dir(&config);
+    let full = base.join(&path);
     if let Some(parent) = full.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -101,15 +102,19 @@ pub fn write_note(path: String, content: String) -> Result<(), String> {
 
 /// 创建文件夹
 #[tauri::command]
-pub fn create_note_dir(path: String) -> Result<(), String> {
-    let full = notes_dir().join(&path);
+pub fn create_note_dir(path: String, state: State<AppState>) -> Result<(), String> {
+    let config = state.config.lock().unwrap();
+    let base = store::get_notes_dir(&config);
+    let full = base.join(&path);
     fs::create_dir_all(&full).map_err(|e| e.to_string())
 }
 
 /// 删除文件或文件夹
 #[tauri::command]
-pub fn delete_note_entry(path: String) -> Result<(), String> {
-    let full = notes_dir().join(&path);
+pub fn delete_note_entry(path: String, state: State<AppState>) -> Result<(), String> {
+    let config = state.config.lock().unwrap();
+    let base = store::get_notes_dir(&config);
+    let full = base.join(&path);
     if full.is_dir() {
         fs::remove_dir_all(&full).map_err(|e| e.to_string())
     } else {
@@ -119,11 +124,51 @@ pub fn delete_note_entry(path: String) -> Result<(), String> {
 
 /// 重命名文件或文件夹
 #[tauri::command]
-pub fn rename_note_entry(path: String, new_name: String) -> Result<(), String> {
-    let full = notes_dir().join(&path);
+pub fn rename_note_entry(
+    path: String,
+    new_name: String,
+    state: State<AppState>,
+) -> Result<(), String> {
+    let config = state.config.lock().unwrap();
+    let base = store::get_notes_dir(&config);
+    let full = base.join(&path);
     let parent = full.parent().unwrap_or(&full);
     let new_path = parent.join(&new_name);
     fs::rename(&full, &new_path).map_err(|e| e.to_string())
+}
+
+/// 获取当前笔记目录路径
+#[tauri::command]
+pub fn get_notes_directory(state: State<AppState>) -> String {
+    let config = state.config.lock().unwrap();
+    store::get_notes_dir(&config).to_string_lossy().to_string()
+}
+
+/// 设置自定义笔记目录
+#[tauri::command]
+pub fn set_notes_directory(dir_path: String, state: State<AppState>) -> Result<(), String> {
+    use std::fs;
+
+    // 验证路径是否存在且可写
+    let path = std::path::PathBuf::from(&dir_path);
+    if !path.exists() {
+        return Err(format!("路径不存在: {}", dir_path));
+    }
+    if !path.is_dir() {
+        return Err("路径不是目录".into());
+    }
+
+    // 尝试写入测试文件以验证权限
+    let test_file = path.join(".todo_test_write");
+    if let Err(e) = fs::write(&test_file, "") {
+        return Err(format!("无法写入目录: {}", e));
+    }
+    fs::remove_file(&test_file).ok();
+
+    // 更新配置
+    let mut config = state.config.lock().unwrap();
+    config.notes_dir = Some(path);
+    store::save_config(&config)
 }
 
 #[cfg(test)]

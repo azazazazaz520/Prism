@@ -78,7 +78,6 @@ pub struct UpdateTaskArgs {
 
 /// 统一的 AI 命令前置：resolve 配置 + 安全获取数据快照。
 /// 内部处理锁的获取和 AI 设置解析，调用方只需关注数据提取逻辑。
-#[allow(dead_code)] // AI 命令迁移后将移除此标注
 pub fn with_ai_context<F, R>(state: &AppState, f: F) -> Result<R, String>
 where
     F: FnOnce(&AiSettings, &store::DataStore) -> Result<R, String>,

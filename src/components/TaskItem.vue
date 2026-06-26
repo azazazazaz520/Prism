@@ -327,26 +327,46 @@ const dueLabel = computed(() => {
 .task-item:hover {
   background: var(--bg-secondary);
   box-shadow: var(--shadow-sm);
-  transform: translateY(-1px);
 }
 
 .task-item.completed {
-  opacity: 0.55;
+  opacity: 0.5;
 }
 
 .task-checkbox {
-  width: 20px;
-  height: 20px;
-  margin-top: 1px;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
   cursor: pointer;
-  accent-color: var(--accent);
   flex-shrink: 0;
   border-radius: 50%;
-  transition: transform var(--transition-fast);
+  border: 2px solid var(--gray-400);
+  background: transparent;
+  transition: all var(--transition-fast);
+  position: relative;
 }
 
 .task-checkbox:hover {
-  transform: scale(1.1);
+  border-color: var(--accent);
+}
+
+.task-checkbox:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.task-checkbox:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 5px;
+  height: 9px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }
 
 .task-body {
@@ -410,9 +430,11 @@ const dueLabel = computed(() => {
 
 .due-badge.overdue {
   color: var(--danger);
+  background: var(--danger-light);
 }
 .due-badge.today {
   color: var(--warning);
+  background: var(--warning-light);
 }
 .due-badge.upcoming {
   color: var(--gray-600);
@@ -429,7 +451,7 @@ const dueLabel = computed(() => {
 }
 
 .tag-badge:hover {
-  background: var(--accent-bg);
+  background: var(--accent-light);
   color: var(--accent);
 }
 
@@ -448,14 +470,16 @@ const dueLabel = computed(() => {
   color: var(--gray-400);
   font-size: 18px;
   cursor: pointer;
-  padding: 0 2px;
+  padding: 4px 6px;
   line-height: 1;
   flex-shrink: 0;
-  transition: color var(--transition-fast);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
 }
 
 .task-delete-btn:hover {
   color: var(--danger);
+  background: var(--danger-light);
 }
 
 .task-actions {
@@ -481,13 +505,15 @@ const dueLabel = computed(() => {
   color: var(--gray-400);
   font-size: 14px;
   cursor: pointer;
-  padding: 0 2px;
+  padding: 4px 6px;
   line-height: 1;
-  transition: color var(--transition-fast);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
 }
 
 .task-menu-btn:hover {
   color: var(--gray-700);
+  background: var(--bg-hover);
 }
 
 .task-decompose-btn {

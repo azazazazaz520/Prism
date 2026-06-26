@@ -69,7 +69,6 @@ fn read_dir_recursive(base: &PathBuf, rel: &str) -> Vec<FileEntry> {
 pub fn list_note_tree(state: State<AppState>) -> Vec<FileEntry> {
     let config = state.config.lock().unwrap();
     let base = store::get_notes_dir(&config);
-    fs::create_dir_all(base.join("inbox")).ok();
     read_dir_recursive(&base, "")
 }
 

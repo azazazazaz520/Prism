@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 
 const props = defineProps<{ aiEnabled?: boolean }>();
@@ -8,43 +8,54 @@ const input = ref('');
 const output = ref('');
 const copied = ref(false);
 const aiLoading = ref(false);
+const isValid = ref<boolean | null>(null);
 
+// 实时校验
 function handleInput(val: string) {
   input.value = val;
   try {
     const parsed = JSON.parse(val);
     output.value = JSON.stringify(parsed, null, 2);
+    isValid.value = true;
   } catch {
     output.value = '';
+    isValid.value = false;
   }
 }
 
 function format() {
   try {
     output.value = JSON.stringify(JSON.parse(input.value), null, 2);
+    isValid.value = true;
   } catch (e: any) {
     output.value = 'JSON 无效: ' + e.message;
+    isValid.value = false;
   }
 }
 
 function minify() {
   try {
     output.value = JSON.stringify(JSON.parse(input.value));
+    isValid.value = true;
   } catch (e: any) {
     output.value = 'JSON 无效: ' + e.message;
+    isValid.value = false;
   }
 }
 
 function validate() {
   try {
     JSON.parse(input.value);
-    output.value = 'JSON 有效';
+    output.value = '✓ JSON 格式有效';
+    isValid.value = true;
   } catch (e: any) {
-    output.value = '无效: ' + e.message;
+    output.value = '✗ 无效: ' + e.message;
+    isValid.value = false;
   }
 }
 
 async function copy() {
+  if (!output.value) return;
   await navigator.clipboard.writeText(output.value);
   copied.value = true;
   setTimeout(() => (copied.value = false), 1500);
@@ -61,33 +72,133 @@ async function aiExplain() {
     aiLoading.value = false;
   }
 }
+
+function clearAll() {
+  input.value = '';
+  output.value = '';
+  isValid.value = null;
+}
+
+const hasContent = computed(() => input.value.length > 0 || output.value.length > 0);
 </script>
 
 <template>
   <div class="json-tool">
-    <textarea
-      class="tool-input"
-      :value="input"
-      @input="handleInput(($event.target as HTMLTextAreaElement).value)"
-      placeholder='粘贴 JSON，如 {"name":"test"}'
-      spellcheck="false"
-    ></textarea>
-    <div class="tool-actions">
-      <button class="btn btn-primary" @click="format">格式化</button>
-      <button class="btn" @click="minify">压缩</button>
-      <button class="btn" @click="validate">校验</button>
-      <button class="btn" @click="copy">复制</button>
-      <button
-        class="btn btn-ai"
-        :disabled="!props.aiEnabled || aiLoading"
-        :title="props.aiEnabled ? '' : '请先配置 AI 供应商'"
-        @click="aiExplain"
-      >
-        {{ aiLoading ? '分析中...' : 'AI 解释' }}
-      </button>
-      <span v-if="copied" class="copied-hint">已复制</span>
+    <!-- 工具栏 -->
+    <div class="tool-toolbar">
+      <div class="toolbar-group toolbar-primary">
+        <button class="btn btn-primary" @click="format" :disabled="!input">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
+            <path
+              d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"
+            />
+          </svg>
+          格式化
+        </button>
+        <button class="btn" @click="minify" :disabled="!input">压缩</button>
+        <button class="btn" @click="validate" :disabled="!input">校验</button>
+      </div>
+      <div class="toolbar-group toolbar-secondary">
+        <button class="btn btn-icon" @click="copy" :disabled="!output" title="复制结果">
+          <svg
+            v-if="!copied"
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+          </svg>
+          <svg
+            v-else
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        </button>
+        <button class="btn btn-icon" @click="clearAll" :disabled="!hasContent" title="清空">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
+            <path
+              d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"
+            />
+          </svg>
+        </button>
+        <button
+          v-if="props.aiEnabled"
+          class="btn btn-ai"
+          :disabled="!input || aiLoading"
+          title="使用 AI 解释 JSON 结构"
+          @click="aiExplain"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+          </svg>
+          {{ aiLoading ? '分析中...' : 'AI 解释' }}
+        </button>
+      </div>
     </div>
-    <pre class="tool-output">{{ output || '等待输入...' }}</pre>
+
+    <!-- 分栏区域 -->
+    <div class="tool-panes">
+      <!-- 输入区 -->
+      <div class="pane pane-input">
+        <div class="pane-header">
+          <span class="pane-label">输入</span>
+          <span v-if="isValid === true" class="pane-status status-success">✓ 有效</span>
+          <span v-else-if="isValid === false" class="pane-status status-error"> 无效</span>
+        </div>
+        <textarea
+          class="pane-content"
+          :value="input"
+          @input="handleInput(($event.target as HTMLTextAreaElement).value)"
+          placeholder='粘贴 JSON，如 {"name":"test"}'
+          spellcheck="false"
+        ></textarea>
+      </div>
+
+      <!-- 输出区 -->
+      <div class="pane pane-output">
+        <div class="pane-header">
+          <span class="pane-label">输出</span>
+          <span v-if="copied" class="pane-status status-copied">已复制</span>
+        </div>
+        <pre class="pane-content"><code>{{ output || '等待输入...' }}</code></pre>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -96,45 +207,59 @@ async function aiExplain() {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
+  height: 100%;
 }
 
-.tool-input {
-  width: 100%;
-  min-height: 100px;
-  padding: var(--space-md);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  font-family: monospace;
-  font-size: var(--text-sm);
-  color: var(--text-primary);
-  background: var(--bg-primary);
-  resize: vertical;
-  outline: none;
-}
-
-.tool-input:focus {
-  border-color: var(--accent);
-}
-
-.tool-actions {
+/* ── 工具栏 ──────────────────────────────── */
+.tool-toolbar {
   display: flex;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-xs);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.toolbar-primary .btn {
+  font-weight: var(--font-weight-medium);
+}
+
+.toolbar-secondary .btn-icon {
+  padding: 6px 8px;
+}
+
+/* ── 按钮样式 ─────────────────────────────── */
 .btn {
-  padding: 5px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
   cursor: pointer;
   border: 1px solid var(--border-default);
   background: var(--bg-primary);
   color: var(--text-secondary);
+  transition:
+    background var(--transition-fast) var(--easing-standard),
+    border-color var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard);
 }
 
-.btn:hover {
+.btn:hover:not(:disabled) {
   background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .btn-primary {
@@ -143,7 +268,7 @@ async function aiExplain() {
   border-color: var(--accent);
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   background: var(--accent-hover);
 }
 
@@ -151,7 +276,7 @@ async function aiExplain() {
   background: var(--accent-light);
   color: var(--accent);
   border-color: var(--accent-muted);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 
 .btn-ai:hover:not(:disabled) {
@@ -159,25 +284,97 @@ async function aiExplain() {
   color: #fff;
 }
 
-.btn-ai:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+/* ── 分栏布局 ─────────────────────────────── */
+.tool-panes {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+  min-height: 0;
 }
 
-.copied-hint {
+.pane {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+.pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px var(--space-md);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.pane-label {
   font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.pane-status {
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+
+.status-success {
+  background: rgba(39, 174, 96, 0.1);
   color: var(--success);
 }
 
-.tool-output {
+.status-error {
+  background: var(--danger-light);
+  color: var(--danger);
+}
+
+.status-copied {
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.pane-content {
+  flex: 1;
   padding: var(--space-md);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  background: var(--bg-secondary);
-  font-family: monospace;
+  font-family: 'Fira Code', 'Consolas', monospace;
   font-size: var(--text-sm);
-  white-space: pre-wrap;
-  min-height: 60px;
+  line-height: 1.6;
   color: var(--text-primary);
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.pane-input .pane-content {
+  background: var(--bg-primary);
+}
+
+.pane-output .pane-content {
+  background: var(--bg-secondary);
+}
+
+.pane-output code {
+  color: var(--text-primary);
+}
+
+/* ── 响应式：小屏幕单列 ───────────────────── */
+@media (max-width: 768px) {
+  .tool-panes {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
 }
 </style>

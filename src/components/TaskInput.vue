@@ -409,7 +409,7 @@ function formatDueDate(d: string): string {
 
 .task-input-field:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-muted);
+  box-shadow: 0 0 0 1px var(--accent-muted);
 }
 .task-input-field.error {
   border-color: var(--danger);

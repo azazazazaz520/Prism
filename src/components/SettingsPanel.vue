@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { SettingsSubModule } from '../types';
 import { useTheme, type ThemeMode } from '../composables/useTheme';
@@ -10,6 +10,36 @@ const { theme, setTheme } = useTheme();
 const { allModules, isEnabled, toggle: toggleModule } = useModuleRegistry();
 
 const activeSub = ref<SettingsSubModule>('preferences');
+
+/** 主题选择器展开状态 */
+const isThemeOpen = ref(false);
+
+const themeOptions = [
+  { value: 'auto', label: '跟随系统' },
+  { value: 'light', label: '浅色' },
+  { value: 'dark', label: '深色' },
+] as const;
+
+function selectTheme(value: ThemeMode) {
+  setTheme(value);
+  isThemeOpen.value = false;
+}
+
+/** 点击外部关闭下拉菜单 */
+function handleClickOutside(event: MouseEvent) {
+  const target = event.target as HTMLElement;
+  if (!target.closest('.custom-select')) {
+    isThemeOpen.value = false;
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside);
+});
 
 /** 提醒提前分钟数 */
 const reminderMinutes = ref(30);
@@ -91,15 +121,34 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
             <div class="group-title">外观</div>
             <div class="setting-row">
               <label>主题模式</label>
-              <select
-                :value="theme"
-                class="theme-select"
-                @change="setTheme(($event.target as HTMLSelectElement).value as ThemeMode)"
-              >
-                <option value="auto">跟随系统</option>
-                <option value="light">浅色</option>
-                <option value="dark">深色</option>
-              </select>
+              <div class="custom-select" :class="{ open: isThemeOpen }">
+                <button type="button" class="select-trigger" @click="isThemeOpen = !isThemeOpen">
+                  {{ themeOptions.find((o) => o.value === theme)?.label || '跟随系统' }}
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+                <div v-if="isThemeOpen" class="select-dropdown">
+                  <button
+                    v-for="opt in themeOptions"
+                    :key="opt.value"
+                    type="button"
+                    :class="['dropdown-item', { selected: theme === opt.value }]"
+                    @click="selectTheme(opt.value)"
+                  >
+                    {{ opt.label }}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -285,6 +334,18 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
   font-size: var(--text-sm);
   text-align: right;
   outline: none;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  /* 隐藏原生数字输入框的上下箭头 */
+  -moz-appearance: textfield;
+}
+.number-input input::-webkit-outer-spin-button,
+.number-input input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.number-input input:focus {
+  border-color: var(--accent);
 }
 
 .unit {
@@ -304,6 +365,84 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
 }
 .theme-select:focus {
   border-color: var(--accent);
+}
+
+/* 自定义下拉菜单 */
+.custom-select {
+  position: relative;
+  display: inline-block;
+}
+
+.select-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 6px var(--space-sm);
+  min-width: 120px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.select-trigger:hover {
+  border-color: var(--accent);
+}
+.select-trigger svg {
+  margin-left: auto;
+  transition: transform var(--transition-fast);
+}
+.custom-select.open .select-trigger svg {
+  transform: rotate(180deg);
+}
+
+.select-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: dropdown-fade-in 0.15s ease-out;
+}
+
+@keyframes dropdown-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dropdown-item {
+  display: block;
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  border: none;
+  background: none;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.dropdown-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.dropdown-item.selected {
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 600;
 }
 
 /* 模块开关按钮 */

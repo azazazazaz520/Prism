@@ -6,10 +6,10 @@ const emit = defineEmits<{ back: [] }>();
 <template>
   <div class="tool-shell">
     <div class="tool-header">
-      <button class="tool-back" @click="emit('back')">
+      <button class="tool-back" aria-label="返回工具箱" @click="emit('back')">
         <svg
-          width="16"
-          height="16"
+          width="14"
+          height="14"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -18,8 +18,9 @@ const emit = defineEmits<{ back: [] }>();
         >
           <path d="M19 12H5M12 19l-7-7 7-7" />
         </svg>
-        返回工具箱
+        <span class="tool-back-label">工具箱</span>
       </button>
+      <div class="tool-divider" aria-hidden="true"></div>
       <span class="tool-title">{{ title }}</span>
     </div>
     <div class="tool-body">
@@ -40,52 +41,74 @@ const emit = defineEmits<{ back: [] }>();
   background: var(--bg-primary);
 }
 
+/* ── 头部：面包屑风格导航 ────────────────── */
 .tool-header {
   display: flex;
   align-items: center;
-  gap: var(--space-md);
-  padding: 0 var(--space-lg);
-  height: 40px;
+  gap: var(--space-sm);
+  padding: 0 var(--space-xl);
+  height: 44px;
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
+  background: var(--bg-secondary);
 }
 
 .tool-back {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   background: none;
-  border: 1px solid var(--border-light);
-  color: var(--text-secondary);
-  padding: 3px 10px;
+  border: none;
+  color: var(--text-muted);
+  padding: 4px 8px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
   flex-shrink: 0;
+  transition:
+    color var(--transition-fast) var(--easing-standard),
+    background var(--transition-fast) var(--easing-standard);
 }
 
 .tool-back:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+  color: var(--accent);
+  background: var(--accent-muted);
+}
+
+.tool-back-label {
+  white-space: nowrap;
+}
+
+.tool-divider {
+  width: 1px;
+  height: 14px;
+  background: var(--border-default);
+  flex-shrink: 0;
 }
 
 .tool-title {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   font-size: var(--text-sm);
   color: var(--text-primary);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tool-body {
   flex: 1;
   overflow-y: auto;
-  padding: var(--space-lg);
+  padding: var(--space-xl);
 }
 
 .tool-footer {
   border-top: 1px solid var(--border-subtle);
-  padding: var(--space-sm) var(--space-lg);
+  padding: var(--space-sm) var(--space-xl);
   display: flex;
   gap: var(--space-sm);
   flex-shrink: 0;
+  background: var(--bg-secondary);
 }
 </style>

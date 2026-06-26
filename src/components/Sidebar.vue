@@ -23,6 +23,24 @@ function handleClick(item: ModuleDescriptor) {
 
 <template>
   <nav class="sidebar">
+    <!-- 品牌区域 -->
+    <div class="sidebar-brand">
+      <svg
+        class="brand-icon"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M12 2L2 7l10 5 10-5-10-5z" />
+        <path d="M2 17l10 5 10-5" />
+        <path d="M2 12l10 5 10-5" />
+      </svg>
+      <span class="brand-name">WorkForge</span>
+    </div>
+
     <!-- 顶部导航区：视图模块 -->
     <div class="sidebar-group">
       <div
@@ -48,6 +66,7 @@ function handleClick(item: ModuleDescriptor) {
 
     <!-- 底部导航区：动作模块 + 设置 -->
     <div class="sidebar-group sidebar-bottom">
+      <div class="sidebar-divider"></div>
       <div v-for="item in actionModules" :key="item.id" class="nav-item" @click="handleClick(item)">
         <svg
           class="nav-icon"
@@ -61,6 +80,7 @@ function handleClick(item: ModuleDescriptor) {
         </svg>
         <span>{{ item.label }}</span>
       </div>
+      <div class="sidebar-divider"></div>
       <div
         v-for="item in bottomModules"
         :key="item.id"
@@ -86,21 +106,48 @@ function handleClick(item: ModuleDescriptor) {
 
 <style scoped>
 .sidebar {
-  width: 260px;
+  width: 240px;
   background: var(--bg-secondary);
-  border-right: 1px solid var(--border-light);
   display: flex;
   flex-direction: column;
-  padding: var(--space-xl) var(--space-md);
+  padding: var(--space-lg) var(--space-md);
   flex-shrink: 0;
   user-select: none;
   transition: all var(--transition-normal);
 }
 
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+.brand-icon {
+  width: 22px;
+  height: 22px;
+  color: var(--accent);
+  stroke-width: 1.5;
+}
+
+.brand-name {
+  font-size: var(--text-h2);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
+}
+
+.sidebar-divider {
+  height: 1px;
+  background: var(--border-light);
+  margin: var(--space-sm) var(--space-md);
+}
+
 .sidebar-group {
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
+  gap: 2px;
 }
 
 .sidebar-bottom {
@@ -112,11 +159,11 @@ function handleClick(item: ModuleDescriptor) {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-lg);
+  padding: 10px var(--space-lg);
   border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: var(--text-h2);
-  font-weight: 500;
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-medium);
   color: var(--text-secondary);
   transition: all var(--transition-fast);
 }
@@ -124,29 +171,27 @@ function handleClick(item: ModuleDescriptor) {
 .nav-item:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
-  transform: translateX(2px);
 }
 
 .nav-item.active {
   background: var(--accent-bg);
   color: var(--accent);
-  font-weight: 600;
-  box-shadow: var(--shadow-sm);
+  font-weight: var(--font-weight-semibold);
 }
 
 .nav-accent-bar {
   position: absolute;
-  left: -10px;
-  top: 6px;
-  bottom: 6px;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
   width: 3px;
   border-radius: 2px;
   background: var(--accent);
 }
 
 .nav-icon {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   stroke-width: 1.5;
 }
 </style>

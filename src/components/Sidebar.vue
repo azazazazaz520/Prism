@@ -31,6 +31,7 @@ function handleClick(item: ModuleDescriptor) {
         :class="['nav-item', { active: activeModule === item.id }]"
         @click="handleClick(item)"
       >
+        <span v-if="activeModule === item.id" class="nav-accent-bar"></span>
         <svg
           class="nav-icon"
           viewBox="0 0 24 24"
@@ -66,6 +67,7 @@ function handleClick(item: ModuleDescriptor) {
         :class="['nav-item', { active: activeModule === item.id }]"
         @click="handleClick(item)"
       >
+        <span v-if="activeModule === item.id" class="nav-accent-bar"></span>
         <svg
           class="nav-icon"
           viewBox="0 0 24 24"
@@ -105,13 +107,14 @@ function handleClick(item: ModuleDescriptor) {
 }
 
 .nav-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: var(--text-base);
+  font-size: var(--text-h2);
   font-weight: 500;
   color: var(--text-secondary);
   transition: all var(--transition-fast);
@@ -123,14 +126,24 @@ function handleClick(item: ModuleDescriptor) {
 }
 
 .nav-item.active {
-  background: var(--bg-primary);
+  background: var(--accent-bg);
   color: var(--accent);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  font-weight: 600;
+}
+
+.nav-accent-bar {
+  position: absolute;
+  left: -10px;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
 }
 
 .nav-icon {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   stroke-width: 1.5;
 }
 </style>

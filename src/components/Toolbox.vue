@@ -88,8 +88,8 @@ function back() {
       </div>
       <div class="tb-search">
         <svg
-          width="14"
-          height="20"
+          width="16"
+          height="16"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -192,7 +192,7 @@ function back() {
   overflow-y: auto;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-md);
+  gap: var(--space-lg);
   padding: 0 var(--space-xl) var(--space-xl);
   max-width: 720px;
 }
@@ -204,31 +204,30 @@ function back() {
   padding: var(--space-xl) var(--space-lg);
   cursor: pointer;
   transition: all var(--transition-fast);
-  min-height: 100px;
+  min-height: 110px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
 }
 
 .tb-card:hover {
-  border-color: var(--accent);
-  box-shadow: var(--shadow-md);
-  transform: translateY(2px);
+  border-color: var(--accent-muted);
+  box-shadow: var(--shadow-lg);
   z-index: 1;
 }
 
 .tb-card-icon {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   margin-bottom: var(--space-sm);
   transition: stroke var(--transition-fast);
 }
 
 .tb-card-name {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   font-size: var(--text-base);
   color: var(--text-primary);
-  margin-bottom: 2px;
+  margin-bottom: 4px;
   transition: color var(--transition-fast);
 }
 

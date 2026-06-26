@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import type { Task, AppModule, Vendor, SubTask } from './types';
+import type { AppModule, Vendor } from './types';
 import Sidebar from './components/Sidebar.vue';
 import TaskInput from './components/TaskInput.vue';
 import TaskList from './components/TaskList.vue';
@@ -15,20 +15,41 @@ import AiAssistant from './components/AiAssistant.vue';
 import NoteEditor from './components/NoteEditor.vue';
 import Toolbox from './components/Toolbox.vue';
 import { useModuleRegistry } from './composables/useModuleRegistry';
+import { useTaskStore } from './composables/useTaskStore';
 
 // ── 模块注册表 ──────────────────────────────
 
 const { topModules, bottomModules, actionModules, isEnabled } = useModuleRegistry();
 
+// ── 任务看板 Store ──────────────────────────────
+
+const {
+  tasks,
+  allTags,
+  filterDate,
+  selectedTags,
+  filteredTasks,
+  dailyCompletionsMap,
+  overdueCount,
+  pendingCount,
+  loadAll,
+  addTask,
+  toggleTask,
+  toggleDailyTask,
+  updateTask,
+  updateTaskMeta,
+  deleteTask,
+  clearCompleted,
+  decomposeTask,
+  selectDate,
+  toggleTag,
+  addTag,
+} = useTaskStore();
+
 // ── 全局状态 ──────────────────────────────
 
 /** 当前侧边栏选中的功能模块 */
 const activeModule = ref<AppModule>('tasks');
-const tasks = ref<Task[]>([]);
-const filterDate = ref<string | null>(null);
-const selectedTags = ref<string[]>([]);
-const allTags = ref<string[]>([]);
-const dailyCompletedIds = ref<string[]>([]);
 
 /** AI 功能是否可用（已配置 API Key 即启用） */
 const aiEnabled = ref(false);
@@ -54,198 +75,8 @@ async function loadAiSettings() {
     const vendors = await invoke<Vendor[]>('get_vendors');
     aiEnabled.value = vendors.some((v) => v.enabled);
   } catch {
-    // 后端命令尚未注册时默认禁用
     aiEnabled.value = false;
   }
-}
-
-/** 加载所有任务和标签数据 */
-async function loadAll() {
-  tasks.value = await invoke<Task[]>('get_tasks');
-  allTags.value = await invoke<string[]>('get_all_tags');
-  await refreshDailyCompletions();
-}
-
-function todayStr(): string {
-  const today = new Date();
-  const y = today.getFullYear();
-  const m = String(today.getMonth() + 1).padStart(2, '0');
-  const d = String(today.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-async function refreshDailyCompletions() {
-  dailyCompletedIds.value = await invoke<string[]>('get_daily_completions', { date: todayStr() });
-}
-
-// ── 计算属性 ──────────────────────────────
-
-const dailyCompletionsMap = computed(() => {
-  const map: Record<string, boolean> = {};
-  for (const id of dailyCompletedIds.value) {
-    map[id] = true;
-  }
-  return map;
-});
-
-/** 根据日期和标签筛选后的任务列表 */
-const filteredTasks = computed(() => {
-  let result = tasks.value;
-  if (filterDate.value) {
-    result = result.filter((t) => t.due_date === filterDate.value);
-  }
-  if (selectedTags.value.length > 0) {
-    result = result.filter((t) => selectedTags.value.some((tag) => t.tags.includes(tag)));
-  }
-  return result;
-});
-
-const overdueCount = computed(() => {
-  const ts = todayStr();
-  return tasks.value.filter((t) => t.due_date && t.due_date < ts && !t.completed).length;
-});
-
-const pendingCount = computed(() => {
-  return tasks.value.filter((t) => !t.completed).length;
-});
-
-// ── 任务操作（保持原有逻辑） ──────────────────────────────
-
-async function handleAdd(
-  title: string,
-  due_date: string | null,
-  tags: string[],
-  important: boolean,
-  pinned: boolean,
-  is_daily: boolean,
-) {
-  const task = await invoke<Task>('add_task', {
-    args: {
-      title,
-      dueDate: due_date,
-      tags,
-      important,
-      pinned,
-      isDaily: is_daily,
-    },
-  });
-  tasks.value.push(task);
-  if (tags.length > 0) {
-    allTags.value = await invoke<string[]>('get_all_tags');
-  }
-}
-
-async function handleToggle(id: string) {
-  await invoke('toggle_task', { id });
-  const task = tasks.value.find((t) => t.id === id);
-  if (task) {
-    task.completed = !task.completed;
-    task.completed_at = task.completed ? new Date().toISOString() : null;
-  }
-}
-
-async function handleToggleDaily(id: string, date: string) {
-  await invoke('toggle_daily_task', { id, date });
-  await refreshDailyCompletions();
-}
-
-async function handleUpdate(id: string, title: string) {
-  const task = tasks.value.find((t) => t.id === id);
-  if (!task) return;
-  await invoke('update_task', {
-    args: {
-      id,
-      title,
-      dueDate: task.due_date,
-      tags: task.tags,
-      important: task.important,
-      pinned: task.pinned,
-      isDaily: task.is_daily,
-    },
-  });
-  task.title = title;
-}
-
-async function handleUpdateMeta(id: string, tags: string[], important: boolean, pinned: boolean) {
-  const task = tasks.value.find((t) => t.id === id);
-  if (!task) return;
-  await invoke('update_task', {
-    args: {
-      id,
-      title: task.title,
-      dueDate: task.due_date,
-      tags,
-      important,
-      pinned,
-      isDaily: task.is_daily,
-    },
-  });
-  task.tags = tags;
-  task.important = important;
-  task.pinned = pinned;
-  allTags.value = await invoke<string[]>('get_all_tags');
-}
-
-async function handleDelete(id: string) {
-  await invoke('delete_task', { id });
-  tasks.value = tasks.value.filter((t) => t.id !== id);
-  allTags.value = await invoke<string[]>('get_all_tags');
-}
-
-async function handleClearCompleted() {
-  await invoke('clear_completed');
-  tasks.value = tasks.value.filter((t) => !t.completed);
-}
-
-// ── AI 操作 ──────────────────────────────
-
-/** AI 拆解任务：调用后端获取子任务，逐个创建并关联父任务 */
-async function handleDecompose(parentId: string) {
-  try {
-    const subtasks = await invoke<SubTask[]>('ai_decompose', { taskId: parentId });
-    for (const sub of subtasks) {
-      const task = await invoke<Task>('add_task', {
-        args: {
-          title: sub.title,
-          dueDate: null,
-          tags: [],
-          important: false,
-          pinned: false,
-          isDaily: false,
-          parentId,
-        },
-      });
-      tasks.value.push(task);
-    }
-  } catch (e) {
-    console.error('任务拆解失败:', e);
-  }
-}
-
-// ── 筛选操作 ──────────────────────────────
-
-function handleSelectDate(date: string | null) {
-  filterDate.value = date;
-}
-
-function handleToggleTag(tag: string) {
-  if (!tag) {
-    selectedTags.value = [];
-    return;
-  }
-  const idx = selectedTags.value.indexOf(tag);
-  if (idx >= 0) {
-    selectedTags.value.splice(idx, 1);
-  } else {
-    selectedTags.value.push(tag);
-  }
-}
-
-function handleAddTag(tag: string) {
-  if (!allTags.value.includes(tag)) {
-    allTags.value.push(tag);
-  }
-  selectedTags.value = [tag];
 }
 
 // ── 模块切换 ──────────────────────────────
@@ -256,7 +87,6 @@ function handleSwitchModule(module: AppModule) {
     invoke('show_floating_window');
     return;
   }
-  // 禁用的模块不允许切换
   if (!isEnabled(module)) return;
   activeModule.value = module;
 }
@@ -290,31 +120,31 @@ function handleSwitchModule(module: AppModule) {
           <div class="module-body">
             <!-- 左侧工具栏：日历 + 标签筛选 -->
             <aside class="task-sidebar">
-              <MiniCalendar :tasks="tasks" @select-date="handleSelectDate" />
+              <MiniCalendar :tasks="tasks" @select-date="selectDate" />
               <TagFilterBar
                 :tags="allTags"
                 :selected="selectedTags"
-                @toggle-tag="handleToggleTag"
-                @add-tag="handleAddTag"
+                @toggle-tag="toggleTag"
+                @add-tag="addTag"
               />
             </aside>
 
             <!-- 右侧任务区：输入 + 列表 + 统计 -->
             <div class="task-main">
               <AiFocusBar v-if="aiEnabled" :tasks="tasks" />
-              <TaskInput :ai-enabled="aiEnabled" @add="handleAdd" />
+              <TaskInput :ai-enabled="aiEnabled" @add="addTask" />
               <TaskList
                 :tasks="filteredTasks"
                 :daily-completions-map="dailyCompletionsMap"
                 :ai-enabled="aiEnabled"
-                @toggle="handleToggle"
-                @toggle-daily="handleToggleDaily"
-                @update="handleUpdate"
-                @delete="handleDelete"
-                @update-meta="handleUpdateMeta"
-                @decompose="handleDecompose"
+                @toggle="toggleTask"
+                @toggle-daily="toggleDailyTask"
+                @update="updateTask"
+                @delete="deleteTask"
+                @update-meta="updateTaskMeta"
+                @decompose="decomposeTask"
               />
-              <TaskStats :tasks="tasks" @clear-completed="handleClearCompleted" />
+              <TaskStats :tasks="tasks" @clear-completed="clearCompleted" />
             </div>
           </div>
         </div>

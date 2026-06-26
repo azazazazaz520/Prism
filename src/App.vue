@@ -215,8 +215,8 @@ function handleSwitchModule(module: AppModule) {
   flex-direction: column;
   overflow: hidden;
   background: var(--bg-primary);
-  border-radius: var(--radius-lg) 0 0 0;
-  box-shadow: -4px 0 var(--shadow-md);
+  border-radius: var(--radius-xl) 0 0 0;
+  box-shadow: -1px 0 0 var(--border-light);
   z-index: 1;
 }
 
@@ -296,10 +296,14 @@ function handleSwitchModule(module: AppModule) {
 /* ── 模块切换过渡 ────────────────────── */
 .module-fade-enter-active,
 .module-fade-leave-active {
-  transition: opacity var(--transition-normal) var(--easing-standard);
+  transition: all var(--transition-normal) var(--easing-standard);
 }
-.module-fade-enter-from,
+.module-fade-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
 .module-fade-leave-to {
   opacity: 0;
+  transform: translateY(-4px);
 }
 </style>

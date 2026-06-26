@@ -207,10 +207,6 @@ function getIcon(isDir: boolean) {
     <aside class="file-tree">
       <div class="tree-header">
         <span class="tree-title">笔记</span>
-        <div class="tree-actions">
-          <button class="tree-btn" title="新建文件" @click="createFile('inbox')">+</button>
-          <button class="tree-btn" title="新建文件夹" @click="createFolder('')">+D</button>
-        </div>
       </div>
       <div class="tree-list">
         <!-- 递归渲染每层 -->
@@ -489,9 +485,6 @@ function getIcon(isDir: boolean) {
 }
 
 .tree-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   padding: var(--space-md) var(--space-md) var(--space-sm);
 }
 
@@ -499,25 +492,6 @@ function getIcon(isDir: boolean) {
   font-weight: 600;
   font-size: var(--text-sm);
   color: var(--text-primary);
-}
-
-.tree-actions {
-  display: flex;
-  gap: 4px;
-}
-
-.tree-btn {
-  background: none;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-sm);
-  padding: 1px 6px;
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-
-.tree-btn:hover {
-  background: var(--bg-hover);
 }
 
 .tree-list {

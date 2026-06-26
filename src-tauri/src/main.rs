@@ -8,6 +8,7 @@ use tauri::Manager;
 use tauri_plugin_notification::NotificationExt;
 
 mod ai;
+mod prompt;
 mod store;
 
 /// 应用全局状态，由 Tauri 托管，可在所有命令中访问
@@ -453,6 +454,7 @@ fn set_theme(state: tauri::State<AppState>, theme: String) -> Result<(), String>
 /// 应用入口：初始化存储、注册命令、启动后台提醒线程
 fn main() {
     let (data, config) = store::initialize();
+    prompt::create_defaults();
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .manage(AppState {

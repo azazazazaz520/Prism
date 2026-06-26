@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use crate::prompt;
 use crate::store;
 
 /// AI 调用所需的配置（从供应商解析而来）
@@ -176,23 +177,7 @@ pub async fn parse_input(
         format!("已有标签: {}", existing_tags.join(", "))
     };
 
-    let system_prompt = format!(
-        "你是一个 TODO 应用的任务解析助手。用户会用自然语言描述一个待办事项，\
-         你需要将其解析为结构化的任务。\n\n\
-         规则：\n\
-         - title: 去除时间/标签/标记后的纯任务描述\n\
-         - due_date: 从\"明天/周五/下周一/5月20日\"等表达中提取，格式 YYYY-MM-DD。\
-         如果没有截止日期则为 null。今天的日期请根据用户消息中的上下文推断。\n\
-         - tags: 从 #标签 格式中提取标签名列表\n\
-         - important: 出现\"重要/紧急/!\"标记时为 true\n\
-         - pinned: 出现\"置顶/📌\"标记时为 true\n\
-         - is_daily: 出现\"每日/每天/日常\"时为 true\n\n\
-         {}\n\n\
-         请**只**返回一个 JSON 对象，不要包含其他文字。格式示例：\n\
-         {{\"title\":\"提交报告\",\"due_date\":\"2026-06-27\",\"tags\":[\"工作\"],\"important\":true,\"pinned\":false,\"is_daily\":false}}",
-        tags_hint
-    );
-
+    let system_prompt = prompt::load(prompt::PARSE_INPUT, &[("tags_hint", &tags_hint)]);
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
     let user_message = format!("今天是 {}。用户输入：{}", today, text);
 
@@ -226,16 +211,7 @@ pub async fn daily_focus(
     }
 
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-    let system_prompt = format!(
-        "你是一个 TODO 应用的智能排序助手。根据以下未完成任务列表，\
-         综合考虑截止日期紧迫度、重要性标记、任务描述中的关键词，\
-         推荐今天应优先处理的 3-5 项任务，并给出简短理由。\n\n\
-         今天是 {}。\n\n\
-         请**只**返回一个 JSON 对象，格式如下（不要包含其他文字）：\n\
-         {{\"items\":[{{\"task_id\":\"...\",\"reason\":\"明天到期且标记重要\"}}],\
-         \"summary\":\"一句话总结今日任务概况\"}}",
-        today
-    );
+    let system_prompt = prompt::load(prompt::DAILY_FOCUS, &[("today", &today)]);
 
     let response = chat_completion(settings, &system_prompt, &task_summaries.join("\n")).await?;
     let json_str = extract_json(&response)?;
@@ -262,14 +238,7 @@ pub async fn decompose(
         )
     };
 
-    let system_prompt = format!(
-        "你是一个任务管理助手。把一个抽象的大任务拆解成 3-5 个具体可执行的小步骤。\
-         每个步骤应该是有明确完成标准的具体动作。{}\n\n\
-         请**只**返回一个 JSON 数组，格式如下（不要包含其他文字）：\n\
-         [{{\"title\":\"...\",\"estimated_minutes\":30}}, ...]\n\
-         estimated_minutes 为估计耗时（分钟），可为 null。",
-        subtask_hint
-    );
+    let system_prompt = prompt::load(prompt::DECOMPOSE, &[("subtask_hint", &subtask_hint)]);
 
     let response = chat_completion(settings, &system_prompt, task_title).await?;
     let json_str = extract_json(&response)?;
@@ -295,17 +264,7 @@ pub async fn overdue_suggest(
         return Ok(vec![]);
     }
 
-    let system_prompt = format!(
-        "你是一个任务管理助手。以下任务已过期（当前日期 {}），请对每个任务给出处理建议。\n\n\
-         action 取值：\n\
-         - \"reschedule\": 重新安排到新日期（给出 new_date）\n\
-         - \"abandon\": 建议放弃（任务可能不再需要）\n\
-         - \"decompose\": 任务太大需要拆解为子任务\n\n\
-         请**只**返回一个 JSON 数组，格式如下（不要包含其他文字）：\n\
-         [{{\"task_id\":\"...\",\"action\":\"reschedule\",\"new_date\":\"2026-07-01\",\"reason\":\"...\"}}, ...]\n\
-         new_date 仅在 action 为 reschedule 时需要，其他情况为 null。",
-        today
-    );
+    let system_prompt = prompt::load(prompt::OVERDUE_SUGGEST, &[("today", &today)]);
 
     let response = chat_completion(settings, &system_prompt, &task_infos.join("\n")).await?;
     let json_str = extract_json(&response)?;
@@ -343,15 +302,7 @@ pub async fn chat(
         format!("当前待办任务：\n{}", pending.join("\n"))
     };
 
-    let system_prompt = format!(
-        "你是一个 TODO 应用的 AI 助手，帮助用户管理任务。你可以：\n\
-         - 分析任务优先级\n\
-         - 建议任务排序\n\
-         - 帮助拆解复杂任务\n\
-         - 回答关于任务管理的问题\n\n\
-         以下是用户当前的任务数据（仅标题和截止日期）：\n{}",
-        context
-    );
+    let system_prompt = prompt::load(prompt::CHAT, &[("context", &context)]);
 
     chat_completion(settings, &system_prompt, message).await
 }

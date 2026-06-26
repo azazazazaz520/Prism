@@ -219,14 +219,25 @@ const dueLabel = computed(() => {
     </div>
 
     <div v-if="!editing" class="task-actions">
-      <button
+      <svg
         v-if="props.aiEnabled"
         class="task-decompose-btn"
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
         title="AI 拆解为子任务"
         @click.stop="emit('decompose', task.id)"
       >
-        🧩
-      </button>
+        <rect x="3" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="3" width="7" height="7" rx="1" />
+        <rect x="3" y="14" width="7" height="7" rx="1" />
+        <rect x="14" y="14" width="7" height="7" rx="1" />
+      </svg>
       <div class="menu-wrapper">
         <button class="task-menu-btn" title="更多操作" @click.stop="openMenu">⋯</button>
         <div v-if="showMenu" class="task-menu" @click.stop>
@@ -276,7 +287,7 @@ const dueLabel = computed(() => {
           </div>
           <div class="menu-divider"></div>
           <div class="menu-tags">
-            <div class="menu-tags-header">🏷 标签</div>
+            <div class="menu-tags-header">标签</div>
             <div class="menu-tags-list">
               <span v-for="tag in menuTags" :key="tag" class="menu-tag-chip">
                 {{ tag }}
@@ -304,26 +315,38 @@ const dueLabel = computed(() => {
 <style scoped>
 .task-item {
   display: flex;
-  align-items: center;
-  padding: var(--space-sm) var(--space-md);
-  border-bottom: 1px solid var(--border-light);
-  transition: background var(--transition-fast);
+  align-items: flex-start;
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius-lg);
+  transition: all var(--transition-fast);
+  gap: var(--space-sm);
+  background: var(--bg-primary);
+  margin-bottom: var(--space-xs);
 }
 
 .task-item:hover {
   background: var(--bg-secondary);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
 }
+
 .task-item.completed {
-  background: var(--bg-secondary);
+  opacity: 0.55;
 }
 
 .task-checkbox {
-  width: 16px;
-  height: 16px;
-  margin-right: var(--space-sm);
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
   cursor: pointer;
-  accent-color: var(--gray-900);
+  accent-color: var(--accent);
   flex-shrink: 0;
+  border-radius: 50%;
+  transition: transform var(--transition-fast);
+}
+
+.task-checkbox:hover {
+  transform: scale(1.1);
 }
 
 .task-body {
@@ -369,7 +392,7 @@ const dueLabel = computed(() => {
   display: flex;
   align-items: center;
   gap: var(--space-xs);
-  margin-top: 2px;
+  margin-top: 4px;
   flex-wrap: wrap;
 }
 
@@ -397,15 +420,24 @@ const dueLabel = computed(() => {
 
 .tag-badge {
   font-size: var(--text-xs);
-  color: var(--text-muted);
-  padding: 0 var(--space-xs);
+  color: var(--text-secondary);
+  padding: 2px var(--space-sm);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.tag-badge:hover {
+  background: var(--accent-bg);
+  color: var(--accent);
 }
 
 .task-edit-input {
   font-size: var(--text-base);
-  padding: 3px 6px;
+  padding: var(--space-xs) var(--space-sm);
   border: 1px solid var(--gray-600);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   outline: none;
   width: 100%;
 }
@@ -431,6 +463,12 @@ const dueLabel = computed(() => {
   align-items: center;
   gap: 2px;
   flex-shrink: 0;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.task-item:hover .task-actions {
+  opacity: 1;
 }
 
 .menu-wrapper {
@@ -453,18 +491,18 @@ const dueLabel = computed(() => {
 }
 
 .task-decompose-btn {
-  background: none;
-  border: none;
-  font-size: 13px;
+  color: var(--gray-400);
   cursor: pointer;
-  padding: 0 2px;
-  line-height: 1;
+  flex-shrink: 0;
   opacity: 0.5;
-  transition: opacity var(--transition-fast);
+  transition:
+    opacity var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .task-decompose-btn:hover {
   opacity: 1;
+  color: var(--accent);
 }
 
 .task-menu {
@@ -473,19 +511,19 @@ const dueLabel = computed(() => {
   right: 0;
   margin-top: var(--space-xs);
   background: var(--bg-primary);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-subtle);
-  box-shadow: 0 2px var(--space-sm) rgba(0, 0, 0, 0.08);
-  padding: var(--space-xs);
+  box-shadow: 0 4px var(--space-lg) rgba(0, 0, 0, 0.08);
+  padding: var(--space-sm);
   z-index: 10;
-  width: 180px;
+  width: 200px;
 }
 
 .menu-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: var(--text-sm);
@@ -535,11 +573,11 @@ const dueLabel = computed(() => {
   font-size: var(--text-xs);
   background: var(--bg-tertiary);
   color: var(--gray-700);
-  padding: 1px 5px;
+  padding: 2px var(--space-sm);
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
 }
 
 .menu-tag-x {
@@ -560,7 +598,7 @@ const dueLabel = computed(() => {
 .menu-tag-input {
   flex: 1;
   min-width: 0;
-  padding: 3px 6px;
+  padding: var(--space-xs) var(--space-sm);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   font-size: var(--text-xs);
@@ -577,7 +615,7 @@ const dueLabel = computed(() => {
   border: none;
   border-radius: var(--radius-sm);
   font-size: var(--text-xs);
-  padding: 3px 6px;
+  padding: var(--space-xs) var(--space-sm);
   cursor: pointer;
 }
 </style>

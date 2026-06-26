@@ -335,23 +335,25 @@ const hasMessages = computed(() => messages.value.length > 0);
 }
 
 .msg-bubble {
-  padding: var(--space-sm) 14px;
-  border-radius: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius-lg);
   font-size: var(--text-base);
   line-height: 1.7;
   word-break: break-word;
+  box-shadow: var(--shadow-sm);
 }
 
 .msg-row.user .msg-bubble {
-  background: var(--text-primary);
-  color: var(--bg-primary);
-  border-bottom-right-radius: 3px;
+  background: var(--accent);
+  color: white;
+  border-bottom-right-radius: 4px;
 }
 
 .msg-row.assistant .msg-bubble {
-  background: var(--bg-hover);
+  background: var(--bg-primary);
   color: var(--text-primary);
-  border-bottom-left-radius: 3px;
+  border: 1px solid var(--border-light);
+  border-bottom-left-radius: 4px;
 }
 
 .msg-bubble :deep(strong) {
@@ -359,10 +361,15 @@ const hasMessages = computed(() => messages.value.length > 0);
 }
 
 .msg-bubble :deep(code) {
-  background: rgba(0, 0, 0, 0.06);
-  padding: 1px var(--space-xs);
+  background: rgba(0, 0, 0, 0.08);
+  padding: 2px 6px;
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+}
+
+.msg-row.user .msg-bubble :deep(code) {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 /* ── 打字动画 ────────────────────── */

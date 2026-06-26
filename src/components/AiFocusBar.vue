@@ -165,19 +165,24 @@ const hasItems = computed(() => (suggestion.value?.items?.length ?? 0) > 0);
 }
 
 .focus-content {
-  background: var(--accent-light);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
+  background: var(--accent-bg);
+  border-radius: var(--radius-lg);
   overflow: hidden;
+  border: 1px solid var(--accent-muted);
 }
 
 .focus-header {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-md);
+  padding: var(--space-md) var(--space-lg);
   cursor: pointer;
   user-select: none;
+  transition: background var(--transition-fast);
+}
+
+.focus-header:hover {
+  background: rgba(0, 0, 0, 0.02);
 }
 
 .focus-icon {

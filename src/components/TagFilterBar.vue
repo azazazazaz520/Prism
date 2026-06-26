@@ -83,8 +83,8 @@ function handleAddTag() {
 
 .tag-chip {
   font-size: var(--text-xs);
-  padding: 3px var(--space-sm);
-  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-md);
   border: 1px solid var(--gray-300);
   background: none;
   color: var(--gray-600);
@@ -110,9 +110,9 @@ function handleAddTag() {
 
 .tag-input-inline {
   font-size: var(--text-xs);
-  padding: 3px 6px;
+  padding: var(--space-xs) var(--space-sm);
   border: 1px solid var(--gray-600);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   outline: none;
   min-width: 70px;
 }

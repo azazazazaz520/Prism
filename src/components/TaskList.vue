@@ -97,14 +97,13 @@ const normalTasks = computed(() => sortedTasks.value.filter((t) => !t.pinned || 
 <style scoped>
 .task-list {
   background: var(--bg-primary);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
 }
 
 .task-empty {
-  padding: 32px var(--space-lg);
+  padding: 48px var(--space-lg);
   text-align: center;
-  color: var(--gray-400);
+  color: var(--text-muted);
   font-size: var(--text-base);
 }
 

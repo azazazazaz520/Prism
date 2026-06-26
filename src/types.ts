@@ -20,8 +20,25 @@ export interface DailyCompletion {
 
 // ── 侧边栏模块 ──────────────────────────────
 
-/** 侧边栏导航的 5 个功能模块 */
-export type AppModule = 'tasks' | 'ai-assistant' | 'calendar' | 'floating' | 'settings';
+/** 侧边栏导航的功能模块 */
+export type AppModule =
+  | 'tasks'
+  | 'ai-assistant'
+  | 'calendar'
+  | 'floating'
+  | 'settings'
+  | 'notes'
+  | 'devtools';
+
+/** 模块注册表描述符（数据驱动侧边栏和设置开关） */
+export interface ModuleDescriptor {
+  id: AppModule;
+  label: string;
+  /** SVG path 数据（纯线条风格） */
+  iconPath: string;
+  /** 是否为动作模块（悬浮窗）而非视图切换 */
+  isAction?: boolean;
+}
 
 // ── AI 相关类型 ──────────────────────────────
 
@@ -84,4 +101,14 @@ export interface OverdueSuggestion {
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+}
+
+// ── 笔记相关类型 ──────────────────────────────
+
+/** 文件树节点 */
+export interface FileEntry {
+  name: string;
+  path: string;
+  isDir: boolean;
+  children?: FileEntry[];
 }

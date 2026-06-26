@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import type { Task, AppModule, Vendor, SubTask } from './types';
+import type { AppModule } from './types';
 import Sidebar from './components/Sidebar.vue';
 import TaskInput from './components/TaskInput.vue';
 import TaskList from './components/TaskList.vue';
@@ -12,25 +12,54 @@ import TagFilterBar from './components/TagFilterBar.vue';
 import SettingsPanel from './components/SettingsPanel.vue';
 import AiFocusBar from './components/AiFocusBar.vue';
 import AiAssistant from './components/AiAssistant.vue';
+import NoteEditor from './components/NoteEditor.vue';
+import Toolbox from './components/Toolbox.vue';
+import { useModuleRegistry } from './composables/useModuleRegistry';
+import { useTaskStore } from './composables/useTaskStore';
+import { useAiStatus } from './composables/useAiStatus';
+
+// ── 模块注册表 ──────────────────────────────
+
+const { topModules, bottomModules, actionModules, isEnabled } = useModuleRegistry();
+
+// ── 任务看板 Store ──────────────────────────────
+
+const {
+  tasks,
+  allTags,
+  filterDate,
+  selectedTags,
+  filteredTasks,
+  dailyCompletionsMap,
+  overdueCount,
+  pendingCount,
+  loadAll,
+  addTask,
+  toggleTask,
+  toggleDailyTask,
+  updateTask,
+  updateTaskMeta,
+  deleteTask,
+  clearCompleted,
+  decomposeTask,
+  selectDate,
+  toggleTag,
+  addTag,
+} = useTaskStore();
+
+// ── AI 状态 ──────────────────────────────
+
+const { aiEnabled, load: loadAiSettings } = useAiStatus();
 
 // ── 全局状态 ──────────────────────────────
 
 /** 当前侧边栏选中的功能模块 */
 const activeModule = ref<AppModule>('tasks');
-const tasks = ref<Task[]>([]);
-const filterDate = ref<string | null>(null);
-const selectedTags = ref<string[]>([]);
-const allTags = ref<string[]>([]);
-const dailyCompletedIds = ref<string[]>([]);
-
-/** AI 功能是否可用（已配置 API Key 即启用） */
-const aiEnabled = ref(false);
 
 // ── 生命周期 ──────────────────────────────
 
 onMounted(async () => {
-  await loadAll();
-  await loadAiSettings();
+  await Promise.all([loadAll(), loadAiSettings()]);
   const appWindow = getCurrentWindow();
   const unlistenFocus = await appWindow.listen('tauri://focus', () => {
     loadAll();
@@ -41,214 +70,15 @@ onMounted(async () => {
   });
 });
 
-/** 检查是否配置了启用的 AI 供应商 */
-async function loadAiSettings() {
-  try {
-    const vendors = await invoke<Vendor[]>('get_vendors');
-    aiEnabled.value = vendors.some((v) => v.enabled);
-  } catch {
-    // 后端命令尚未注册时默认禁用
-    aiEnabled.value = false;
-  }
-}
-
-/** 加载所有任务和标签数据 */
-async function loadAll() {
-  tasks.value = await invoke<Task[]>('get_tasks');
-  allTags.value = await invoke<string[]>('get_all_tags');
-  await refreshDailyCompletions();
-}
-
-function todayStr(): string {
-  const today = new Date();
-  const y = today.getFullYear();
-  const m = String(today.getMonth() + 1).padStart(2, '0');
-  const d = String(today.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-async function refreshDailyCompletions() {
-  dailyCompletedIds.value = await invoke<string[]>('get_daily_completions', { date: todayStr() });
-}
-
-// ── 计算属性 ──────────────────────────────
-
-const dailyCompletionsMap = computed(() => {
-  const map: Record<string, boolean> = {};
-  for (const id of dailyCompletedIds.value) {
-    map[id] = true;
-  }
-  return map;
-});
-
-/** 根据日期和标签筛选后的任务列表 */
-const filteredTasks = computed(() => {
-  let result = tasks.value;
-  if (filterDate.value) {
-    result = result.filter((t) => t.due_date === filterDate.value);
-  }
-  if (selectedTags.value.length > 0) {
-    result = result.filter((t) => selectedTags.value.some((tag) => t.tags.includes(tag)));
-  }
-  return result;
-});
-
-const overdueCount = computed(() => {
-  const ts = todayStr();
-  return tasks.value.filter((t) => t.due_date && t.due_date < ts && !t.completed).length;
-});
-
-const pendingCount = computed(() => {
-  return tasks.value.filter((t) => !t.completed).length;
-});
-
-// ── 任务操作（保持原有逻辑） ──────────────────────────────
-
-async function handleAdd(
-  title: string,
-  due_date: string | null,
-  tags: string[],
-  important: boolean,
-  pinned: boolean,
-  is_daily: boolean,
-) {
-  const task = await invoke<Task>('add_task', {
-    args: {
-      title,
-      dueDate: due_date,
-      tags,
-      important,
-      pinned,
-      isDaily: is_daily,
-    },
-  });
-  tasks.value.push(task);
-  if (tags.length > 0) {
-    allTags.value = await invoke<string[]>('get_all_tags');
-  }
-}
-
-async function handleToggle(id: string) {
-  await invoke('toggle_task', { id });
-  const task = tasks.value.find((t) => t.id === id);
-  if (task) {
-    task.completed = !task.completed;
-    task.completed_at = task.completed ? new Date().toISOString() : null;
-  }
-}
-
-async function handleToggleDaily(id: string, date: string) {
-  await invoke('toggle_daily_task', { id, date });
-  await refreshDailyCompletions();
-}
-
-async function handleUpdate(id: string, title: string) {
-  const task = tasks.value.find((t) => t.id === id);
-  if (!task) return;
-  await invoke('update_task', {
-    args: {
-      id,
-      title,
-      dueDate: task.due_date,
-      tags: task.tags,
-      important: task.important,
-      pinned: task.pinned,
-      isDaily: task.is_daily,
-    },
-  });
-  task.title = title;
-}
-
-async function handleUpdateMeta(id: string, tags: string[], important: boolean, pinned: boolean) {
-  const task = tasks.value.find((t) => t.id === id);
-  if (!task) return;
-  await invoke('update_task', {
-    args: {
-      id,
-      title: task.title,
-      dueDate: task.due_date,
-      tags,
-      important,
-      pinned,
-      isDaily: task.is_daily,
-    },
-  });
-  task.tags = tags;
-  task.important = important;
-  task.pinned = pinned;
-  allTags.value = await invoke<string[]>('get_all_tags');
-}
-
-async function handleDelete(id: string) {
-  await invoke('delete_task', { id });
-  tasks.value = tasks.value.filter((t) => t.id !== id);
-  allTags.value = await invoke<string[]>('get_all_tags');
-}
-
-async function handleClearCompleted() {
-  await invoke('clear_completed');
-  tasks.value = tasks.value.filter((t) => !t.completed);
-}
-
-// ── AI 操作 ──────────────────────────────
-
-/** AI 拆解任务：调用后端获取子任务，逐个创建并关联父任务 */
-async function handleDecompose(parentId: string) {
-  try {
-    const subtasks = await invoke<SubTask[]>('ai_decompose', { taskId: parentId });
-    for (const sub of subtasks) {
-      const task = await invoke<Task>('add_task', {
-        args: {
-          title: sub.title,
-          dueDate: null,
-          tags: [],
-          important: false,
-          pinned: false,
-          isDaily: false,
-          parentId,
-        },
-      });
-      tasks.value.push(task);
-    }
-  } catch (e) {
-    console.error('任务拆解失败:', e);
-  }
-}
-
-// ── 筛选操作 ──────────────────────────────
-
-function handleSelectDate(date: string | null) {
-  filterDate.value = date;
-}
-
-function handleToggleTag(tag: string) {
-  if (!tag) {
-    selectedTags.value = [];
-    return;
-  }
-  const idx = selectedTags.value.indexOf(tag);
-  if (idx >= 0) {
-    selectedTags.value.splice(idx, 1);
-  } else {
-    selectedTags.value.push(tag);
-  }
-}
-
-function handleAddTag(tag: string) {
-  if (!allTags.value.includes(tag)) {
-    allTags.value.push(tag);
-  }
-  selectedTags.value = [tag];
-}
-
 // ── 模块切换 ──────────────────────────────
 
-/** 处理侧边栏模块切换，悬浮窗直接触发动作而非切换视图 */
+/** 处理侧边栏模块切换，动作模块（悬浮窗）直接触发而非切换视图 */
 function handleSwitchModule(module: AppModule) {
   if (module === 'floating') {
     invoke('show_floating_window');
     return;
   }
+  if (!isEnabled(module)) return;
   activeModule.value = module;
 }
 </script>
@@ -258,7 +88,9 @@ function handleSwitchModule(module: AppModule) {
     <!-- 侧边栏导航 -->
     <Sidebar
       :active-module="activeModule"
-      :ai-enabled="aiEnabled"
+      :top-modules="topModules"
+      :bottom-modules="bottomModules"
+      :action-modules="actionModules"
       @switch-module="handleSwitchModule"
     />
 
@@ -266,7 +98,7 @@ function handleSwitchModule(module: AppModule) {
     <main class="main-content">
       <Transition name="module-fade" mode="out-in">
         <!-- 任务看板模块 -->
-        <div v-if="activeModule === 'tasks'" key="tasks" class="module-tasks">
+        <div v-if="activeModule === 'tasks' && isEnabled('tasks')" key="tasks" class="module-tasks">
           <div class="module-header">
             <div>
               <h2 class="module-title">任务看板</h2>
@@ -279,44 +111,69 @@ function handleSwitchModule(module: AppModule) {
           <div class="module-body">
             <!-- 左侧工具栏：日历 + 标签筛选 -->
             <aside class="task-sidebar">
-              <MiniCalendar :tasks="tasks" @select-date="handleSelectDate" />
+              <MiniCalendar :tasks="tasks" @select-date="selectDate" />
               <TagFilterBar
                 :tags="allTags"
                 :selected="selectedTags"
-                @toggle-tag="handleToggleTag"
-                @add-tag="handleAddTag"
+                @toggle-tag="toggleTag"
+                @add-tag="addTag"
               />
             </aside>
 
             <!-- 右侧任务区：输入 + 列表 + 统计 -->
             <div class="task-main">
               <AiFocusBar v-if="aiEnabled" :tasks="tasks" />
-              <TaskInput :ai-enabled="aiEnabled" @add="handleAdd" />
+              <TaskInput :ai-enabled="aiEnabled" @add="addTask" />
               <TaskList
                 :tasks="filteredTasks"
                 :daily-completions-map="dailyCompletionsMap"
                 :ai-enabled="aiEnabled"
-                @toggle="handleToggle"
-                @toggle-daily="handleToggleDaily"
-                @update="handleUpdate"
-                @delete="handleDelete"
-                @update-meta="handleUpdateMeta"
-                @decompose="handleDecompose"
+                @toggle="toggleTask"
+                @toggle-daily="toggleDailyTask"
+                @update="updateTask"
+                @delete="deleteTask"
+                @update-meta="updateTaskMeta"
+                @decompose="decomposeTask"
               />
-              <TaskStats :tasks="tasks" @clear-completed="handleClearCompleted" />
+              <TaskStats :tasks="tasks" @clear-completed="clearCompleted" />
             </div>
           </div>
         </div>
 
         <!-- AI 助手模块（Phase 4） -->
-        <div v-else-if="activeModule === 'ai-assistant'" key="ai" class="module-ai">
+        <div
+          v-else-if="activeModule === 'ai-assistant' && isEnabled('ai-assistant')"
+          key="ai"
+          class="module-ai"
+        >
           <AiAssistant />
         </div>
 
-        <!-- 日历视图模块（Phase 5 实现） -->
-        <div v-else-if="activeModule === 'calendar'" key="calendar" class="module-placeholder">
+        <!-- 日历视图模块 -->
+        <div
+          v-else-if="activeModule === 'calendar' && isEnabled('calendar')"
+          key="calendar"
+          class="module-placeholder"
+        >
           <h2 class="module-title">日历视图</h2>
           <p class="placeholder-text">日历视图功能将在 Phase 5 中实现</p>
+        </div>
+
+        <!-- 笔记模块 -->
+        <div
+          v-else-if="activeModule === 'notes' && isEnabled('notes')"
+          key="notes"
+          class="module-notes"
+        >
+          <NoteEditor />
+        </div>
+
+        <div
+          v-else-if="activeModule === 'devtools' && isEnabled('devtools')"
+          key="devtools"
+          class="module-devtools"
+        >
+          <Toolbox :ai-enabled="aiEnabled" />
         </div>
 
         <!-- 设置模块 -->
@@ -334,7 +191,7 @@ function handleSwitchModule(module: AppModule) {
   display: flex;
   height: 100vh;
   overflow: hidden;
-  background: var(--bg-secondary);
+  background: var(--bg-primary);
 }
 
 .main-content {
@@ -342,38 +199,47 @@ function handleSwitchModule(module: AppModule) {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--bg-secondary);
+  transition: background var(--transition-normal);
 }
 
 /* 模块容器通用样式 */
 .module-tasks,
 .module-settings,
 .module-placeholder,
-.module-ai {
+.module-ai,
+.module-notes,
+.module-devtools {
   flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg) 0 0 0;
+  box-shadow: -4px 0 var(--shadow-md);
+  z-index: 1;
 }
 
 /* 任务看板头部：标题 + 统计 + AI 状态 */
 .module-header {
-  padding: var(--space-md) var(--space-xl) var(--space-sm);
+  padding: var(--space-2xl) var(--space-xl) var(--space-lg);
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  border-bottom: 1px solid transparent;
 }
 
 .module-title {
-  font-weight: 600;
-  font-size: var(--text-md);
+  font-weight: 700;
+  font-size: 24px;
   color: var(--text-primary);
   margin: 0;
 }
 
 .module-subtitle {
-  font-size: var(--text-xs);
-  color: var(--text-disabled);
-  margin-top: 2px;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin-top: 4px;
   display: block;
 }
 
@@ -389,23 +255,23 @@ function handleSwitchModule(module: AppModule) {
 /* 任务看板内容区：左右分区布局 */
 .module-body {
   flex: 1;
-  padding: 0 var(--space-xl) var(--space-md);
+  padding: 0 var(--space-2xl) var(--space-2xl);
   overflow: hidden;
   display: flex;
-  gap: var(--space-sm);
-  max-width: 760px;
+  gap: var(--space-xl);
+  max-width: 1280px;
   margin: 0 auto;
   width: 100%;
 }
 
 /* 左侧工具栏：日历 + 标签筛选，固定宽度 */
 .task-sidebar {
-  width: 210px;
+  width: 240px;
   flex-shrink: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
+  gap: var(--space-lg);
 }
 
 /* 右侧任务区：输入 + 列表 + 统计，flex 填充 */

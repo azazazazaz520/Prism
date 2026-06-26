@@ -27,14 +27,16 @@ body {
 
 /* ── 滚动条 ──────────────────────────── */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   background: var(--gray-300);
-  border-radius: 3px;
+  border-radius: 4px;
+  transition: background var(--transition-fast);
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--gray-400);
@@ -42,6 +44,6 @@ body {
 
 /* ── 选中高亮 ────────────────────────── */
 ::selection {
-  background: var(--accent-muted);
+  background: var(--accent-bg-active);
   color: var(--text-primary);
 }

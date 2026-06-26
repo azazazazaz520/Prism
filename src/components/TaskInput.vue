@@ -388,26 +388,28 @@ function formatDueDate(d: string): string {
 
 <style scoped>
 .task-input {
-  margin-bottom: var(--space-md);
+  margin-bottom: var(--space-lg);
 }
 
 .input-row {
   display: flex;
-  gap: var(--space-xs);
+  gap: var(--space-sm);
 }
 
 .task-input-field {
   flex: 1;
-  padding: 7px var(--space-md);
+  padding: 12px var(--space-lg);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-full);
   font-size: var(--text-base);
   outline: none;
-  transition: border-color var(--transition-normal);
+  transition: all var(--transition-fast);
+  background: var(--bg-primary);
 }
 
 .task-input-field:focus {
-  border-color: var(--gray-600);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-muted);
 }
 .task-input-field.error {
   border-color: var(--danger);
@@ -418,42 +420,47 @@ function formatDueDate(d: string): string {
 }
 
 .date-btn {
-  padding: 7px var(--space-sm);
-  background: none;
+  padding: 10px var(--space-md);
+  background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-full);
   cursor: pointer;
   font-size: var(--text-sm);
   line-height: 1;
-  transition: border-color var(--transition-normal);
+  transition: all var(--transition-fast);
 }
 
 .date-btn:hover,
 .date-btn.active {
-  border-color: var(--gray-600);
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
 }
 
 .task-input-btn {
-  padding: 7px var(--space-lg);
-  background: var(--gray-900);
+  padding: 10px var(--space-xl);
+  background: var(--accent);
   color: white;
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-full);
   font-size: var(--text-base);
   cursor: pointer;
-  transition: background var(--transition-normal);
+  transition: all var(--transition-fast);
   white-space: nowrap;
+  font-weight: 500;
 }
 
 .task-input-btn:hover {
-  background: var(--gray-800);
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
 }
 
 .ai-btn {
-  padding: 7px var(--space-sm);
+  padding: 10px var(--space-md);
   background: none;
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   cursor: pointer;
   font-size: var(--text-sm);
   line-height: 1;
@@ -471,34 +478,35 @@ function formatDueDate(d: string): string {
 
 .quick-actions {
   display: flex;
-  gap: var(--space-xs);
-  margin-top: var(--space-xs);
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
   flex-wrap: wrap;
 }
 
 .qa-btn {
   display: flex;
   align-items: center;
-  gap: 3px;
-  padding: 3px var(--space-sm);
-  background: none;
-  border: 1px solid var(--gray-300);
-  border-radius: var(--radius-sm);
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-md);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-full);
   font-size: var(--text-xs);
   cursor: pointer;
   transition: all var(--transition-fast);
-  color: var(--text-muted);
-}
-
-.qa-btn:hover {
-  border-color: var(--gray-600);
   color: var(--text-secondary);
 }
 
+.qa-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
 .qa-btn.active {
-  background: var(--bg-hover);
-  border-color: var(--gray-600);
-  color: var(--text-primary);
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
 }
 
 .tag-input-row {
@@ -509,9 +517,9 @@ function formatDueDate(d: string): string {
 
 .tag-input {
   flex: 1;
-  padding: var(--space-xs) var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   font-size: var(--text-sm);
   outline: none;
 }
@@ -521,11 +529,11 @@ function formatDueDate(d: string): string {
 }
 
 .tag-add-btn {
-  padding: var(--space-xs) var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
   background: var(--gray-900);
   color: white;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   font-size: var(--text-sm);
   cursor: pointer;
 }
@@ -541,11 +549,11 @@ function formatDueDate(d: string): string {
   font-size: var(--text-xs);
   background: var(--bg-tertiary);
   color: var(--gray-700);
-  padding: 1px 6px;
-  border-radius: var(--radius-sm);
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--space-xs);
 }
 
 .tag-chip-x {
@@ -559,14 +567,13 @@ function formatDueDate(d: string): string {
 }
 
 .summary {
-  margin-top: var(--space-xs);
-  padding-top: var(--space-xs);
-  border-top: 1px solid var(--border-light);
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
   font-size: var(--text-xs);
   color: var(--text-muted);
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-xs);
+  gap: var(--space-sm);
 }
 
 .summary-item {

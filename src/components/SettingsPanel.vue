@@ -3,9 +3,11 @@ import { ref, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { SettingsSubModule } from '../types';
 import { useTheme, type ThemeMode } from '../composables/useTheme';
+import { useModuleRegistry } from '../composables/useModuleRegistry';
 import VendorList from './VendorList.vue';
 
 const { theme, setTheme } = useTheme();
+const { allModules, isEnabled, toggle: toggleModule } = useModuleRegistry();
 
 const activeSub = ref<SettingsSubModule>('preferences');
 
@@ -102,6 +104,23 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
           </div>
 
           <div class="settings-group">
+            <div class="group-title">模块</div>
+            <div
+              v-for="m in allModules.filter((m) => m.id !== 'settings')"
+              :key="m.id"
+              class="setting-row"
+            >
+              <label>{{ m.label }}</label>
+              <button
+                :class="['toggle-btn', { on: isEnabled(m.id) }]"
+                @click="toggleModule(m.id, !isEnabled(m.id))"
+              >
+                <span class="toggle-knob" />
+              </button>
+            </div>
+          </div>
+
+          <div class="settings-group">
             <div class="group-title">提醒设置</div>
             <div class="setting-row">
               <label>提前提醒</label>
@@ -174,20 +193,22 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-md);
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-full);
   background: none;
   font-size: var(--text-sm);
-  color: var(--gray-700);
+  color: var(--text-secondary);
   cursor: pointer;
   text-align: left;
+  transition: all var(--transition-fast);
 }
 .nav-item:hover {
   background: var(--bg-hover);
+  transform: translateX(2px);
 }
 .nav-item.active {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  font-weight: 500;
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .settings-main {
@@ -207,10 +228,11 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
 
 .settings-group {
   background: var(--bg-primary);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
-  padding: var(--space-lg);
-  margin-bottom: var(--space-md);
+  padding: var(--space-xl);
+  margin-bottom: var(--space-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 .group-title {
@@ -282,5 +304,38 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
 }
 .theme-select:focus {
   border-color: var(--accent);
+}
+
+/* 模块开关按钮 */
+.toggle-btn {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  border: none;
+  background: var(--gray-300);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  padding: 0;
+}
+
+.toggle-btn.on {
+  background: var(--accent);
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform var(--transition-fast);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.toggle-btn.on .toggle-knob {
+  transform: translateX(20px);
 }
 </style>

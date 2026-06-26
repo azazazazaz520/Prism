@@ -279,6 +279,7 @@ function handleSwitchModule(module: AppModule) {
   flex: 1;
   overflow-y: auto;
   min-width: 0;
+  padding-top: var(--space-sm);
 }
 
 /* 占位模块（尚未实现的 Phase） */

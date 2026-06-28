@@ -123,7 +123,31 @@ function handleSwitchModule(module: AppModule) {
             <!-- 右侧任务区：输入 + 列表 + 统计 -->
             <div class="task-main">
               <AiFocusBar v-if="aiEnabled" :tasks="tasks" />
-              <TaskInput :ai-enabled="aiEnabled" @add="addTask" />
+              <div class="task-input-row">
+                <TaskInput :ai-enabled="aiEnabled" @add="addTask" />
+                <button
+                  v-if="aiEnabled"
+                  class="import-btn"
+                  title="从聊天记录导入任务"
+                  @click="invoke('show_import_window')"
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                  导入
+                </button>
+              </div>
               <TaskList
                 :tasks="filteredTasks"
                 :daily-completions-map="dailyCompletionsMap"
@@ -270,6 +294,41 @@ function handleSwitchModule(module: AppModule) {
   overflow-y: auto;
   min-width: 0;
   padding-top: var(--space-sm);
+}
+
+.task-input-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+}
+
+.task-input-row > :first-child {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.import-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 12px var(--space-lg);
+  background: var(--bg-primary);
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-full);
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.import-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-light);
+  color: var(--accent);
 }
 
 /* 占位模块（尚未实现的 Phase） */

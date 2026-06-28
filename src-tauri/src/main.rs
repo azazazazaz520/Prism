@@ -4,6 +4,7 @@
 use std::collections::HashSet;
 use std::sync::Mutex;
 use tauri::Manager;
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_notification::NotificationExt;
 
 pub(crate) mod ai;
@@ -22,6 +23,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(AppState {
             data: Mutex::new(data),
             config: Mutex::new(config),
@@ -44,6 +46,8 @@ fn main() {
             // 配置命令 (commands::config)
             commands::config::show_floating_window,
             commands::config::show_main_window,
+            commands::config::show_import_window,
+            commands::config::hide_import_window,
             commands::config::set_reminder_minutes,
             commands::config::get_reminder_minutes,
             commands::config::get_ai_settings_all,
@@ -73,8 +77,26 @@ fn main() {
             commands::ai::ai_chat,
             commands::ai::ai_json_explain,
             commands::ai::ai_regex_generate,
+            commands::ai::ai_parse_wechat,
         ])
         .setup(|app| {
+            // ── 全局快捷键：Ctrl+Shift+I → 打开导入窗 ──
+            let handle = app.handle().clone();
+            handle
+                .global_shortcut()
+                .on_shortcut(
+                    Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyI),
+                    |_app, _shortcut, event| {
+                        if event.state == ShortcutState::Pressed {
+                            if let Some(win) = _app.get_webview_window("import") {
+                                let _ = win.show();
+                                let _ = win.set_focus();
+                            }
+                        }
+                    },
+                )
+                .expect("failed to register Ctrl+Shift+I shortcut");
+
             let handle = app.handle().clone();
             // 后台线程：每分钟检查一次到期任务并推送系统通知
             std::thread::spawn(move || {

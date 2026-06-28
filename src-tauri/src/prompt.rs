@@ -13,6 +13,7 @@ pub const OVERDUE_SUGGEST: &str = "overdue-suggest.md";
 pub const CHAT: &str = "chat.md";
 pub const JSON_EXPLAIN: &str = "json-explain.md";
 pub const REGEX_GENERATE: &str = "regex-generate.md";
+pub const WECHAT_PARSE: &str = "wechat-parse.md";
 
 // ═══════════════════════════════════════════════════════════════
 //  编译时内嵌默认 prompt（文件缺失时回退）
@@ -103,6 +104,30 @@ const DEFAULT_REGEX_GENERATE: &str = "\
 - 优先使用 JavaScript/ECMAScript 兼容的语法
 - 如果用户描述模糊，选择最常见、最实用的匹配方式";
 
+const DEFAULT_WECHAT_PARSE: &str = "\
+# 聊天记录任务提取
+
+你是一个 TODO 应用的智能解析助手。用户会粘贴一段聊天记录（可能是微信、钉钉、Slack 等），你需要从中提取所有可能的待办任务。
+
+## 格式
+聊天消息通常按行排列，忽略具体的格式差异（时间戳、发言者等），关注语义内容。
+
+## 规则
+- 逐条分析每条消息，识别其中隐含的待办事项、承诺、约定、截止日期
+- 忽略纯闲聊、表情、问候语、已完成的陈述
+- 如果多条消息讨论同一件事，合并为一个任务（取最完整的描述）
+- 每个任务 title 应为简洁可执行的行动描述（动词开头，不超过 30 字）
+- due_date: 从「明天/周五/下周一/5月20日/下午3点」等表达中提取，格式 YYYY-MM-DD。如无明确日期则为 null
+- tags: 根据消息上下文提取 1-2 个关键词标签（如「工作」「生活」「学习」）
+- important: 出现「重要/紧急/赶紧/!」或明显紧迫语境时为 true
+- pinned: 出现「置顶」标记时为 true，聊天中极少出现则默认 false
+- is_daily: 出现「每日/每天/日常」时为 true
+
+{{tags_hint}}
+
+请**只**返回一个 JSON 数组，每个元素是一个任务对象，不要包含其他文字。格式示例：
+[{\"title\":\"提交项目报告\",\"due_date\":\"2026-06-29\",\"tags\":[\"工作\"],\"important\":true,\"pinned\":false,\"is_daily\":false}]\n如果没有发现任何任务，返回空数组 []。";
+
 // ═══════════════════════════════════════════════════════════════
 //  加载与渲染
 // ═══════════════════════════════════════════════════════════════
@@ -116,6 +141,7 @@ fn get_default(name: &str) -> &'static str {
         CHAT => DEFAULT_CHAT,
         JSON_EXPLAIN => DEFAULT_JSON_EXPLAIN,
         REGEX_GENERATE => DEFAULT_REGEX_GENERATE,
+        WECHAT_PARSE => DEFAULT_WECHAT_PARSE,
         _ => "",
     }
 }
@@ -149,6 +175,7 @@ pub fn create_defaults() {
         (CHAT, DEFAULT_CHAT),
         (JSON_EXPLAIN, DEFAULT_JSON_EXPLAIN),
         (REGEX_GENERATE, DEFAULT_REGEX_GENERATE),
+        (WECHAT_PARSE, DEFAULT_WECHAT_PARSE),
     ];
     for (name, content) in defaults {
         let path = dir.join(name);
@@ -229,6 +256,7 @@ mod tests {
         assert!(!get_default(CHAT).is_empty());
         assert!(!get_default(JSON_EXPLAIN).is_empty());
         assert!(!get_default(REGEX_GENERATE).is_empty());
+        assert!(!get_default(WECHAT_PARSE).is_empty());
     }
 
     #[test]

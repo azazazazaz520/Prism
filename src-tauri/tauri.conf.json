@@ -33,6 +33,20 @@
         "resizable": false,
         "visible": false,
         "url": "/?window=floating"
+      },
+      {
+        "label": "import",
+        "title": "Import",
+        "width": 400,
+        "height": 560,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "dragDropEnabled": true,
+        "alwaysOnTop": true,
+        "resizable": true,
+        "visible": false,
+        "url": "/?window=import"
       }
     ],
     "security": {

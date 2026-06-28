@@ -166,26 +166,61 @@ fn task_to_summary(t: &store::Task) -> String {
 //  功能 1：自然语言快速录入
 // ═══════════════════════════════════════════════════════════════
 
-pub async fn parse_input(
+/// 通用解析核心：构建上下文 → 加载 Prompt → 调用 LLM → 提取 JSON
+async fn parse_core(
     settings: &AiSettings,
-    text: &str,
+    prompt_name: &str,
+    user_message: &str,
     existing_tags: &[String],
-) -> Result<ParsedTask, String> {
+) -> Result<String, String> {
     let tags_hint = if existing_tags.is_empty() {
         "无已有标签".to_string()
     } else {
         format!("已有标签: {}", existing_tags.join(", "))
     };
 
-    let system_prompt = prompt::load(prompt::PARSE_INPUT, &[("tags_hint", &tags_hint)]);
+    let system_prompt = prompt::load(prompt_name, &[("tags_hint", &tags_hint)]);
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-    let user_message = format!("今天是 {}。用户输入：{}", today, text);
+    let message = format!("今天是 {}。{}", today, user_message);
 
-    let response = chat_completion(settings, &system_prompt, &user_message).await?;
-    let json_str = extract_json(&response)?;
+    let response = chat_completion(settings, &system_prompt, &message).await?;
+    extract_json(&response)
+}
 
+pub async fn parse_input(
+    settings: &AiSettings,
+    text: &str,
+    existing_tags: &[String],
+) -> Result<ParsedTask, String> {
+    let json_str = parse_core(
+        settings,
+        prompt::PARSE_INPUT,
+        &format!("用户输入：{}", text),
+        existing_tags,
+    )
+    .await?;
     serde_json::from_str::<ParsedTask>(&json_str)
-        .map_err(|e| format!("AI 返回格式异常: {}。原文: {}", e, response))
+        .map_err(|e| format!("AI 返回格式异常: {}。原文: {}", e, json_str))
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  功能 1b：聊天记录批量任务提取
+// ═══════════════════════════════════════════════════════════════
+
+pub async fn parse_wechat(
+    settings: &AiSettings,
+    text: &str,
+    existing_tags: &[String],
+) -> Result<Vec<ParsedTask>, String> {
+    let json_str = parse_core(
+        settings,
+        prompt::WECHAT_PARSE,
+        &format!("聊天记录：\n{}", text),
+        existing_tags,
+    )
+    .await?;
+    serde_json::from_str::<Vec<ParsedTask>>(&json_str)
+        .map_err(|e| format!("AI 返回格式异常: {}。原文: {}", e, json_str))
 }
 
 // ═══════════════════════════════════════════════════════════════

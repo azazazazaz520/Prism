@@ -1,8 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicovrc/tauri-v2-schema/main/tauri.conf.json",
-  "productName": "TODO",
+  "productName": "Prism",
   "version": "0.1.0",
-  "identifier": "com.todo.app",
+  "identifier": "com.prism.app",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
@@ -13,18 +13,18 @@
     "windows": [
       {
         "label": "main",
-        "title": "TODO",
-        "width": 780,
+        "title": "Prism",
+        "width": 1000,
         "height": 600,
         "minWidth": 600,
-        "minHeight": 480,
+        "minHeight": 600,
         "resizable": true
       },
       {
         "label": "floating",
-        "title": "TODO",
-        "width": 320,
-        "height": 360,
+        "title": "Prism",
+        "width": 260,
+        "height": 320,
         "decorations": false,
         "transparent": true,
         "shadow": false,

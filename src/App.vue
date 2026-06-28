@@ -149,16 +149,6 @@ function handleSwitchModule(module: AppModule) {
           <AiAssistant />
         </div>
 
-        <!-- 日历视图模块 -->
-        <div
-          v-else-if="activeModule === 'calendar' && isEnabled('calendar')"
-          key="calendar"
-          class="module-placeholder"
-        >
-          <h2 class="module-title">日历视图</h2>
-          <p class="placeholder-text">日历视图功能将在 Phase 5 中实现</p>
-        </div>
-
         <!-- 笔记模块 -->
         <div
           v-else-if="activeModule === 'notes' && isEnabled('notes')"

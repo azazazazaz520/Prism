@@ -35,7 +35,7 @@ const selectedName = computed(() => {
 /** 渲染后的 Markdown HTML */
 const renderedHtml = computed(() => {
   if (!content.value) return '';
-  return marked.parse(content.value) as string;
+  return marked.parse(content.value, { breaks: true }) as string;
 });
 
 /** 字数统计（中文字 + 英文单词） */

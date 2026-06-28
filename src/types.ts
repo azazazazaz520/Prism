@@ -21,14 +21,7 @@ export interface DailyCompletion {
 // ── 侧边栏模块 ──────────────────────────────
 
 /** 侧边栏导航的功能模块 */
-export type AppModule =
-  | 'tasks'
-  | 'ai-assistant'
-  | 'calendar'
-  | 'floating'
-  | 'settings'
-  | 'notes'
-  | 'devtools';
+export type AppModule = 'tasks' | 'ai-assistant' | 'floating' | 'settings' | 'notes' | 'devtools';
 
 /** 模块注册表描述符（数据驱动侧边栏和设置开关） */
 export interface ModuleDescriptor {

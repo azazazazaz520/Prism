@@ -16,11 +16,6 @@ const ALL_MODULES: ModuleDescriptor[] = [
       'M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z',
   },
   {
-    id: 'calendar',
-    label: '日历视图',
-    iconPath: 'M3 4h18v18H3V4zm13-2v4M8 2v4M3 10h18',
-  },
-  {
     id: 'notes',
     label: '笔记',
     iconPath: 'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8',

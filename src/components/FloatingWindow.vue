@@ -11,6 +11,10 @@ const carouselInterval = ref(5000);
 const reminderMinutes = ref(30);
 const showPanel = ref(false);
 const isPaused = ref(false);
+
+/** 悬浮窗背景色（透明度由控制面板调整） */
+const floatingBg = computed(() => `rgba(30, 30, 40, ${opacity.value})`);
+
 let timer: ReturnType<typeof setInterval> | null = null;
 let pollInterval: ReturnType<typeof setInterval> | null = null;
 let unlistenFocus: (() => void) | null = null;
@@ -104,6 +108,8 @@ async function exitFloating() {
 }
 
 onMounted(async () => {
+  document.documentElement.style.background = 'transparent';
+  document.documentElement.style.overflow = 'hidden';
   document.body.style.margin = '0';
   document.body.style.padding = '0';
   document.body.style.background = 'transparent';
@@ -157,7 +163,7 @@ function onPointerUp() {
     ref="scrollContainer"
     class="floating-window"
     :class="{ dragging: isDragging }"
-    :style="{ background: `rgba(30, 30, 40, ${opacity})` }"
+    :style="{ backgroundColor: floatingBg }"
     @pointerdown="onPointerDown"
     @pointermove="onPointerMove"
     @pointerup="onPointerUp"
@@ -257,11 +263,10 @@ function onPointerUp() {
 .floating-window {
   width: 320px;
   min-height: 100vh;
-  border-radius: var(--radius-sm);
-  box-shadow:
-    0 var(--space-sm) 32px rgba(0, 0, 0, 0.4),
-    0 0 0 1px rgba(255, 255, 255, 0.08);
-  overflow-y: scroll;
+  clip-path: inset(0 round var(--radius-lg));
+  filter: drop-shadow(0 var(--space-sm) 32px rgba(0, 0, 0, 0.4));
+  overflow: hidden;
+  overflow-y: auto;
   scrollbar-width: none;
   user-select: none;
   cursor: grab;

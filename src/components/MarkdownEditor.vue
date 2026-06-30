@@ -115,7 +115,6 @@ function buildExtensions() {
     history(),
     drawSelection(),
     dropCursor(),
-    EditorView.lineWrapping,
     bracketMatching(),
     syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
     markdown({ codeLanguages: languages }),

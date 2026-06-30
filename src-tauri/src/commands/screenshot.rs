@@ -107,6 +107,7 @@ fn bitmap_to_png(
     }
 }
 
+#[allow(dead_code)]
 fn encode_png(pixels: &[u8], width: u32, height: u32) -> Result<Vec<u8>, String> {
     let mut out = Vec::new();
     {

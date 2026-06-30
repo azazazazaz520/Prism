@@ -7,6 +7,7 @@ import type { FileEntry } from '../types';
 import InputDialog from './InputDialog.vue';
 import ConfirmDialog from './ConfirmDialog.vue';
 import TreeNode from './TreeNode.vue';
+import MarkdownEditor from './MarkdownEditor.vue';
 
 // ── 状态 ──────────────────────────────
 
@@ -18,9 +19,6 @@ const saving = ref(false);
 const isDirty = ref(false);
 const cursorLine = ref(1);
 const cursorCol = ref(1);
-
-/** 文本域 DOM 引用，用于追踪光标位置 */
-const textareaRef = ref<HTMLTextAreaElement | null>(null);
 
 /** 操作结果提示（临时显示） */
 const statusMsg = ref('');
@@ -61,16 +59,24 @@ const wordCount = computed(() => {
   return chineseChars + englishWords;
 });
 
-/** 更新光标位置 */
-function updateCursor() {
-  const el = textareaRef.value;
-  if (!el) return;
-  const text = el.value;
-  const pos = el.selectionStart;
-  const before = text.substring(0, pos);
-  cursorLine.value = before.split('\n').length;
-  const lastLine = before.split('\n').pop() || '';
-  cursorCol.value = lastLine.length + 1;
+/** 来自 MarkdownEditor 的光标变更 */
+function handleCursorChange(line: number, col: number) {
+  cursorLine.value = line;
+  cursorCol.value = col;
+}
+
+/** Ctrl+S 手动保存 */
+async function handleManualSave() {
+  if (!selectedPath.value) return;
+  saving.value = true;
+  try {
+    await invoke('write_note', { path: selectedPath.value, content: content.value });
+    isDirty.value = false;
+  } catch (e) {
+    console.error('保存失败:', e);
+  } finally {
+    saving.value = false;
+  }
 }
 
 // ── 自定义对话框状态 ──────────────────────────────
@@ -461,14 +467,13 @@ async function deleteEntry(path: string) {
 
         <!-- 编辑区 -->
         <div class="editor-panes">
-          <textarea
-            ref="textareaRef"
+          <MarkdownEditor
             v-show="viewMode !== 'preview'"
-            v-model="content"
-            :class="['editor-textarea', { full: viewMode === 'edit' }]"
+            :model-value="content"
             placeholder="开始编写 Markdown..."
-            @click="updateCursor"
-            @keyup="updateCursor"
+            @update:model-value="content = $event"
+            @cursor-change="handleCursorChange"
+            @save="handleManualSave"
           />
           <div
             v-show="viewMode !== 'edit'"
@@ -869,27 +874,6 @@ async function deleteEntry(path: string) {
   flex: 1;
   display: flex;
   overflow: hidden;
-}
-
-.editor-textarea {
-  flex: 1;
-  border: none;
-  padding: var(--space-lg);
-  font-family: 'Cascadia Code', 'Fira Code', monospace;
-  font-size: var(--text-sm);
-  line-height: 1.7;
-  color: var(--text-primary);
-  background: var(--bg-primary);
-  resize: none;
-  outline: none;
-}
-
-.editor-textarea:focus {
-  box-shadow: inset 0 0 0 2px var(--accent-bg);
-}
-
-.editor-textarea.full {
-  flex: 1;
 }
 
 .editor-preview {

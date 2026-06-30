@@ -8,6 +8,7 @@ import InputDialog from './InputDialog.vue';
 import ConfirmDialog from './ConfirmDialog.vue';
 import TreeNode from './TreeNode.vue';
 import MarkdownEditor from './MarkdownEditor.vue';
+import MarkdownToolbar from './MarkdownToolbar.vue';
 
 // ── 状态 ──────────────────────────────
 
@@ -19,6 +20,8 @@ const saving = ref(false);
 const isDirty = ref(false);
 const cursorLine = ref(1);
 const cursorCol = ref(1);
+
+const textareaRef = ref<InstanceType<typeof MarkdownEditor> | null>(null);
 
 /** 操作结果提示（临时显示） */
 const statusMsg = ref('');
@@ -413,6 +416,7 @@ async function deleteEntry(path: string) {
             <span class="toolbar-filename">{{ selectedName }}</span>
             <span v-if="isDirty" class="toolbar-dirty" title="未保存的更改">&#9679;</span>
           </div>
+          <MarkdownToolbar :editor-ref="textareaRef" />
           <div class="toolbar-right">
             <div class="editor-modes">
               <button
@@ -468,6 +472,7 @@ async function deleteEntry(path: string) {
         <!-- 编辑区 -->
         <div class="editor-panes">
           <MarkdownEditor
+            ref="textareaRef"
             v-show="viewMode !== 'preview'"
             :model-value="content"
             placeholder="开始编写 Markdown..."

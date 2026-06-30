@@ -68,6 +68,7 @@ const customTheme = EditorView.theme({
     fontFamily: 'inherit',
     lineHeight: 'inherit',
     overflow: 'auto',
+    width: '100%',
   },
   '.cm-content': {
     padding: 'var(--space-lg)',

@@ -14,6 +14,19 @@ pub async fn ai_parse_input(
     ai::parse_input(&settings, &text, &existing_tags).await
 }
 
+/// 聊天记录批量任务提取
+#[tauri::command]
+pub async fn ai_parse_wechat(
+    state: tauri::State<'_, AppState>,
+    text: String,
+) -> Result<Vec<ai::ParsedTask>, String> {
+    let (settings, existing_tags) = with_ai_context(&state, |settings, data| {
+        let existing_tags: Vec<String> = data.tasks.iter().flat_map(|t| t.tags.clone()).collect();
+        Ok((settings.clone(), existing_tags))
+    })?;
+    ai::parse_wechat(&settings, &text, &existing_tags).await
+}
+
 /// 今日聚焦建议
 #[tauri::command]
 pub async fn ai_daily_focus(

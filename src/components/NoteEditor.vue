@@ -5,6 +5,8 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { marked } from 'marked';
 import type { FileEntry } from '../types';
 import InputDialog from './InputDialog.vue';
+import ConfirmDialog from './ConfirmDialog.vue';
+import TreeNode from './TreeNode.vue';
 
 // ── 状态 ──────────────────────────────
 
@@ -19,6 +21,18 @@ const cursorCol = ref(1);
 
 /** 文本域 DOM 引用，用于追踪光标位置 */
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
+
+/** 操作结果提示（临时显示） */
+const statusMsg = ref('');
+let statusTimer: ReturnType<typeof setTimeout> | null = null;
+
+function showStatus(msg: string) {
+  statusMsg.value = msg;
+  if (statusTimer) clearTimeout(statusTimer);
+  statusTimer = setTimeout(() => {
+    statusMsg.value = '';
+  }, 3000);
+}
 
 /** 笔记目录路径 */
 const notesDir = ref('');
@@ -67,6 +81,35 @@ const dialogLabel = ref('');
 const dialogPlaceholder = ref('');
 const dialogDefault = ref('');
 let dialogCallback: ((value: string | null) => void) | null = null;
+
+// ── 确认对话框 ──────────────────────────────
+
+const confirmVisible = ref(false);
+const confirmTitle = ref('');
+const confirmMessage = ref('');
+let confirmCallback: (() => void) | null = null;
+
+function showConfirm(title: string, message: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    confirmTitle.value = title;
+    confirmMessage.value = message;
+    confirmCallback = () => resolve(true);
+    confirmVisible.value = true;
+  });
+}
+
+function handleConfirmOk() {
+  confirmVisible.value = false;
+  if (confirmCallback) {
+    confirmCallback();
+    confirmCallback = null;
+  }
+}
+
+function handleConfirmCancel() {
+  confirmVisible.value = false;
+  confirmCallback = null;
+}
 
 async function loadNotesDir() {
   try {
@@ -204,9 +247,30 @@ function toggleExpand(dirPath: string) {
   expanded.value = next;
 }
 
+/** 校验文件/文件夹名称 */
+const INVALID_NAME_CHARS = /[<>:"/\\|?*]/;
+
+function validateName(name: string): string | null {
+  if (INVALID_NAME_CHARS.test(name)) {
+    return '名称包含非法字符（< > : " / \\ | ? *）';
+  }
+  if (name === '.' || name === '..') {
+    return '不允许使用 . 或 .. 作为名称';
+  }
+  if (name.length > 255) {
+    return '名称过长（最多 255 字符）';
+  }
+  return null;
+}
+
 async function createFile(parentDir: string) {
   const name = await showDialog('新建文件', '文件名称（不含扩展名）：', '例如：我的笔记', '');
   if (!name) return;
+  const err = validateName(name);
+  if (err) {
+    showStatus(err);
+    return;
+  }
   const fileName = name.endsWith('.md') ? name : `${name}.md`;
   const path = parentDir ? `${parentDir}/${fileName}` : fileName;
   try {
@@ -214,6 +278,7 @@ async function createFile(parentDir: string) {
     await loadTree();
     openFile(path);
   } catch (e) {
+    showStatus(`创建文件失败: ${e}`);
     console.error('创建文件失败:', e);
   }
 }
@@ -221,6 +286,11 @@ async function createFile(parentDir: string) {
 async function createFolder(parentDir: string) {
   const name = await showDialog('新建文件夹', '文件夹名称：', '例如：工作文档', '');
   if (!name) return;
+  const err = validateName(name);
+  if (err) {
+    showStatus(err);
+    return;
+  }
   const path = parentDir ? `${parentDir}/${name}` : name;
   try {
     await invoke('create_note_dir', { path });
@@ -229,6 +299,7 @@ async function createFolder(parentDir: string) {
     next.add(path);
     expanded.value = next;
   } catch (e) {
+    showStatus(`创建文件夹失败: ${e}`);
     console.error('创建文件夹失败:', e);
   }
 }
@@ -237,6 +308,11 @@ async function renameEntry(path: string, isDir: boolean) {
   const oldName = path.split('/').pop() || '';
   const newName = await showDialog('重命名', '新名称：', '', oldName);
   if (!newName || newName === oldName) return;
+  const err = validateName(newName);
+  if (err) {
+    showStatus(err);
+    return;
+  }
   try {
     await invoke('rename_note_entry', { path, newName });
     if (selectedPath.value === path) {
@@ -245,31 +321,44 @@ async function renameEntry(path: string, isDir: boolean) {
     }
     await loadTree();
   } catch (e) {
+    showStatus(`重命名失败: ${e}`);
     console.error('重命名失败:', e);
   }
 }
 
 async function deleteEntry(path: string) {
   const name = path.split('/').pop() || '';
-  if (!confirm(`确定删除「${name}」？`)) return;
+  // 判断是否为文件夹（从 tree 中查找）
+  const findEntry = (entries: FileEntry[], targetPath: string): FileEntry | null => {
+    for (const e of entries) {
+      if (e.path === targetPath) return e;
+      if (e.children) {
+        const found = findEntry(e.children, targetPath);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+  const entry = findEntry(tree.value, path);
+  const typeLabel = entry?.isDir ? '文件夹' : '文件';
+
+  const confirmed = await showConfirm(
+    '确认删除',
+    `确定删除${typeLabel}「${name}」？删除后将移至系统回收站。`,
+  );
+  if (!confirmed) return;
   try {
     await invoke('delete_note_entry', { path });
     if (selectedPath.value === path) {
       selectedPath.value = null;
       content.value = '';
     }
+    showStatus(`已删除「${name}」（移至回收站）`);
     await loadTree();
   } catch (e) {
+    showStatus(`删除失败: ${e}`);
     console.error('删除失败:', e);
   }
-}
-
-// ── 渲染树节点（递归） ──────────────────────────────
-
-function getIcon(isDir: boolean) {
-  return isDir
-    ? 'M2 6a2 2 0 012-2h5l2 2h9a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V6z'
-    : 'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6';
 }
 </script>
 
@@ -281,288 +370,20 @@ function getIcon(isDir: boolean) {
         <span class="tree-title">笔记</span>
       </div>
       <div class="tree-list">
-        <!-- 递归渲染每层 -->
-        <template v-for="entry in tree" :key="entry.path">
-          <!-- 目录 -->
-          <template v-if="entry.isDir">
-            <div class="tree-row tree-row-dir" @click="toggleExpand(entry.path)">
-              <svg
-                class="tree-chevron"
-                :class="{ open: expanded.has(entry.path) }"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path d="M6 9l6 6 6-6" />
-              </svg>
-              <svg
-                class="tree-icon"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path :d="getIcon(true)" />
-              </svg>
-              <span class="tree-name">{{ entry.name }}</span>
-              <button class="tree-add-btn" title="新建文件" @click.stop="createFile(entry.path)">
-                +
-              </button>
-              <div class="tree-node-actions">
-                <button class="node-btn" title="重命名" @click.stop="renameEntry(entry.path, true)">
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                  >
-                    <path
-                      d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"
-                    />
-                  </svg>
-                </button>
-                <button
-                  class="node-btn node-btn-danger"
-                  title="删除"
-                  @click.stop="deleteEntry(entry.path)"
-                >
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                  >
-                    <path
-                      d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"
-                    />
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <div v-if="expanded.has(entry.path) && entry.children" class="tree-children">
-              <template v-for="child in entry.children" :key="child.path">
-                <!-- 子目录 -->
-                <template v-if="child.isDir">
-                  <div class="tree-row tree-row-dir" @click="toggleExpand(child.path)">
-                    <svg
-                      class="tree-chevron"
-                      :class="{ open: expanded.has(child.path) }"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <path d="M6 9l6 6 6-6" />
-                    </svg>
-                    <svg
-                      class="tree-icon"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path :d="getIcon(true)" />
-                    </svg>
-                    <span class="tree-name">{{ child.name }}</span>
-                    <button
-                      class="tree-add-btn"
-                      title="新建文件"
-                      @click.stop="createFile(child.path)"
-                    >
-                      +
-                    </button>
-                    <div class="tree-node-actions">
-                      <button
-                        class="node-btn"
-                        title="重命名"
-                        @click.stop="renameEntry(child.path, true)"
-                      >
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                        >
-                          <path
-                            d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"
-                          />
-                        </svg>
-                      </button>
-                      <button
-                        class="node-btn node-btn-danger"
-                        title="删除"
-                        @click.stop="deleteEntry(child.path)"
-                      >
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                        >
-                          <path
-                            d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"
-                          />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                  <div v-if="expanded.has(child.path) && child.children" class="tree-children">
-                    <div
-                      v-for="sub in child.children.filter((c) => !c.isDir)"
-                      :key="sub.path"
-                      :class="['tree-row', 'tree-row-file', { active: selectedPath === sub.path }]"
-                      @click="openFile(sub.path)"
-                    >
-                      <svg
-                        class="tree-icon"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path :d="getIcon(false)" />
-                      </svg>
-                      <span class="tree-name">{{ sub.name }}</span>
-                    </div>
-                  </div>
-                </template>
-                <!-- 子文件 -->
-                <div
-                  v-else
-                  :class="['tree-row', 'tree-row-file', { active: selectedPath === child.path }]"
-                  @click="openFile(child.path)"
-                >
-                  <svg
-                    class="tree-icon"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path :d="getIcon(false)" />
-                  </svg>
-                  <span class="tree-name">{{ child.name }}</span>
-                  <div class="tree-node-actions">
-                    <button
-                      class="node-btn"
-                      title="重命名"
-                      @click.stop="renameEntry(child.path, false)"
-                    >
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                      >
-                        <path
-                          d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"
-                        />
-                      </svg>
-                    </button>
-                    <button
-                      class="node-btn node-btn-danger"
-                      title="删除"
-                      @click.stop="deleteEntry(child.path)"
-                    >
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                      >
-                        <path
-                          d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              </template>
-            </div>
-          </template>
-          <!-- 根级文件 -->
-          <div
-            v-else
-            :class="['tree-row', 'tree-row-file', { active: selectedPath === entry.path }]"
-            @click="openFile(entry.path)"
-          >
-            <svg
-              class="tree-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path :d="getIcon(false)" />
-            </svg>
-            <span class="tree-name">{{ entry.name }}</span>
-            <div class="tree-node-actions">
-              <button class="node-btn" title="重命名" @click.stop="renameEntry(entry.path, false)">
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                >
-                  <path
-                    d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"
-                  />
-                </svg>
-              </button>
-              <button
-                class="node-btn node-btn-danger"
-                title="删除"
-                @click.stop="deleteEntry(entry.path)"
-              >
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                >
-                  <path
-                    d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"
-                  />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </template>
+        <TreeNode
+          v-for="entry in tree"
+          :key="entry.path"
+          :entry="entry"
+          :expanded="expanded"
+          :selected-path="selectedPath"
+          :depth="0"
+          @toggle-expand="toggleExpand"
+          @select="openFile"
+          @create-file="createFile"
+          @create-folder="createFolder"
+          @rename="renameEntry"
+          @delete="deleteEntry"
+        />
       </div>
 
       <!-- 笔记目录设置 -->
@@ -720,6 +541,23 @@ function getIcon(isDir: boolean) {
       @confirm="handleDialogConfirm"
       @cancel="handleDialogCancel"
     />
+
+    <!-- 删除确认对话框 -->
+    <ConfirmDialog
+      :visible="confirmVisible"
+      :title="confirmTitle"
+      :message="confirmMessage"
+      confirm-text="删除"
+      cancel-text="取消"
+      :danger="true"
+      @confirm="handleConfirmOk"
+      @cancel="handleConfirmCancel"
+    />
+
+    <!-- 操作状态提示 -->
+    <Transition name="status-fade">
+      <div v-if="statusMsg" class="status-toast">{{ statusMsg }}</div>
+    </Transition>
   </div>
 </template>
 
@@ -1130,6 +968,40 @@ function getIcon(isDir: boolean) {
 .statusbar-saving {
   margin-left: auto;
   color: var(--accent);
+}
+
+/* ── 状态提示 Toast ──────────────── */
+
+.status-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow-md);
+  z-index: 10000;
+  max-width: 80vw;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status-fade-enter-active,
+.status-fade-leave-active {
+  transition:
+    opacity 0.25s,
+    transform 0.25s;
+}
+
+.status-fade-enter-from,
+.status-fade-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(8px);
 }
 
 /* ── 空状态欢迎页 ────────────────── */

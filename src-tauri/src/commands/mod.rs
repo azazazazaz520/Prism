@@ -1,5 +1,6 @@
 pub mod ai;
 pub mod config;
+pub mod screenshot;
 pub mod tasks;
 
 use std::collections::HashSet;

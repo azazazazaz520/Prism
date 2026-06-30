@@ -152,15 +152,24 @@ pub fn get_notes_dir(config: &ConfigStore) -> PathBuf {
 // ═══════════════════════════════════════════════════════════════
 
 /// 确保 Workspace 目录结构存在（notes/、prompts/、notes.meta.json）
+/// 目录创建失败时记录 stderr 但不阻塞启动（用户可能无权限写入父目录）
 pub fn ensure_workspace() {
     let root = get_workspace_dir();
-    fs::create_dir_all(&root).ok();
-    fs::create_dir_all(root.join("notes")).ok();
-    fs::create_dir_all(root.join("prompts")).ok();
+    if let Err(e) = fs::create_dir_all(&root) {
+        eprintln!("[store] 无法创建 workspace 目录 {:?}: {}", root, e);
+    }
+    if let Err(e) = fs::create_dir_all(root.join("notes")) {
+        eprintln!("[store] 无法创建 notes 目录: {}", e);
+    }
+    if let Err(e) = fs::create_dir_all(root.join("prompts")) {
+        eprintln!("[store] 无法创建 prompts 目录: {}", e);
+    }
     // notes.meta.json 不存在时初始化为空数组
     let meta_path = root.join("notes.meta.json");
     if !meta_path.exists() {
-        fs::write(&meta_path, "[]").ok();
+        if let Err(e) = fs::write(&meta_path, "[]") {
+            eprintln!("[store] 无法初始化 notes.meta.json: {}", e);
+        }
     }
 }
 
@@ -262,7 +271,9 @@ pub fn initialize() -> (DataStore, ConfigStore) {
     ensure_workspace();
     if needs_migration() {
         // 迁移失败不阻塞启动，回退到空 store
-        migrate_legacy().ok();
+        if let Err(e) = migrate_legacy() {
+            eprintln!("[store] 旧格式迁移失败（将使用空 store）: {}", e);
+        }
     }
     (load_data(), load_config())
 }
@@ -279,7 +290,6 @@ mod tests {
     /// 为每个测试创建独立的临时目录，避免并行测试互相干扰
     fn with_temp_workspace<F: FnOnce()>(f: F) {
         let tmp = std::env::temp_dir().join(format!("todo-test-{}", uuid::Uuid::new_v4()));
-        // 临时替换 HOME 不可行，改为直接测试纯函数
         fs::create_dir_all(&tmp).unwrap();
         f();
         fs::remove_dir_all(&tmp).ok();

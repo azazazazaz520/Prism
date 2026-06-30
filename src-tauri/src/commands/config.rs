@@ -1,6 +1,6 @@
 use super::AppState;
 use crate::store;
-use tauri::Manager;
+use tauri::{LogicalSize, Manager};
 
 // ── 窗口管理 ──────────────────────────────
 
@@ -29,6 +29,22 @@ pub fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
     }
     main_win.show().map_err(|e| e.to_string())?;
     main_win.set_focus().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// 调整悬浮窗高度：展开（控制面板可见）/ 收起（仅任务卡片行）
+#[tauri::command]
+pub fn resize_floating_window(app: tauri::AppHandle, expanded: bool) -> Result<(), String> {
+    let win = app
+        .get_webview_window("floating")
+        .ok_or("floating window not found")?;
+    if expanded {
+        win.set_size(LogicalSize::new(260.0, 310.0))
+            .map_err(|e| e.to_string())?;
+    } else {
+        win.set_size(LogicalSize::new(260.0, 155.0))
+            .map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 

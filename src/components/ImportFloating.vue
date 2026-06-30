@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { ParsedTask } from '../types';
 
 // ── 扩展 ParsedTask：加入前端选择状态 ──────────────
@@ -17,19 +18,52 @@ const success = ref('');
 const candidates = ref<CandidateTask[]>([]);
 const error = ref('');
 
+// ── 截图模式 ──────────────────────────────
+const screenshotImage = ref('');
+
+function checkScreenshot() {
+  const win = window as any;
+  if (win.__screenshotResult) {
+    const data = win.__screenshotResult;
+    chatText.value = data.text || '';
+    screenshotImage.value = data.image_base64 || '';
+    if (data.error) {
+      error.value = data.error;
+    }
+    delete win.__screenshotResult;
+  }
+}
+
+function clearScreenshot() {
+  screenshotImage.value = '';
+  chatText.value = '';
+}
+
 const allSelected = computed(
   () => candidates.value.length > 0 && candidates.value.every((c) => c.selected),
 );
 const selectedCount = computed(() => candidates.value.filter((c) => c.selected).length);
 
-onMounted(() => {
-  // 透明窗口：确保 body/html 背景透明，避免底部露白
+onMounted(async () => {
+  // 透明窗口
   document.documentElement.style.background = 'transparent';
   document.documentElement.style.overflow = 'hidden';
   document.body.style.margin = '0';
   document.body.style.padding = '0';
   document.body.style.background = 'transparent';
   document.body.style.overflow = 'hidden';
+
+  checkScreenshot();
+
+  const appWindow = getCurrentWindow();
+  unlistenFocus = await appWindow.listen('tauri://focus', () => {
+    checkScreenshot();
+  });
+});
+
+let unlistenFocus: (() => void) | null = null;
+onUnmounted(() => {
+  if (unlistenFocus) unlistenFocus();
 });
 
 // ── AI 解析 ──────────────────────────────
@@ -123,10 +157,15 @@ function formatDate(d: string | null): string {
 
     <!-- 输入区 -->
     <div class="input-section">
+      <!-- 截图预览 -->
+      <div v-if="screenshotImage" class="screenshot-preview">
+        <img :src="'data:image/png;base64,' + screenshotImage" class="screenshot-img" />
+        <button class="clear-screenshot-btn" @click="clearScreenshot">清除截图</button>
+      </div>
       <textarea
         v-model="chatText"
         class="chat-textarea"
-        placeholder="在此粘贴聊天记录..."
+        :placeholder="screenshotImage ? '截图已加载（可手动输入文本）...' : '在此粘贴聊天记录...'"
         rows="4"
       ></textarea>
       <div class="input-actions">
@@ -351,6 +390,41 @@ function formatDate(d: string | null): string {
 }
 .chat-textarea::placeholder {
   color: rgba(255, 255, 255, 0.25);
+}
+
+/* ── 截图预览 ────────────────────── */
+.screenshot-preview {
+  position: relative;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.screenshot-img {
+  width: 100%;
+  max-height: 180px;
+  object-fit: contain;
+  display: block;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.clear-screenshot-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.clear-screenshot-btn:hover {
+  background: rgba(231, 76, 60, 0.6);
+  color: white;
 }
 
 .input-actions {

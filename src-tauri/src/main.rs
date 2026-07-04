@@ -35,6 +35,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             // 任务命令 (commands::tasks)
             commands::tasks::get_tasks,
+            commands::tasks::get_all_tasks_including_deleted,
             commands::tasks::add_task,
             commands::tasks::toggle_task,
             commands::tasks::toggle_daily_task,

@@ -15,6 +15,12 @@ pub fn get_tasks(state: tauri::State<AppState>) -> Vec<store::Task> {
         .collect()
 }
 
+/// 获取所有任务列表（包含已软删除，供同步配对时批量推送）
+#[tauri::command]
+pub fn get_all_tasks_including_deleted(state: tauri::State<AppState>) -> Vec<store::Task> {
+    state.data.lock().unwrap().tasks.clone()
+}
+
 /// 新增任务
 #[tauri::command]
 pub fn add_task(state: tauri::State<AppState>, args: AddTaskArgs) -> Result<store::Task, String> {

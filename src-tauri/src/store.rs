@@ -25,12 +25,24 @@ pub struct Task {
     /// 父任务 ID，拆解产生的子任务指向其父任务
     #[serde(default)]
     pub parent_id: Option<String>,
+    /// 最后更新时间（ISO 8601），用于跨设备 LWW 合并
+    #[serde(default)]
+    pub updated_at: String,
+    /// 软删除标记，true 表示已删除但保留用于同步传播
+    #[serde(default)]
+    pub is_deleted: bool,
+    /// 所属同步 Profile，null 表示仅本地存储
+    #[serde(default)]
+    pub profile_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DailyCompletion {
     pub task_id: String,
     pub date: String,
+    /// 所属同步 Profile，null 表示仅本地存储
+    #[serde(default)]
+    pub profile_id: Option<String>,
 }
 
 /// AI 供应商（支持 OpenAI 等）
@@ -322,6 +334,9 @@ mod tests {
             pinned: false,
             is_daily: false,
             parent_id: None,
+            updated_at: "2026-05-17T00:00:00+08:00".to_string(),
+            is_deleted: false,
+            profile_id: None,
         };
         let json = serde_json::to_string(&task).unwrap();
         let parsed: Task = serde_json::from_str(&json).unwrap();
@@ -347,10 +362,14 @@ mod tests {
                 pinned: false,
                 is_daily: false,
                 parent_id: None,
+                updated_at: "2026-01-01T00:00:00Z".to_string(),
+                is_deleted: false,
+                profile_id: None,
             }],
             daily_completions: vec![DailyCompletion {
                 task_id: "1".to_string(),
                 date: "2026-01-02".to_string(),
+                profile_id: None,
             }],
         };
         let json = serde_json::to_string(&store).unwrap();
@@ -423,6 +442,9 @@ mod tests {
                     pinned: false,
                     is_daily: false,
                     parent_id: None,
+                    updated_at: "2026-01-01T00:00:00Z".to_string(),
+                    is_deleted: false,
+                    profile_id: None,
                 }],
                 daily_completions: vec![],
                 vendors: vec![Vendor {

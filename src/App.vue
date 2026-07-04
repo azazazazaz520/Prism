@@ -34,6 +34,7 @@ const {
   overdueCount,
   pendingCount,
   loadAll,
+  initSync,
   addTask,
   toggleTask,
   toggleDailyTask,
@@ -60,6 +61,7 @@ const activeModule = ref<AppModule>('tasks');
 
 onMounted(async () => {
   await Promise.all([loadAll(), loadAiSettings()]);
+  initSync();
   const appWindow = getCurrentWindow();
   const unlistenFocus = await appWindow.listen('tauri://focus', () => {
     loadAll();

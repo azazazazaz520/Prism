@@ -77,6 +77,20 @@ pub struct DataStore {
     pub daily_completions: Vec<DailyCompletion>,
 }
 
+/// 同步状态（存储于 sync.json，独立于用户偏好配置）
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SyncStore {
+    /// 设备配对用的同步码
+    #[serde(default)]
+    pub sync_code: Option<String>,
+    /// Supabase profile ID
+    #[serde(default)]
+    pub profile_id: Option<String>,
+    /// 上次成功同步的时间戳
+    #[serde(default)]
+    pub last_sync_at: Option<String>,
+}
+
 /// 应用配置（存储于 config.json）
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ConfigStore {
@@ -136,6 +150,10 @@ pub fn get_workspace_dir() -> PathBuf {
 
 fn get_data_path() -> PathBuf {
     get_workspace_dir().join("data.json")
+}
+
+fn get_sync_path() -> PathBuf {
+    get_workspace_dir().join("sync.json")
 }
 
 fn get_config_path() -> PathBuf {
@@ -224,6 +242,28 @@ pub fn load_config() -> ConfigStore {
         Ok(content) => serde_json::from_str(&content).unwrap_or_else(|_| default_config_store()),
         Err(_) => default_config_store(),
     }
+}
+
+fn default_sync_store() -> SyncStore {
+    SyncStore {
+        sync_code: None,
+        profile_id: None,
+        last_sync_at: None,
+    }
+}
+
+pub fn load_sync() -> SyncStore {
+    let path = get_sync_path();
+    match fs::read_to_string(&path) {
+        Ok(content) => serde_json::from_str(&content).unwrap_or_else(|_| default_sync_store()),
+        Err(_) => default_sync_store(),
+    }
+}
+
+pub fn save_sync(store: &SyncStore) -> Result<(), String> {
+    let path = get_sync_path();
+    let content = serde_json::to_string_pretty(store).map_err(|e| e.to_string())?;
+    fs::write(&path, content).map_err(|e| e.to_string())
 }
 
 pub fn save_config(store: &ConfigStore) -> Result<(), String> {

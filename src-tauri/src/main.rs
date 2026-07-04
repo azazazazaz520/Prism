@@ -19,6 +19,7 @@ use commands::AppState;
 /// 应用入口：编排初始化、注册命令、设置回调
 fn main() {
     let (data, config) = store::initialize();
+    let sync = store::load_sync();
     prompt::create_defaults();
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
@@ -27,6 +28,7 @@ fn main() {
         .manage(AppState {
             data: Mutex::new(data),
             config: Mutex::new(config),
+            sync: Mutex::new(sync),
             notified_today: Mutex::new(HashSet::new()),
         })
         // 注册所有前端可调用的命令
@@ -43,6 +45,9 @@ fn main() {
             commands::tasks::get_all_tags,
             commands::tasks::delete_tag,
             commands::tasks::get_daily_completions,
+            // 同步命令 (commands::sync)
+            commands::sync::get_sync_config,
+            commands::sync::set_sync_config,
             // 配置命令 (commands::config)
             commands::config::show_floating_window,
             commands::config::show_main_window,

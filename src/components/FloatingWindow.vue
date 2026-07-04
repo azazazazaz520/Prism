@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { Task } from '../types';
@@ -121,12 +121,19 @@ onMounted(async () => {
   unlistenFocus = await appWindow.listen('tauri://focus', () => {
     loadTasks();
   });
+  // 初始化为紧凑尺寸（面板默认关闭）
+  await invoke('resize_floating_window', { expanded: false });
 });
 
 onUnmounted(() => {
   if (timer) clearInterval(timer);
   if (pollInterval) clearInterval(pollInterval);
   if (unlistenFocus) unlistenFocus();
+});
+
+// 面板展开/收起时同步窗口高度
+watch(showPanel, (expanded) => {
+  invoke('resize_floating_window', { expanded });
 });
 
 // Grab-to-scroll
@@ -212,44 +219,46 @@ function onPointerUp() {
       <button class="arrow-btn" @click="nextCard">▶</button>
     </div>
 
-    <div v-if="showPanel" class="panel">
-      <div class="panel-row">
-        <label>🔆 透明度</label>
-        <input
-          type="range"
-          min="30"
-          max="100"
-          :value="Math.round(opacity * 100)"
-          @input="setOpacity(($event.target as HTMLInputElement).valueAsNumber)"
-        />
-        <span class="opacity-val">{{ opacity.toFixed(2) }}</span>
+    <Transition name="panel-slide">
+      <div v-if="showPanel" class="panel">
+        <div class="panel-row">
+          <label>🔆 透明度</label>
+          <input
+            type="range"
+            min="30"
+            max="100"
+            :value="Math.round(opacity * 100)"
+            @input="setOpacity(($event.target as HTMLInputElement).valueAsNumber)"
+          />
+          <span class="opacity-val">{{ opacity.toFixed(2) }}</span>
+        </div>
+        <div class="panel-row">
+          <label>⏱ 自动轮播</label>
+          <select
+            :value="carouselInterval"
+            @change="setCarouselInterval(Number(($event.target as HTMLSelectElement).value))"
+          >
+            <option :value="3000">3 秒</option>
+            <option :value="5000">5 秒</option>
+            <option :value="10000">10 秒</option>
+            <option :value="0">关闭</option>
+          </select>
+        </div>
+        <div class="panel-row">
+          <label>🔔 截止提醒</label>
+          <select
+            :value="reminderMinutes"
+            @change="setReminder(Number(($event.target as HTMLSelectElement).value))"
+          >
+            <option :value="0">关闭</option>
+            <option :value="10">提前 10 分钟</option>
+            <option :value="30">提前 30 分钟</option>
+            <option :value="60">提前 1 小时</option>
+          </select>
+        </div>
+        <button class="exit-btn" @click="exitFloating">↩ 退出悬浮窗</button>
       </div>
-      <div class="panel-row">
-        <label>⏱ 自动轮播</label>
-        <select
-          :value="carouselInterval"
-          @change="setCarouselInterval(Number(($event.target as HTMLSelectElement).value))"
-        >
-          <option :value="3000">3 秒</option>
-          <option :value="5000">5 秒</option>
-          <option :value="10000">10 秒</option>
-          <option :value="0">关闭</option>
-        </select>
-      </div>
-      <div class="panel-row">
-        <label>🔔 截止提醒</label>
-        <select
-          :value="reminderMinutes"
-          @change="setReminder(Number(($event.target as HTMLSelectElement).value))"
-        >
-          <option :value="0">关闭</option>
-          <option :value="10">提前 10 分钟</option>
-          <option :value="30">提前 30 分钟</option>
-          <option :value="60">提前 1 小时</option>
-        </select>
-      </div>
-      <button class="exit-btn" @click="exitFloating">↩ 退出悬浮窗</button>
-    </div>
+    </Transition>
   </div>
 </template>
 
@@ -537,5 +546,16 @@ function onPointerUp() {
   background: var(--danger-light);
   color: var(--danger);
   border-color: rgba(231, 76, 60, 0.3);
+}
+
+/* ── 面板进出场动画 ────────────────────── */
+.panel-slide-enter-active,
+.panel-slide-leave-active {
+  transition: all 0.2s ease;
+}
+.panel-slide-enter-from,
+.panel-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
 }
 </style>

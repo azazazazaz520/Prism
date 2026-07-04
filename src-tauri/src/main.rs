@@ -46,6 +46,7 @@ fn main() {
             // 配置命令 (commands::config)
             commands::config::show_floating_window,
             commands::config::show_main_window,
+            commands::config::resize_floating_window,
             commands::config::show_import_window,
             commands::config::hide_import_window,
             commands::config::hide_selector_window,

@@ -56,10 +56,6 @@ pub struct Vendor {
     pub is_default: bool,
 }
 
-// ═══════════════════════════════════════════════════════════════
-//  新存储结构（ADR-0001：混合存储架构）
-// ═══════════════════════════════════════════════════════════════
-
 /// 结构化任务数据（存储于 data.json）
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DataStore {

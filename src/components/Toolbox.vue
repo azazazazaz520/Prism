@@ -92,7 +92,7 @@ function back() {
 
 <template>
   <div class="toolbox">
-    <!-- Grid view -->
+    <!-- 工具网格视图 -->
     <template v-if="!activeTool">
       <div class="tb-header">
         <h2 class="tb-title">开发者工具箱</h2>
@@ -190,7 +190,7 @@ function back() {
       </div>
     </template>
 
-    <!-- Tool view -->
+    <!-- 工具详情视图 -->
     <template v-else>
       <ToolShell :title="activeToolDef?.name ?? ''" @back="back">
         <JsonTool v-if="activeTool === 'json'" :ai-enabled="props.aiEnabled" />

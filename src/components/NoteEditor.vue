@@ -198,7 +198,7 @@ watch(content, (val) => {
   }, 500);
 });
 
-// initially load tree and notes dir
+// 初始化加载文件树和笔记目录
 loadTree();
 loadNotesDir();
 

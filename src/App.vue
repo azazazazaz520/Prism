@@ -7,6 +7,7 @@ import Sidebar from './components/Sidebar.vue';
 import TaskInput from './components/TaskInput.vue';
 import TaskList from './components/TaskList.vue';
 import TaskStats from './components/TaskStats.vue';
+import SyncStatus from './components/SyncStatus.vue';
 import MiniCalendar from './components/MiniCalendar.vue';
 import TagFilterBar from './components/TagFilterBar.vue';
 import SettingsPanel from './components/SettingsPanel.vue';
@@ -67,8 +68,12 @@ onMounted(async () => {
     loadAll();
     loadAiSettings();
   });
+  // 监听手动同步事件
+  const handleForceSync = () => loadAll();
+  window.addEventListener('prism:force-sync', handleForceSync);
   onUnmounted(() => {
     unlistenFocus();
+    window.removeEventListener('prism:force-sync', handleForceSync);
   });
 });
 
@@ -162,6 +167,7 @@ function handleSwitchModule(module: AppModule) {
                 @decompose="decomposeTask"
               />
               <TaskStats :tasks="tasks" @clear-completed="clearCompleted" />
+              <SyncStatus />
             </div>
           </div>
         </div>

@@ -5,6 +5,7 @@ import type { SettingsSubModule } from '../types';
 import { useTheme, type ThemeMode } from '../composables/useTheme';
 import { useModuleRegistry } from '../composables/useModuleRegistry';
 import VendorList from './VendorList.vue';
+import SyncSetup from './SyncSetup.vue';
 
 const { theme, setTheme } = useTheme();
 const { allModules, isEnabled, toggle: toggleModule } = useModuleRegistry();
@@ -64,6 +65,7 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
   { key: 'preferences', label: '偏好设置' },
   { key: 'vendors', label: '供应商' },
   { key: 'models', label: '默认模型' },
+  { key: 'sync', label: '同步' },
 ];
 </script>
 
@@ -194,6 +196,11 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
         <!-- 默认模型（占位） -->
         <div v-else-if="activeSub === 'models'" class="sub-page sub-placeholder">
           <p>默认模型设置将在后续版本中完善。</p>
+        </div>
+
+        <!-- 同步 -->
+        <div v-else-if="activeSub === 'sync'" class="sub-page">
+          <SyncSetup />
         </div>
       </div>
     </div>

@@ -35,6 +35,7 @@ const {
   overdueCount,
   pendingCount,
   loadAll,
+  refreshTasks,
   initSync,
   addTask,
   toggleTask,
@@ -64,12 +65,17 @@ onMounted(async () => {
   await Promise.all([loadAll(), loadAiSettings()]);
   initSync();
   const appWindow = getCurrentWindow();
+  let lastRefresh = 0;
   const unlistenFocus = await appWindow.listen('tauri://focus', () => {
-    loadAll();
+    // 去抖：拖拽窗口等连续焦点事件 5 秒内只刷新一次
+    const now = Date.now();
+    if (now - lastRefresh < 5000) return;
+    lastRefresh = now;
+    refreshTasks();
     loadAiSettings();
   });
   // 监听手动同步事件
-  const handleForceSync = () => loadAll();
+  const handleForceSync = () => refreshTasks();
   window.addEventListener('prism:force-sync', handleForceSync);
   onUnmounted(() => {
     unlistenFocus();

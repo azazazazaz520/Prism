@@ -7,6 +7,7 @@ import Sidebar from './components/Sidebar.vue';
 import TaskInput from './components/TaskInput.vue';
 import TaskList from './components/TaskList.vue';
 import TaskStats from './components/TaskStats.vue';
+import SyncStatus from './components/SyncStatus.vue';
 import MiniCalendar from './components/MiniCalendar.vue';
 import TagFilterBar from './components/TagFilterBar.vue';
 import SettingsPanel from './components/SettingsPanel.vue';
@@ -34,6 +35,8 @@ const {
   overdueCount,
   pendingCount,
   loadAll,
+  refreshTasks,
+  initSync,
   addTask,
   toggleTask,
   toggleDailyTask,
@@ -60,13 +63,23 @@ const activeModule = ref<AppModule>('tasks');
 
 onMounted(async () => {
   await Promise.all([loadAll(), loadAiSettings()]);
+  initSync();
   const appWindow = getCurrentWindow();
+  let lastRefresh = 0;
   const unlistenFocus = await appWindow.listen('tauri://focus', () => {
-    loadAll();
+    // 去抖：拖拽窗口等连续焦点事件 5 秒内只刷新一次
+    const now = Date.now();
+    if (now - lastRefresh < 5000) return;
+    lastRefresh = now;
+    refreshTasks();
     loadAiSettings();
   });
+  // 监听手动同步事件
+  const handleForceSync = () => refreshTasks();
+  window.addEventListener('prism:force-sync', handleForceSync);
   onUnmounted(() => {
     unlistenFocus();
+    window.removeEventListener('prism:force-sync', handleForceSync);
   });
 });
 
@@ -160,6 +173,7 @@ function handleSwitchModule(module: AppModule) {
                 @decompose="decomposeTask"
               />
               <TaskStats :tasks="tasks" @clear-completed="clearCompleted" />
+              <SyncStatus />
             </div>
           </div>
         </div>

@@ -5,6 +5,7 @@ import type { SettingsSubModule } from '../types';
 import { useTheme, type ThemeMode } from '../composables/useTheme';
 import { useModuleRegistry } from '../composables/useModuleRegistry';
 import VendorList from './VendorList.vue';
+import SyncSetup from './SyncSetup.vue';
 
 const { theme, setTheme } = useTheme();
 const { allModules, isEnabled, toggle: toggleModule } = useModuleRegistry();
@@ -64,6 +65,7 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
   { key: 'preferences', label: '偏好设置' },
   { key: 'vendors', label: '供应商' },
   { key: 'models', label: '默认模型' },
+  { key: 'sync', label: '跨设备同步' },
 ];
 </script>
 
@@ -101,6 +103,11 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
             <template v-else-if="m.key === 'vendors'">
               <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
               <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+            </template>
+            <template v-else-if="m.key === 'sync'">
+              <polyline points="1 4 1 10 7 10" />
+              <polyline points="23 20 23 14 17 14" />
+              <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" />
             </template>
             <template v-else>
               <path d="M12 2a4 4 0 0 1 4 4v1h4v14H4V7h4V6a4 4 0 0 1 4-4z" />
@@ -194,6 +201,11 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
         <!-- 默认模型（占位） -->
         <div v-else-if="activeSub === 'models'" class="sub-page sub-placeholder">
           <p>默认模型设置将在后续版本中完善。</p>
+        </div>
+
+        <!-- 同步 -->
+        <div v-else-if="activeSub === 'sync'" class="sub-page">
+          <SyncSetup />
         </div>
       </div>
     </div>

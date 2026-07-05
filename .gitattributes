@@ -1,0 +1,2 @@
+# Tauri generated schemas - force LF to avoid CRLF noise on Windows
+src-tauri/gen/schemas/*.json text eol=lf

@@ -1,6 +1,7 @@
 pub mod ai;
 pub mod config;
 pub mod screenshot;
+pub mod sync;
 pub mod tasks;
 
 use std::collections::HashSet;
@@ -47,6 +48,8 @@ pub struct AppState {
     pub data: Mutex<store::DataStore>,
     /// 应用配置（供应商、主题、提醒等）
     pub config: Mutex<store::ConfigStore>,
+    /// 同步状态（配对码、profile、上次同步时间）
+    pub sync: Mutex<store::SyncStore>,
     /// 当天已通知的任务 ID 集合，避免重复提醒
     pub notified_today: Mutex<HashSet<String>>,
 }

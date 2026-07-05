@@ -2,9 +2,10 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import type { Task } from '../types';
+import { useTaskStore } from '../composables/useTaskStore';
 
-const tasks = ref<Task[]>([]);
+const { tasks, loadAll, refreshTasks } = useTaskStore();
+
 const currentIndex = ref(0);
 const opacity = ref(0.92);
 const carouselInterval = ref(5000);
@@ -47,8 +48,8 @@ const dueLabel = computed(() => {
   return `${parseInt(parts[1])}/${parseInt(parts[2])}`;
 });
 
-async function loadTasks() {
-  tasks.value = await invoke<Task[]>('get_tasks');
+async function loadData() {
+  await refreshTasks();
   const mins = await invoke<number>('get_reminder_minutes');
   reminderMinutes.value = mins;
 }
@@ -114,12 +115,15 @@ onMounted(async () => {
   document.body.style.padding = '0';
   document.body.style.background = 'transparent';
   document.body.style.overflow = 'hidden';
-  await loadTasks();
+  // 首次加载：初始化认证 + 本地 + 远端（后续轮询用 refreshTasks 跳认证）
+  await loadAll();
+  const mins = await invoke<number>('get_reminder_minutes');
+  reminderMinutes.value = mins;
   resetTimer();
-  pollInterval = setInterval(loadTasks, 30000);
+  pollInterval = setInterval(loadData, 30000);
   const appWindow = getCurrentWindow();
   unlistenFocus = await appWindow.listen('tauri://focus', () => {
-    loadTasks();
+    loadData();
   });
   // 初始化为紧凑尺寸（面板默认关闭）
   await invoke('resize_floating_window', { expanded: false });

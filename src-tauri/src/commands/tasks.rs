@@ -54,7 +54,11 @@ pub fn toggle_task(state: tauri::State<AppState>, id: String) -> Result<(), Stri
     let now = chrono::Utc::now().to_rfc3339();
     if let Some(task) = data.tasks.iter_mut().find(|t| t.id == id) {
         task.completed = !task.completed;
-        task.completed_at = if task.completed { Some(now.clone()) } else { None };
+        task.completed_at = if task.completed {
+            Some(now.clone())
+        } else {
+            None
+        };
         task.updated_at = now;
     }
     store::save_data(&data)
@@ -75,8 +79,11 @@ pub fn toggle_daily_task(
     {
         data.daily_completions.remove(pos);
     } else {
-        data.daily_completions
-            .push(store::DailyCompletion { task_id: id, date, profile_id: None });
+        data.daily_completions.push(store::DailyCompletion {
+            task_id: id,
+            date,
+            profile_id: None,
+        });
     }
     store::save_data(&data)
 }
@@ -108,7 +115,11 @@ pub fn delete_task(state: tauri::State<AppState>, id: String) -> Result<(), Stri
         task.updated_at = now.clone();
     }
     // 级联软删除子任务（parent_id 指向被删任务的）
-    for child in data.tasks.iter_mut().filter(|t| t.parent_id.as_deref() == Some(&id)) {
+    for child in data
+        .tasks
+        .iter_mut()
+        .filter(|t| t.parent_id.as_deref() == Some(&id))
+    {
         child.is_deleted = true;
         child.updated_at = now.clone();
     }

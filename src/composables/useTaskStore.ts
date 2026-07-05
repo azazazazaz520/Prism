@@ -86,18 +86,63 @@ export function useTaskStore() {
       }
     }
 
-    tasks.value = await invoke<Task[]>('get_tasks');
-    allTags.value = await invoke<string[]>('get_all_tags');
+    const [localTasks, _allTags] = await Promise.all([
+      invoke<Task[]>('get_tasks'),
+      invoke<string[]>('get_all_tags'),
+    ]);
+    allTags.value = _allTags;
     await refreshDailyCompletions();
+
+    // 先展示本地数据，防止远端慢/失败时黑屏
+    tasks.value = localTasks.filter((t) => !t.is_deleted);
 
     // 恢复已配对的 profile，并尝试远端合并
     if (isLoggedIn.value) {
       try {
         await syncCode.restoreProfile();
-        await pullAndMerge();
+        const remoteTasks = await pullTasks(true);
+        if (remoteTasks.length > 0) {
+          tasks.value = mergeTasksLWW(tasks.value, remoteTasks);
+        }
       } catch (e) {
-        console.warn('[sync] pullAndMerge failed:', e);
+        console.warn('[sync] loadAll pull failed:', e);
       }
+    }
+  }
+
+  /**
+   * 重新进入时刷新任务：后台合并本地+远端，替换前不重置列表。
+   * 与 loadAll 的区别：保持当前数据可见，避免"先闪本地再出远端"的闪烁。
+   */
+  async function refreshTasks() {
+    const [localTasks, _allTags] = await Promise.all([
+      invoke<Task[]>('get_tasks'),
+      invoke<string[]>('get_all_tags'),
+    ]);
+    allTags.value = _allTags;
+    await refreshDailyCompletions();
+
+    let merged = localTasks.filter((t) => !t.is_deleted);
+
+    if (isLoggedIn.value) {
+      try {
+        const remoteTasks = await pullTasks(true);
+        if (remoteTasks.length > 0) {
+          merged = mergeTasksLWW(merged, remoteTasks);
+        }
+      } catch (e) {
+        console.warn('[sync] refreshTasks pull failed:', e);
+      }
+    }
+
+    // 仅在结果有变化时替换，避免无关更新触发重渲染
+    if (
+      merged.length !== tasks.value.length ||
+      !merged.every(
+        (t, i) => t.id === tasks.value[i]?.id && t.updated_at === tasks.value[i]?.updated_at,
+      )
+    ) {
+      tasks.value = merged;
     }
   }
 
@@ -368,6 +413,7 @@ export function useTaskStore() {
     pendingCount,
     // 数据加载
     loadAll,
+    refreshTasks,
     initSync,
     // CRUD
     addTask,

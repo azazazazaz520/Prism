@@ -33,11 +33,18 @@ export function useTaskStore() {
 
   // ── 创建 TaskRepo，变更时触发同步 ──────────────
 
-  const repo = createTaskRepo((task) => {
-    if (isLoggedIn.value) {
-      pushTask(task).catch((e) => console.warn('[sync] pushTask:', e));
-    }
-  });
+  const repo = createTaskRepo(
+    (task) => {
+      if (isLoggedIn.value) {
+        pushTask(task).catch((e) => console.warn('[sync] pushTask:', e));
+      }
+    },
+    (dc) => {
+      if (isLoggedIn.value) {
+        pushDailyCompletion(dc).catch((e) => console.warn('[sync] pushDailyCompletion:', e));
+      }
+    },
+  );
 
   const { tasks, allTags, dailyCompletedIds } = repo;
 

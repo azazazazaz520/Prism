@@ -22,6 +22,9 @@ export { mergeLWW as mergeTasksLWW } from './useFilterEngine';
 const filterDate = ref<string | null>(null);
 const selectedTags = ref<string[]>([]);
 
+/** 初始加载与同步合并的加载态（全局单例） */
+const isLoading = ref(false);
+
 /** 是否已初始化认证和同步 */
 let syncInitialized = false;
 
@@ -61,51 +64,62 @@ export function useTaskStore() {
   // ── 数据加载与同步（编排） ──────────────────────
 
   async function loadAll() {
-    if (!syncInitialized) {
-      syncInitialized = true;
-      try {
-        await initAuth();
-      } catch (e) {
-        console.warn('[sync] initAuth failed:', e);
-      }
-    }
-
-    await Promise.all([repo.loadAll(), refreshDailyCompletions()]);
-
-    if (isLoggedIn.value) {
-      try {
-        await syncCode.restoreProfile();
-        const remoteTasks = await pullTasks(true);
-        if (remoteTasks.length > 0) {
-          tasks.value = mergeLWW(tasks.value, remoteTasks);
+    isLoading.value = true;
+    try {
+      if (!syncInitialized) {
+        syncInitialized = true;
+        try {
+          await initAuth();
+        } catch (e) {
+          console.warn('[sync] initAuth failed:', e);
         }
-      } catch (e) {
-        console.warn('[sync] loadAll pull failed:', e);
       }
+
+      await Promise.all([repo.loadAll(), refreshDailyCompletions()]);
+
+      if (isLoggedIn.value) {
+        try {
+          await syncCode.restoreProfile();
+          const remoteTasks = await pullTasks(true);
+          if (remoteTasks.length > 0) {
+            tasks.value = mergeLWW(tasks.value, remoteTasks);
+          }
+        } catch (e) {
+          console.warn('[sync] loadAll pull failed:', e);
+        }
+      }
+    } finally {
+      isLoading.value = false;
     }
   }
 
   async function refreshTasks() {
-    await repo.refreshTasks();
-    await refreshDailyCompletions();
+    isLoading.value = true;
+    try {
+      await repo.refreshTasks();
+      await refreshDailyCompletions();
 
-    if (isLoggedIn.value) {
-      try {
-        const remoteTasks = await pullTasks(true);
-        if (remoteTasks.length > 0) {
-          const merged = mergeLWW(tasks.value, remoteTasks);
-          if (
-            merged.length !== tasks.value.length ||
-            !merged.every(
-              (t, i) => t.id === tasks.value[i]?.id && t.updated_at === tasks.value[i]?.updated_at,
-            )
-          ) {
-            tasks.value = merged;
+      if (isLoggedIn.value) {
+        try {
+          const remoteTasks = await pullTasks(true);
+          if (remoteTasks.length > 0) {
+            const merged = mergeLWW(tasks.value, remoteTasks);
+            if (
+              merged.length !== tasks.value.length ||
+              !merged.every(
+                (t, i) =>
+                  t.id === tasks.value[i]?.id && t.updated_at === tasks.value[i]?.updated_at,
+              )
+            ) {
+              tasks.value = merged;
+            }
           }
+        } catch (e) {
+          console.warn('[sync] refreshTasks pull failed:', e);
         }
-      } catch (e) {
-        console.warn('[sync] refreshTasks pull failed:', e);
       }
+    } finally {
+      isLoading.value = false;
     }
   }
 
@@ -271,6 +285,7 @@ export function useTaskStore() {
     filterDate,
     selectedTags,
     syncStatus,
+    isLoading,
     // 计算属性
     filteredTasks,
     dailyCompletionsMap: dailyCompletions,

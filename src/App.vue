@@ -34,6 +34,7 @@ const {
   dailyCompletionsMap,
   overdueCount,
   pendingCount,
+  isLoading,
   loadAll,
   refreshTasks,
   initSync,
@@ -135,6 +136,13 @@ function handleSwitchModule(module: AppModule) {
 
             <!-- 右侧任务区：输入 + 列表 + 统计 -->
             <div class="task-main">
+              <!-- 初始加载中遮罩 -->
+              <Transition name="module-fade">
+                <div v-if="isLoading" class="loading-overlay">
+                  <span class="loading-spinner"></span>
+                  <span class="loading-text">加载任务数据…</span>
+                </div>
+              </Transition>
               <AiFocusBar v-if="aiEnabled" :tasks="tasks" />
               <div class="task-input-row">
                 <TaskInput :ai-enabled="aiEnabled" @add="addTask" />
@@ -308,6 +316,41 @@ function handleSwitchModule(module: AppModule) {
   overflow-y: auto;
   min-width: 0;
   padding-top: var(--space-sm);
+  position: relative;
+}
+
+/* 加载中遮罩 */
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  background: var(--bg-primary);
+  z-index: 10;
+  border-radius: var(--radius-xl) 0 0 0;
+}
+
+.loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-default);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-text {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
 }
 
 .task-input-row {

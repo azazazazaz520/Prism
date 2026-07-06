@@ -75,19 +75,29 @@ export function useTaskStore() {
         }
       }
 
-      await Promise.all([repo.loadAll(), refreshDailyCompletions()]);
+      // 并行拉取本地 + 远端，合并后再一次性写入 tasks，消除中间态闪烁
+      const [localTasks, _allTags] = await Promise.all([
+        invoke<Task[]>('get_tasks'),
+        invoke<string[]>('get_all_tags'),
+      ]);
+      allTags.value = _allTags;
+      await refreshDailyCompletions();
+
+      let merged = localTasks.filter((t) => !t.is_deleted);
 
       if (isLoggedIn.value) {
         try {
           await syncCode.restoreProfile();
           const remoteTasks = await pullTasks(true);
           if (remoteTasks.length > 0) {
-            tasks.value = mergeLWW(tasks.value, remoteTasks);
+            merged = mergeLWW(merged, remoteTasks);
           }
         } catch (e) {
           console.warn('[sync] loadAll pull failed:', e);
         }
       }
+
+      tasks.value = merged;
     } finally {
       isLoading.value = false;
     }
@@ -96,21 +106,28 @@ export function useTaskStore() {
   async function refreshTasks() {
     isLoading.value = true;
     try {
-      await repo.refreshTasks();
+      // 并行拉取本地 + 远端，合并后再一次性写入 tasks，消除中间态闪烁
+      const [localTasks, _allTags] = await Promise.all([
+        invoke<Task[]>('get_tasks'),
+        invoke<string[]>('get_all_tags'),
+      ]);
+      allTags.value = _allTags;
       await refreshDailyCompletions();
+
+      let merged = localTasks.filter((t) => !t.is_deleted);
 
       if (isLoggedIn.value) {
         try {
           const remoteTasks = await pullTasks(true);
           if (remoteTasks.length > 0) {
-            const merged = mergeLWW(tasks.value, remoteTasks);
-            // 批量替换，避免逐次响应式更新导致闪烁
-            tasks.value = merged;
+            merged = mergeLWW(merged, remoteTasks);
           }
         } catch (e) {
           console.warn('[sync] refreshTasks pull failed:', e);
         }
       }
+
+      tasks.value = merged;
     } finally {
       isLoading.value = false;
     }

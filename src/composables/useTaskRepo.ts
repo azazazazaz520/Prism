@@ -65,9 +65,9 @@ export function createTaskRepo(
       invoke<Task[]>('get_tasks'),
       invoke<string[]>('get_all_tags'),
     ]);
-    allTags.value = _allTags;
     const filtered = localTasks.filter((t) => !t.is_deleted);
 
+    // 同时更新 tasks 和 allTags，避免中间状态导致闪烁
     if (
       filtered.length !== tasks.value.length ||
       !filtered.every(
@@ -75,6 +75,12 @@ export function createTaskRepo(
       )
     ) {
       tasks.value = filtered;
+      allTags.value = _allTags;
+    } else if (
+      _allTags.length !== allTags.value.length ||
+      !_allTags.every((tag, i) => tag === allTags.value[i])
+    ) {
+      allTags.value = _allTags;
     }
   }
 

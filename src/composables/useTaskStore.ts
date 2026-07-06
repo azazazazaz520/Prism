@@ -104,15 +104,8 @@ export function useTaskStore() {
           const remoteTasks = await pullTasks(true);
           if (remoteTasks.length > 0) {
             const merged = mergeLWW(tasks.value, remoteTasks);
-            if (
-              merged.length !== tasks.value.length ||
-              !merged.every(
-                (t, i) =>
-                  t.id === tasks.value[i]?.id && t.updated_at === tasks.value[i]?.updated_at,
-              )
-            ) {
-              tasks.value = merged;
-            }
+            // 批量替换，避免逐次响应式更新导致闪烁
+            tasks.value = merged;
           }
         } catch (e) {
           console.warn('[sync] refreshTasks pull failed:', e);
@@ -127,14 +120,7 @@ export function useTaskStore() {
     const remoteTasks = await pullTasks(true);
     if (remoteTasks.length === 0) return;
     const merged = mergeLWW(tasks.value, remoteTasks);
-    if (
-      merged.length !== tasks.value.length ||
-      !merged.every(
-        (t, i) => t.id === tasks.value[i]?.id && t.updated_at === tasks.value[i]?.updated_at,
-      )
-    ) {
-      tasks.value = merged;
-    }
+    tasks.value = merged;
   }
 
   async function initSync() {

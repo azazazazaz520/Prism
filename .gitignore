@@ -42,6 +42,7 @@ rustc-ice-*.txt
 .mcp.json
 .codegraph/
 .qoder/
+.codex/
 
 # Project docs & local-only files
 docs/

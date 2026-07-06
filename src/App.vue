@@ -136,52 +136,52 @@ function handleSwitchModule(module: AppModule) {
 
             <!-- 右侧任务区：输入 + 列表 + 统计 -->
             <div class="task-main">
-              <!-- 初始加载中遮罩 -->
-              <Transition name="module-fade">
-                <div v-if="isLoading" class="loading-overlay">
-                  <span class="loading-spinner"></span>
-                  <span class="loading-text">加载任务数据…</span>
-                </div>
-              </Transition>
-              <AiFocusBar v-if="aiEnabled" :tasks="tasks" />
-              <div class="task-input-row">
-                <TaskInput :ai-enabled="aiEnabled" @add="addTask" />
-                <button
-                  v-if="aiEnabled"
-                  class="import-btn"
-                  title="从聊天记录导入任务"
-                  @click="invoke('show_import_window')"
-                >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
-                  </svg>
-                  导入
-                </button>
+              <!-- 初始加载中遮罩，无过渡动画避免闪烁 -->
+              <div v-if="isLoading" class="loading-overlay">
+                <span class="loading-spinner"></span>
+                <span class="loading-text">加载任务数据…</span>
               </div>
-              <TaskList
-                :tasks="filteredTasks"
-                :daily-completions-map="dailyCompletionsMap"
-                :ai-enabled="aiEnabled"
-                @toggle="toggleTask"
-                @toggle-daily="toggleDailyTask"
-                @update="updateTask"
-                @delete="deleteTask"
-                @update-meta="updateTaskMeta"
-                @decompose="decomposeTask"
-              />
-              <TaskStats :tasks="tasks" @clear-completed="clearCompleted" />
-              <SyncStatus />
+              <template v-else>
+                <AiFocusBar v-if="aiEnabled" :tasks="tasks" />
+                <div class="task-input-row">
+                  <TaskInput :ai-enabled="aiEnabled" @add="addTask" />
+                  <button
+                    v-if="aiEnabled"
+                    class="import-btn"
+                    title="从聊天记录导入任务"
+                    @click="invoke('show_import_window')"
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    导入
+                  </button>
+                </div>
+                <TaskList
+                  :tasks="filteredTasks"
+                  :daily-completions-map="dailyCompletionsMap"
+                  :ai-enabled="aiEnabled"
+                  @toggle="toggleTask"
+                  @toggle-daily="toggleDailyTask"
+                  @update="updateTask"
+                  @delete="deleteTask"
+                  @update-meta="updateTaskMeta"
+                  @decompose="decomposeTask"
+                />
+                <TaskStats :tasks="tasks" @clear-completed="clearCompleted" />
+                <SyncStatus />
+              </template>
             </div>
           </div>
         </div>

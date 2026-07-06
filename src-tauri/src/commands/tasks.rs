@@ -119,3 +119,36 @@ pub fn get_daily_completions(state: tauri::State<AppState>, date: String) -> Vec
     let data = state.data.lock().unwrap();
     TaskService::daily_completions(&data, &date)
 }
+
+/// 合并远端每日完成记录到本地（双向 LWW 合并）
+/// 参数 `remote_completions` 为远端的所有 daily_completions 记录
+#[tauri::command]
+pub fn sync_remote_daily_completions(
+    state: tauri::State<AppState>,
+    remote_completions: Vec<store::DailyCompletion>,
+) -> Result<(), String> {
+    let mut data = state.data.lock().unwrap();
+    for remote in remote_completions {
+        let exists = data
+            .daily_completions
+            .iter()
+            .any(|dc| dc.task_id == remote.task_id && dc.date == remote.date);
+        if !exists {
+            data.daily_completions.push(remote);
+        }
+    }
+    store::save_data(&data)
+}
+
+/// 从本地删除指定每日完成记录（Realtime DELETE 事件时调用）
+#[tauri::command]
+pub fn delete_daily_completion(
+    state: tauri::State<AppState>,
+    task_id: String,
+    date: String,
+) -> Result<(), String> {
+    let mut data = state.data.lock().unwrap();
+    data.daily_completions
+        .retain(|dc| !(dc.task_id == task_id && dc.date == date));
+    store::save_data(&data)
+}

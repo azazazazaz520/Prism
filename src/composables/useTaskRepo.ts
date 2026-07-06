@@ -44,6 +44,7 @@ export interface TaskRepo {
 export function createTaskRepo(
   onTaskChanged?: (task: Task) => void,
   onDailyChanged?: (dc: DailyCompletion) => void,
+  onDailyDeleted?: (taskId: string, date: string) => void,
 ): TaskRepo {
   const tasks = ref<Task[]>([]);
   const allTags = ref<string[]>([]);
@@ -130,18 +131,45 @@ export function createTaskRepo(
 
   /// 切换每日任务完成状态，返回变动的 DailyCompletion 供同步层推送
   async function toggleDailyTask(id: string, date: string): Promise<DailyCompletion> {
+    // 在 invoke 前记录当前状态，判断操作类型
+    const wasCompleted = dailyCompletedIds.value.includes(id);
     await invoke('toggle_daily_task', { id, date });
     await refreshDailyCompletions();
 
-    // 判断操作类型：当前是否在已完成列表中
-    const isCurrentlyCompleted = dailyCompletedIds.value.includes(id);
-    const dc: DailyCompletion = {
-      task_id: id,
-      date,
-      profile_id: null,
-    };
-    onDailyChanged?.(dc);
-    return dc;
+    // 同步更新 task.completed 以匹配每日完成状态，触发 pushTask 推送到 Supabase
+    const task = tasks.value.find((t) => t.id === id);
+    if (task) {
+      const newlyCompleted = !wasCompleted;
+      tasks.value = tasks.value.map((t) =>
+        t.id === id
+          ? {
+              ...t,
+              completed: newlyCompleted,
+              completed_at: newlyCompleted ? new Date().toISOString() : null,
+              updated_at: new Date().toISOString(),
+            }
+          : t,
+      );
+      const updated = tasks.value.find((t) => t.id === id);
+      if (updated) onTaskChanged?.(updated);
+    }
+
+    if (wasCompleted) {
+      // 取消完成：需要从远端删除记录
+      onDailyDeleted?.(id, date);
+    } else {
+      // 完成：需要推送到远端
+      const dc: DailyCompletion = {
+        task_id: id,
+        date,
+        profile_id: null,
+      };
+      onDailyChanged?.(dc);
+      return dc;
+    }
+
+    // 返回一个空操作标记（取消完成时不需要 upsert）
+    return { task_id: id, date, profile_id: null };
   }
 
   async function updateTask(id: string, title: string) {

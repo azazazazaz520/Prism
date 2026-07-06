@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import type { Task, SubTask } from '../types';
+import type { Task, DailyCompletion, SubTask } from '../types';
 import { useAuth } from './useAuth';
 import { useSync } from './useSync';
 import { useSyncCode } from './useSyncCode';
@@ -31,7 +31,15 @@ let syncInitialized = false;
 /** 任务看板 composable：组合 TaskRepo + FilterEngine + Sync，只做编排 */
 export function useTaskStore() {
   const { isLoggedIn, initAuth } = useAuth();
-  const { pushTask, pushDailyCompletion, pullTasks, subscribeToChanges, syncStatus } = useSync();
+  const {
+    pushTask,
+    pushDailyCompletion,
+    pushDeleteDailyCompletion,
+    pullTasks,
+    pullDailyCompletions,
+    subscribeToChanges,
+    syncStatus,
+  } = useSync();
   const syncCode = useSyncCode();
 
   // ── 创建 TaskRepo，变更时触发同步 ──────────────
@@ -45,6 +53,13 @@ export function useTaskStore() {
     (dc) => {
       if (isLoggedIn.value) {
         pushDailyCompletion(dc).catch((e) => console.warn('[sync] pushDailyCompletion:', e));
+      }
+    },
+    (taskId, date) => {
+      if (isLoggedIn.value) {
+        pushDeleteDailyCompletion(taskId, date).catch((e) =>
+          console.warn('[sync] pushDeleteDailyCompletion:', e),
+        );
       }
     },
   );
@@ -88,9 +103,15 @@ export function useTaskStore() {
       if (isLoggedIn.value) {
         try {
           await syncCode.restoreProfile();
-          const remoteTasks = await pullTasks(true);
+          const [remoteTasks, remoteDCs] = await Promise.all([
+            pullTasks(true),
+            pullDailyCompletions(),
+          ]);
           if (remoteTasks.length > 0) {
             merged = mergeLWW(merged, remoteTasks);
+          }
+          if (remoteDCs.length > 0) {
+            await mergeDailyCompletions(remoteDCs);
           }
         } catch (e) {
           console.warn('[sync] loadAll pull failed:', e);
@@ -118,9 +139,15 @@ export function useTaskStore() {
 
       if (isLoggedIn.value) {
         try {
-          const remoteTasks = await pullTasks(true);
+          const [remoteTasks, remoteDCs] = await Promise.all([
+            pullTasks(true),
+            pullDailyCompletions(),
+          ]);
           if (remoteTasks.length > 0) {
             merged = mergeLWW(merged, remoteTasks);
+          }
+          if (remoteDCs.length > 0) {
+            await mergeDailyCompletions(remoteDCs);
           }
         } catch (e) {
           console.warn('[sync] refreshTasks pull failed:', e);
@@ -169,6 +196,23 @@ export function useTaskStore() {
     dailyCompletedIds.value = await invoke<string[]>('get_daily_completions', {
       date: getTodayStr(),
     });
+  }
+
+  /// 将远端每日完成记录合并到本地 store
+  async function mergeDailyCompletions(remoteDCs: DailyCompletion[]) {
+    if (remoteDCs.length === 0) return;
+    try {
+      await invoke('sync_remote_daily_completions', {
+        remoteCompletions: remoteDCs.map((dc) => ({
+          task_id: dc.task_id,
+          date: dc.date,
+          profile_id: dc.profile_id,
+        })),
+      });
+      await refreshDailyCompletions();
+    } catch (e) {
+      console.warn('[sync] mergeDailyCompletions failed:', e);
+    }
   }
 
   // ── CRUD 包装器（委托给 TaskRepo + 错误回退） ──

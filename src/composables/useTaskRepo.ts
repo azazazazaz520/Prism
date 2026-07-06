@@ -1,14 +1,13 @@
 import { ref, type Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import type { Task, SubTask } from '../types';
+import type { Task, SubTask, DailyCompletion } from '../types';
 import { getTodayStr } from './useFilterEngine';
 
 /**
  * TaskRepo — 任务 CRUD 模块
  *
  * 封装所有 Rust 后端交互，管理本地任务列表的响应式状态。
- * 接口：核心 CRUD 方法 + 辅助读取方法。
- * 不关心同步 — 调用方通过 onTaskChanged 回调获知变更。
+ * 不关心同步 — 调用方通过 onTaskChanged / onDailyChanged 回调获知变更。
  */
 
 export interface TaskRepo {
@@ -28,7 +27,7 @@ export interface TaskRepo {
     parentId?: string,
   ) => Promise<Task>;
   toggleTask: (id: string) => Promise<void>;
-  toggleDailyTask: (id: string, date: string) => Promise<void>;
+  toggleDailyTask: (id: string, date: string) => Promise<DailyCompletion>;
   updateTask: (id: string, title: string) => Promise<void>;
   updateTaskMeta: (
     id: string,
@@ -42,7 +41,10 @@ export interface TaskRepo {
 }
 
 /** 创建 TaskRepo 实例 */
-export function createTaskRepo(onTaskChanged?: (task: Task) => void): TaskRepo {
+export function createTaskRepo(
+  onTaskChanged?: (task: Task) => void,
+  onDailyChanged?: (dc: DailyCompletion) => void,
+): TaskRepo {
   const tasks = ref<Task[]>([]);
   const allTags = ref<string[]>([]);
   const dailyCompletedIds = ref<string[]>([]);
@@ -120,9 +122,20 @@ export function createTaskRepo(onTaskChanged?: (task: Task) => void): TaskRepo {
     if (updated) onTaskChanged?.(updated);
   }
 
-  async function toggleDailyTask(id: string, date: string) {
+  /// 切换每日任务完成状态，返回变动的 DailyCompletion 供同步层推送
+  async function toggleDailyTask(id: string, date: string): Promise<DailyCompletion> {
     await invoke('toggle_daily_task', { id, date });
     await refreshDailyCompletions();
+
+    // 判断操作类型：当前是否在已完成列表中
+    const isCurrentlyCompleted = dailyCompletedIds.value.includes(id);
+    const dc: DailyCompletion = {
+      task_id: id,
+      date,
+      profile_id: null,
+    };
+    onDailyChanged?.(dc);
+    return dc;
   }
 
   async function updateTask(id: string, title: string) {

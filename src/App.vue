@@ -34,6 +34,7 @@ const {
   dailyCompletionsMap,
   overdueCount,
   pendingCount,
+  isLoading,
   loadAll,
   refreshTasks,
   initSync,
@@ -135,45 +136,52 @@ function handleSwitchModule(module: AppModule) {
 
             <!-- 右侧任务区：输入 + 列表 + 统计 -->
             <div class="task-main">
-              <AiFocusBar v-if="aiEnabled" :tasks="tasks" />
-              <div class="task-input-row">
-                <TaskInput :ai-enabled="aiEnabled" @add="addTask" />
-                <button
-                  v-if="aiEnabled"
-                  class="import-btn"
-                  title="从聊天记录导入任务"
-                  @click="invoke('show_import_window')"
-                >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
-                  </svg>
-                  导入
-                </button>
+              <!-- 初始加载中遮罩，无过渡动画避免闪烁 -->
+              <div v-if="isLoading" class="loading-overlay">
+                <span class="loading-spinner"></span>
+                <span class="loading-text">加载任务数据…</span>
               </div>
-              <TaskList
-                :tasks="filteredTasks"
-                :daily-completions-map="dailyCompletionsMap"
-                :ai-enabled="aiEnabled"
-                @toggle="toggleTask"
-                @toggle-daily="toggleDailyTask"
-                @update="updateTask"
-                @delete="deleteTask"
-                @update-meta="updateTaskMeta"
-                @decompose="decomposeTask"
-              />
-              <TaskStats :tasks="tasks" @clear-completed="clearCompleted" />
-              <SyncStatus />
+              <template v-else>
+                <AiFocusBar v-if="aiEnabled" :tasks="tasks" />
+                <div class="task-input-row">
+                  <TaskInput :ai-enabled="aiEnabled" @add="addTask" />
+                  <button
+                    v-if="aiEnabled"
+                    class="import-btn"
+                    title="从聊天记录导入任务"
+                    @click="invoke('show_import_window')"
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    导入
+                  </button>
+                </div>
+                <TaskList
+                  :tasks="filteredTasks"
+                  :daily-completions-map="dailyCompletionsMap"
+                  :ai-enabled="aiEnabled"
+                  @toggle="toggleTask"
+                  @toggle-daily="toggleDailyTask"
+                  @update="updateTask"
+                  @delete="deleteTask"
+                  @update-meta="updateTaskMeta"
+                  @decompose="decomposeTask"
+                />
+                <TaskStats :tasks="tasks" @clear-completed="clearCompleted" />
+                <SyncStatus />
+              </template>
             </div>
           </div>
         </div>
@@ -308,6 +316,41 @@ function handleSwitchModule(module: AppModule) {
   overflow-y: auto;
   min-width: 0;
   padding-top: var(--space-sm);
+  position: relative;
+}
+
+/* 加载中遮罩 */
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  background: var(--bg-primary);
+  z-index: 10;
+  border-radius: var(--radius-xl) 0 0 0;
+}
+
+.loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-default);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-text {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
 }
 
 .task-input-row {

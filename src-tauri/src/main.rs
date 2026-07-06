@@ -11,6 +11,7 @@ pub(crate) mod ai;
 pub(crate) mod notes;
 pub(crate) mod prompt;
 pub(crate) mod store;
+pub(crate) mod task_service;
 
 mod commands;
 

@@ -108,19 +108,43 @@ impl TaskService {
     }
 
     /// 切换每日任务的完成状态（按日期记录，支持跨天追踪）
+    /// 同时同步更新 task.completed，确保 Supabase 的 tasks 表能感知完成状态变更
     pub fn toggle_daily(data: &mut store::DataStore, id: &str, date: &str) {
+        let now = chrono::Utc::now().to_rfc3339();
         if let Some(pos) = data
             .daily_completions
             .iter()
             .position(|dc| dc.task_id == id && dc.date == date)
         {
+            // 取消完成：移除 daily_completion
             data.daily_completions.remove(pos);
+            // 若该任务当天不再有完成记录，则设 completed = false
+            let still_completed = data
+                .daily_completions
+                .iter()
+                .any(|dc| dc.task_id == id && dc.date == date);
+            if !still_completed {
+                if let Some(task) = data.tasks.iter_mut().find(|t| t.id == id) {
+                    task.completed = false;
+                    task.completed_at = None;
+                    task.updated_at = now;
+                }
+            }
         } else {
+            // 完成：添加 daily_completion
             data.daily_completions.push(store::DailyCompletion {
                 task_id: id.to_string(),
                 date: date.to_string(),
                 profile_id: None,
             });
+            // 同步更新 task.completed，使 Supabase tasks 表反映完成状态
+            if let Some(task) = data.tasks.iter_mut().find(|t| t.id == id) {
+                if !task.completed {
+                    task.completed = true;
+                    task.completed_at = Some(now.clone());
+                    task.updated_at = now;
+                }
+            }
         }
     }
 

@@ -11,7 +11,6 @@ pub(crate) mod ai;
 pub(crate) mod notes;
 pub(crate) mod prompt;
 pub(crate) mod store;
-pub(crate) mod task_service;
 
 mod commands;
 
@@ -47,8 +46,6 @@ fn main() {
             commands::tasks::get_all_tags,
             commands::tasks::delete_tag,
             commands::tasks::get_daily_completions,
-            commands::tasks::sync_remote_daily_completions,
-            commands::tasks::delete_daily_completion,
             // 同步命令 (commands::sync)
             commands::sync::get_sync_config,
             commands::sync::set_sync_config,

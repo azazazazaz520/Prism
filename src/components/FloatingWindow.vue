@@ -4,7 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useTaskStore } from '../composables/useTaskStore';
 
-const { tasks, isLoading, loadAll, refreshTasks } = useTaskStore();
+const { tasks, loadAll, refreshTasks } = useTaskStore();
 
 const currentIndex = ref(0);
 const opacity = ref(0.92);
@@ -196,8 +196,7 @@ function onPointerUp() {
     </div>
 
     <div class="card-area">
-      <div v-if="isLoading" class="loading-hint">加载中…</div>
-      <div v-else-if="incompleteTasks.length === 0" class="no-tasks">🎉 全部完成！</div>
+      <div v-if="incompleteTasks.length === 0" class="no-tasks">🎉 全部完成！</div>
       <div v-else-if="currentTask" class="card" :key="currentTask.id">
         <div class="card-title">
           <span v-if="currentTask.pinned" class="card-pin">📌</span>

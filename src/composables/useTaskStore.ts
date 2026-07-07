@@ -187,17 +187,19 @@ export function useTaskStore() {
         allTags.value = tagsFromTasks(tasks.value);
       },
       (dc, eventType) => {
-        // 远端每日完成变更：先更新本地 data.json，再刷新 UI
+        // 乐观更新 UI：直接操作 dailyCompletedIds，不依赖 data.json 回读
         if (eventType === 'DELETE') {
-          invoke('delete_daily_completion', { taskId: dc.task_id, date: dc.date })
-            .then(() => refreshDailyCompletions())
-            .catch(() => refreshDailyCompletions());
+          invoke('delete_daily_completion', { taskId: dc.task_id, date: dc.date });
+          if (dc.date === getTodayStr()) {
+            dailyCompletedIds.value = dailyCompletedIds.value.filter((tid) => tid !== dc.task_id);
+          }
         } else {
           invoke('sync_remote_daily_completions', {
             remoteCompletions: [{ task_id: dc.task_id, date: dc.date }],
-          })
-            .then(() => refreshDailyCompletions())
-            .catch(() => refreshDailyCompletions());
+          });
+          if (dc.date === getTodayStr() && !dailyCompletedIds.value.includes(dc.task_id)) {
+            dailyCompletedIds.value = [...dailyCompletedIds.value, dc.task_id];
+          }
         }
       },
     );

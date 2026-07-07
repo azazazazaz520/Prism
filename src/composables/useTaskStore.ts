@@ -1,168 +1,172 @@
 import { ref, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import type { Task, SubTask } from '../types';
+import type { Task, DailyCompletion, SubTask } from '../types';
 import { useAuth } from './useAuth';
 import { useSync } from './useSync';
 import { useSyncCode } from './useSyncCode';
+import { createTaskRepo } from './useTaskRepo';
+import {
+  filterTasks,
+  tagsFromTasks,
+  dailyCompletionsMap,
+  countOverdue,
+  countPending,
+  getTodayStr,
+  mergeLWW,
+} from './useFilterEngine';
 
-/** 任务数据（全局单例 ref，确保跨组件共享） */
-const tasks = ref<Task[]>([]);
-const allTags = ref<string[]>([]);
-const dailyCompletedIds = ref<string[]>([]);
+// 重新导出 — 保持向后兼容
+export { mergeLWW as mergeTasksLWW } from './useFilterEngine';
 
-/** 筛选状态 */
+/** 筛选状态（全局单例，确保跨组件共享） */
 const filterDate = ref<string | null>(null);
 const selectedTags = ref<string[]>([]);
+
+/** 初始加载与同步合并的加载态（全局单例） */
+const isLoading = ref(false);
 
 /** 是否已初始化认证和同步 */
 let syncInitialized = false;
 
-/** LWW 合并纯函数：将远端任务合并到本地任务列表。
- *  返回合并后的新数组，不修改原数组。
- *  >= 而非 >：手动同步时远端优先，防止 DB 直接修改后 updated_at 未变导致漏更新。 */
-export function mergeTasksLWW(local: Task[], remote: Task[]): Task[] {
-  if (remote.length === 0) return local;
-
-  const merged = new Map(local.map((t) => [t.id, t]));
-
-  for (const rt of remote) {
-    const lt = merged.get(rt.id);
-    if (!lt || new Date(rt.updated_at) >= new Date(lt.updated_at)) {
-      merged.set(rt.id, rt);
-    }
-  }
-
-  return [...merged.values()].filter((t) => !t.is_deleted);
-}
-
-/** 任务看板 composable：核心数据 + 筛选 + CRUD + 同步 */
+/** 任务看板 composable：组合 TaskRepo + FilterEngine + Sync，只做编排 */
 export function useTaskStore() {
   const { isLoggedIn, initAuth } = useAuth();
-  const { pushTask, pullTasks, subscribeToChanges, syncStatus } = useSync();
+  const {
+    pushTask,
+    pushDailyCompletion,
+    pushDeleteDailyCompletion,
+    pullTasks,
+    pullDailyCompletions,
+    subscribeToChanges,
+    syncStatus,
+  } = useSync();
   const syncCode = useSyncCode();
 
-  // ── 计算属性 ──────────────────────────────
+  // ── 创建 TaskRepo，变更时触发同步 ──────────────
 
-  const dailyCompletionsMap = computed(() => {
-    const map: Record<string, boolean> = {};
-    for (const id of dailyCompletedIds.value) {
-      map[id] = true;
-    }
-    return map;
-  });
+  const repo = createTaskRepo(
+    (task) => {
+      if (isLoggedIn.value) {
+        pushTask(task).catch((e) => console.warn('[sync] pushTask:', e));
+      }
+    },
+    (dc) => {
+      if (isLoggedIn.value) {
+        pushDailyCompletion(dc).catch((e) => console.warn('[sync] pushDailyCompletion:', e));
+      }
+    },
+    (taskId, date) => {
+      if (isLoggedIn.value) {
+        pushDeleteDailyCompletion(taskId, date).catch((e) =>
+          console.warn('[sync] pushDeleteDailyCompletion:', e),
+        );
+      }
+    },
+  );
 
-  /** 根据日期和标签筛选后的任务列表 */
-  const filteredTasks = computed(() => {
-    let result = tasks.value;
-    if (filterDate.value) {
-      result = result.filter((t) => t.due_date === filterDate.value);
-    }
-    if (selectedTags.value.length > 0) {
-      result = result.filter((t) => selectedTags.value.some((tag) => t.tags.includes(tag)));
-    }
-    return [...result];
-  });
+  const { tasks, allTags, dailyCompletedIds } = repo;
 
-  const overdueCount = computed(() => {
-    const ts = todayStr();
-    return tasks.value.filter((t) => t.due_date && t.due_date < ts && !t.completed).length;
-  });
+  // ── 计算属性（委托给 FilterEngine） ────────────
 
-  const pendingCount = computed(() => {
-    return tasks.value.filter((t) => !t.completed).length;
-  });
+  const filteredTasks = computed(() =>
+    filterTasks(tasks.value, filterDate.value, selectedTags.value),
+  );
 
-  // ── 数据加载与同步 ──────────────────────────
+  const overdueCount = computed(() => countOverdue(tasks.value));
+  const pendingCount = computed(() => countPending(tasks.value));
+  const dailyCompletions = computed(() => dailyCompletionsMap(dailyCompletedIds.value));
 
-  /** 加载本地数据，若已配对则从远端合并，并初始化 Realtime 订阅 */
+  // ── 数据加载与同步（编排） ──────────────────────
+
   async function loadAll() {
-    // 仅在首次调用时初始化认证和同步
-    if (!syncInitialized) {
-      syncInitialized = true;
-      try {
-        await initAuth();
-      } catch (e) {
-        console.warn('[sync] initAuth failed:', e);
-      }
-    }
-
-    const [localTasks, _allTags] = await Promise.all([
-      invoke<Task[]>('get_tasks'),
-      invoke<string[]>('get_all_tags'),
-    ]);
-    allTags.value = _allTags;
-    await refreshDailyCompletions();
-
-    // 先展示本地数据，防止远端慢/失败时黑屏
-    tasks.value = localTasks.filter((t) => !t.is_deleted);
-
-    // 恢复已配对的 profile，并尝试远端合并
-    if (isLoggedIn.value) {
-      try {
-        await syncCode.restoreProfile();
-        const remoteTasks = await pullTasks(true);
-        if (remoteTasks.length > 0) {
-          tasks.value = mergeTasksLWW(tasks.value, remoteTasks);
+    isLoading.value = true;
+    try {
+      if (!syncInitialized) {
+        syncInitialized = true;
+        try {
+          await initAuth();
+        } catch (e) {
+          console.warn('[sync] initAuth failed:', e);
         }
-      } catch (e) {
-        console.warn('[sync] loadAll pull failed:', e);
       }
-    }
-  }
 
-  /**
-   * 重新进入时刷新任务：后台合并本地+远端，替换前不重置列表。
-   * 与 loadAll 的区别：保持当前数据可见，避免"先闪本地再出远端"的闪烁。
-   */
-  async function refreshTasks() {
-    const [localTasks, _allTags] = await Promise.all([
-      invoke<Task[]>('get_tasks'),
-      invoke<string[]>('get_all_tags'),
-    ]);
-    allTags.value = _allTags;
-    await refreshDailyCompletions();
+      // 并行拉取本地 + 远端，合并后再一次性写入 tasks，消除中间态闪烁
+      const [localTasks, _allTags] = await Promise.all([
+        invoke<Task[]>('get_tasks'),
+        invoke<string[]>('get_all_tags'),
+      ]);
+      allTags.value = _allTags;
+      await refreshDailyCompletions();
 
-    let merged = localTasks.filter((t) => !t.is_deleted);
+      let merged = localTasks.filter((t) => !t.is_deleted);
 
-    if (isLoggedIn.value) {
-      try {
-        const remoteTasks = await pullTasks(true);
-        if (remoteTasks.length > 0) {
-          merged = mergeTasksLWW(merged, remoteTasks);
+      if (isLoggedIn.value) {
+        try {
+          await syncCode.restoreProfile();
+          const [remoteTasks, remoteDCs] = await Promise.all([
+            pullTasks(true),
+            pullDailyCompletions(),
+          ]);
+          if (remoteTasks.length > 0) {
+            merged = mergeLWW(merged, remoteTasks);
+          }
+          if (remoteDCs.length > 0) {
+            await mergeDailyCompletions(remoteDCs);
+          }
+        } catch (e) {
+          console.warn('[sync] loadAll pull failed:', e);
         }
-      } catch (e) {
-        console.warn('[sync] refreshTasks pull failed:', e);
       }
-    }
 
-    // 仅在结果有变化时替换，避免无关更新触发重渲染
-    if (
-      merged.length !== tasks.value.length ||
-      !merged.every(
-        (t, i) => t.id === tasks.value[i]?.id && t.updated_at === tasks.value[i]?.updated_at,
-      )
-    ) {
       tasks.value = merged;
+    } finally {
+      isLoading.value = false;
     }
   }
 
-  /** LWW 合并远端任务到本地，强制全量拉取 */
+  async function refreshTasks() {
+    isLoading.value = true;
+    try {
+      // 并行拉取本地 + 远端，合并后再一次性写入 tasks，消除中间态闪烁
+      const [localTasks, _allTags] = await Promise.all([
+        invoke<Task[]>('get_tasks'),
+        invoke<string[]>('get_all_tags'),
+      ]);
+      allTags.value = _allTags;
+      await refreshDailyCompletions();
+
+      let merged = localTasks.filter((t) => !t.is_deleted);
+
+      if (isLoggedIn.value) {
+        try {
+          const [remoteTasks, remoteDCs] = await Promise.all([
+            pullTasks(true),
+            pullDailyCompletions(),
+          ]);
+          if (remoteTasks.length > 0) {
+            merged = mergeLWW(merged, remoteTasks);
+          }
+          if (remoteDCs.length > 0) {
+            await mergeDailyCompletions(remoteDCs);
+          }
+        } catch (e) {
+          console.warn('[sync] refreshTasks pull failed:', e);
+        }
+      }
+
+      tasks.value = merged;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
   async function pullAndMerge() {
     const remoteTasks = await pullTasks(true);
     if (remoteTasks.length === 0) return;
-
-    const merged = mergeTasksLWW(tasks.value, remoteTasks);
-    if (
-      merged.length !== tasks.value.length ||
-      !merged.every(
-        (t, i) => t.id === tasks.value[i]?.id && t.updated_at === tasks.value[i]?.updated_at,
-      )
-    ) {
-      tasks.value = merged;
-    }
+    const merged = mergeLWW(tasks.value, remoteTasks);
+    tasks.value = merged;
   }
 
-  /** 初始化 Realtime 订阅（仅已配对时生效） */
   async function initSync() {
     if (!isLoggedIn.value) return;
     const hasProfile = await syncCode.hasProfile();
@@ -180,28 +184,53 @@ export function useTaskStore() {
         } else if (!remoteTask.is_deleted) {
           tasks.value = [...tasks.value, remoteTask];
         }
-        allTags.value = [...new Set(tasks.value.flatMap((t) => t.tags))].sort();
+        allTags.value = tagsFromTasks(tasks.value);
       },
-      (_dc) => {
-        refreshDailyCompletions();
+      (dc, eventType) => {
+        // 乐观更新 UI：直接操作 dailyCompletedIds，不依赖 data.json 回读
+        if (eventType === 'DELETE') {
+          invoke('delete_daily_completion', { taskId: dc.task_id, date: dc.date });
+          if (dc.date === getTodayStr()) {
+            dailyCompletedIds.value = dailyCompletedIds.value.filter((tid) => tid !== dc.task_id);
+          }
+        } else {
+          invoke('sync_remote_daily_completions', {
+            remoteCompletions: [{ task_id: dc.task_id, date: dc.date }],
+          });
+          if (dc.date === getTodayStr() && !dailyCompletedIds.value.includes(dc.task_id)) {
+            dailyCompletedIds.value = [...dailyCompletedIds.value, dc.task_id];
+          }
+        }
       },
     );
   }
 
   async function refreshDailyCompletions() {
     dailyCompletedIds.value = await invoke<string[]>('get_daily_completions', {
-      date: todayStr(),
+      date: getTodayStr(),
     });
   }
 
-  // ── 同步推送辅助 ──────────────────────────
-
-  function syncPush(task: Task) {
-    if (!isLoggedIn.value) return;
-    pushTask(task).catch((e) => console.warn('[sync] pushTask:', e));
+  /// 将远端每日完成记录合并到本地 store
+  async function mergeDailyCompletions(remoteDCs: DailyCompletion[]) {
+    if (remoteDCs.length === 0) return;
+    try {
+      await invoke('sync_remote_daily_completions', {
+        remoteCompletions: remoteDCs.map((dc) => ({
+          task_id: dc.task_id,
+          date: dc.date,
+          profile_id: dc.profile_id,
+        })),
+      });
+      await refreshDailyCompletions();
+    } catch (e) {
+      console.warn('[sync] mergeDailyCompletions failed:', e);
+    }
   }
 
-  // ── 任务 CRUD ──────────────────────────────
+  // ── CRUD 包装器（委托给 TaskRepo + 错误回退） ──
+
+  // 注意：构造 repo 时已设 onTaskChanged → sync，所以 CRUD 操作自动同步
 
   async function addTask(
     title: string,
@@ -212,21 +241,7 @@ export function useTaskStore() {
     is_daily: boolean,
   ) {
     try {
-      const task = await invoke<Task>('add_task', {
-        args: {
-          title,
-          dueDate: due_date,
-          tags,
-          important,
-          pinned,
-          isDaily: is_daily,
-        },
-      });
-      tasks.value = [...tasks.value, task];
-      if (tags.length > 0) {
-        allTags.value = await invoke<string[]>('get_all_tags');
-      }
-      syncPush(task);
+      await repo.addTask(title, due_date, tags, important, pinned, is_daily);
     } catch (e) {
       console.error('[addTask] invoke failed, falling back to reload:', e);
       await loadAll();
@@ -235,19 +250,7 @@ export function useTaskStore() {
 
   async function toggleTask(id: string) {
     try {
-      await invoke('toggle_task', { id });
-      tasks.value = tasks.value.map((t) =>
-        t.id === id
-          ? {
-              ...t,
-              completed: !t.completed,
-              completed_at: !t.completed ? new Date().toISOString() : null,
-              updated_at: new Date().toISOString(),
-            }
-          : t,
-      );
-      const updated = tasks.value.find((t) => t.id === id);
-      if (updated) syncPush(updated);
+      await repo.toggleTask(id);
     } catch (e) {
       console.error('[toggleTask] invoke failed, falling back to reload:', e);
       await loadAll();
@@ -256,8 +259,7 @@ export function useTaskStore() {
 
   async function toggleDailyTask(id: string, date: string) {
     try {
-      await invoke('toggle_daily_task', { id, date });
-      await refreshDailyCompletions();
+      await repo.toggleDailyTask(id, date);
     } catch (e) {
       console.error('[toggleDailyTask] invoke failed, falling back to reload:', e);
       await loadAll();
@@ -265,25 +267,8 @@ export function useTaskStore() {
   }
 
   async function updateTask(id: string, title: string) {
-    if (!tasks.value.find((t) => t.id === id)) return;
     try {
-      const task = tasks.value.find((t) => t.id === id)!;
-      await invoke('update_task', {
-        args: {
-          id,
-          title,
-          dueDate: task.due_date,
-          tags: task.tags,
-          important: task.important,
-          pinned: task.pinned,
-          isDaily: task.is_daily,
-        },
-      });
-      tasks.value = tasks.value.map((t) =>
-        t.id === id ? { ...t, title, updated_at: new Date().toISOString() } : t,
-      );
-      const updated = tasks.value.find((t) => t.id === id);
-      if (updated) syncPush(updated);
+      await repo.updateTask(id, title);
     } catch (e) {
       console.error('[updateTask] invoke failed, falling back to reload:', e);
       await loadAll();
@@ -291,26 +276,8 @@ export function useTaskStore() {
   }
 
   async function updateTaskMeta(id: string, tags: string[], important: boolean, pinned: boolean) {
-    if (!tasks.value.find((t) => t.id === id)) return;
     try {
-      const task = tasks.value.find((t) => t.id === id)!;
-      await invoke('update_task', {
-        args: {
-          id,
-          title: task.title,
-          dueDate: task.due_date,
-          tags,
-          important,
-          pinned,
-          isDaily: task.is_daily,
-        },
-      });
-      tasks.value = tasks.value.map((t) =>
-        t.id === id ? { ...t, tags, important, pinned, updated_at: new Date().toISOString() } : t,
-      );
-      allTags.value = await invoke<string[]>('get_all_tags');
-      const updated = tasks.value.find((t) => t.id === id);
-      if (updated) syncPush(updated);
+      await repo.updateTaskMeta(id, tags, important, pinned);
     } catch (e) {
       console.error('[updateTaskMeta] invoke failed, falling back to reload:', e);
       await loadAll();
@@ -319,14 +286,7 @@ export function useTaskStore() {
 
   async function deleteTask(id: string) {
     try {
-      await invoke('delete_task', { id });
-      tasks.value = tasks.value.map((t) =>
-        t.id === id ? { ...t, is_deleted: true, updated_at: new Date().toISOString() } : t,
-      );
-      const deleted = tasks.value.find((t) => t.id === id);
-      if (deleted) syncPush(deleted);
-      tasks.value = tasks.value.filter((t) => t.id !== id);
-      allTags.value = await invoke<string[]>('get_all_tags');
+      await repo.deleteTask(id);
     } catch (e) {
       console.error('[deleteTask] invoke failed, falling back to reload:', e);
       await loadAll();
@@ -335,40 +295,19 @@ export function useTaskStore() {
 
   async function clearCompleted() {
     try {
-      await invoke('clear_completed');
-      const now = new Date().toISOString();
-      tasks.value = tasks.value.map((t) =>
-        t.completed && !t.is_deleted ? { ...t, is_deleted: true, updated_at: now } : t,
-      );
-      // 推送每个被清除的任务
-      const cleared = tasks.value.filter((t) => t.completed && t.is_deleted);
-      for (const task of cleared) {
-        syncPush(task);
-      }
-      tasks.value = tasks.value.filter((t) => !t.is_deleted);
+      await repo.clearCompleted();
     } catch (e) {
       console.error('[clearCompleted] invoke failed, falling back to reload:', e);
       await loadAll();
     }
   }
 
-  /** AI 拆解任务：调用后端获取子任务，逐个创建并关联父任务 */
   async function decomposeTask(parentId: string) {
-    const subtasks = await invoke<SubTask[]>('ai_decompose', { taskId: parentId });
-    for (const sub of subtasks) {
-      const task = await invoke<Task>('add_task', {
-        args: {
-          title: sub.title,
-          dueDate: null,
-          tags: [],
-          important: false,
-          pinned: false,
-          isDaily: false,
-          parentId,
-        },
-      });
-      tasks.value = [...tasks.value, task];
-      syncPush(task);
+    try {
+      await repo.decomposeTask(parentId);
+    } catch (e) {
+      console.error('[decomposeTask] invoke failed, falling back to reload:', e);
+      await loadAll();
     }
   }
 
@@ -406,9 +345,10 @@ export function useTaskStore() {
     filterDate,
     selectedTags,
     syncStatus,
+    isLoading,
     // 计算属性
     filteredTasks,
-    dailyCompletionsMap,
+    dailyCompletionsMap: dailyCompletions,
     overdueCount,
     pendingCount,
     // 数据加载
@@ -429,12 +369,4 @@ export function useTaskStore() {
     toggleTag,
     addTag,
   };
-}
-
-function todayStr(): string {
-  const today = new Date();
-  const y = today.getFullYear();
-  const m = String(today.getMonth() + 1).padStart(2, '0');
-  const d = String(today.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
 }

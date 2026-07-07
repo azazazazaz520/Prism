@@ -22,6 +22,12 @@ export { mergeLWW as mergeTasksLWW } from './useFilterEngine';
 const filterDate = ref<string | null>(null);
 const selectedTags = ref<string[]>([]);
 
+/**
+ * 用户在筛选栏手动添加的标签（尚未附加到任何任务的标签）。
+ * 独立追踪，确保不会被从 tasks 重新推算 allTags 时覆盖丢失。
+ */
+const customTags = ref<string[]>([]);
+
 /** 初始加载与同步合并的加载态（全局单例） */
 const isLoading = ref(false);
 
@@ -66,6 +72,18 @@ export function useTaskStore() {
 
   const { tasks, allTags, dailyCompletedIds } = repo;
 
+  /**
+   * 统一计算 allTags = 任务派生标签 ∪ 手动添加标签。
+   * 所有需要更新 allTags 的代码路径都应通过此函数，
+   * 确保 customTags 不会被覆盖丢失。
+   */
+  function syncAllTags(source?: Task[]) {
+    const tasks_ = source ?? tasks.value;
+    const derived = tagsFromTasks(tasks_);
+    const union = [...new Set([...derived, ...customTags.value])].sort();
+    allTags.value = union;
+  }
+
   // ── 计算属性（委托给 FilterEngine） ────────────
 
   const filteredTasks = computed(() =>
@@ -90,12 +108,7 @@ export function useTaskStore() {
         }
       }
 
-      // 并行拉取本地 + 远端，合并后再一次性写入 tasks，消除中间态闪烁
-      const [localTasks, _allTags] = await Promise.all([
-        invoke<Task[]>('get_tasks'),
-        invoke<string[]>('get_all_tags'),
-      ]);
-      allTags.value = _allTags;
+      const localTasks = await invoke<Task[]>('get_tasks');
       await refreshDailyCompletions();
 
       let merged = localTasks.filter((t) => !t.is_deleted);
@@ -119,6 +132,7 @@ export function useTaskStore() {
       }
 
       tasks.value = merged;
+      syncAllTags(merged);
     } finally {
       isLoading.value = false;
     }
@@ -127,12 +141,7 @@ export function useTaskStore() {
   async function refreshTasks() {
     isLoading.value = true;
     try {
-      // 并行拉取本地 + 远端，合并后再一次性写入 tasks，消除中间态闪烁
-      const [localTasks, _allTags] = await Promise.all([
-        invoke<Task[]>('get_tasks'),
-        invoke<string[]>('get_all_tags'),
-      ]);
-      allTags.value = _allTags;
+      const localTasks = await invoke<Task[]>('get_tasks');
       await refreshDailyCompletions();
 
       let merged = localTasks.filter((t) => !t.is_deleted);
@@ -155,6 +164,7 @@ export function useTaskStore() {
       }
 
       tasks.value = merged;
+      syncAllTags(merged);
     } finally {
       isLoading.value = false;
     }
@@ -165,6 +175,7 @@ export function useTaskStore() {
     if (remoteTasks.length === 0) return;
     const merged = mergeLWW(tasks.value, remoteTasks);
     tasks.value = merged;
+    syncAllTags(merged);
   }
 
   async function initSync() {
@@ -195,7 +206,7 @@ export function useTaskStore() {
         } else if (!remoteTask.is_deleted) {
           tasks.value = [...tasks.value, remoteTask];
         }
-        allTags.value = tagsFromTasks(tasks.value);
+        syncAllTags();
       },
       (dc, eventType) => {
         if (eventType === 'DELETE') {
@@ -346,6 +357,10 @@ export function useTaskStore() {
   }
 
   function addTag(tag: string) {
+    // 追踪手动添加的标签，确保 syncAllTags() 不会覆盖丢失
+    if (!customTags.value.includes(tag)) {
+      customTags.value.push(tag);
+    }
     if (!allTags.value.includes(tag)) {
       allTags.value.push(tag);
     }

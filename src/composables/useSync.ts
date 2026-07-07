@@ -298,7 +298,10 @@ export function useSync() {
 
   async function subscribeToChanges(
     onTaskChange: (task: Task) => void,
-    onDailyCompletionChange: (dc: DailyCompletion) => void,
+    onDailyCompletionChange: (
+      dc: DailyCompletion,
+      eventType: 'INSERT' | 'UPDATE' | 'DELETE',
+    ) => void,
   ): Promise<RealtimeChannel | null> {
     const profileId = getProfileId();
     if (!profileId) return null;
@@ -324,8 +327,10 @@ export function useSync() {
           filter: `profile_id=eq.${profileId}`,
         },
         (payload) => {
-          const dc = payload.new as DailyCompletion;
-          if (dc) onDailyCompletionChange(dc);
+          // DELETE 事件 payload.new 为 null，payload.old 存有被删记录
+          const dc = (payload.new || payload.old) as DailyCompletion;
+          const eventType = payload.eventType as 'INSERT' | 'UPDATE' | 'DELETE';
+          if (dc) onDailyCompletionChange(dc, eventType);
         },
       )
       .subscribe((status) => {

@@ -139,3 +139,16 @@ pub fn sync_remote_daily_completions(
     }
     store::save_data(&data)
 }
+
+/// 从本地删除指定每日完成记录（Realtime DELETE 事件时调用）
+#[tauri::command]
+pub fn delete_daily_completion(
+    state: tauri::State<AppState>,
+    task_id: String,
+    date: String,
+) -> Result<(), String> {
+    let mut data = state.data.lock().unwrap();
+    data.daily_completions
+        .retain(|dc| !(dc.task_id == task_id && dc.date == date));
+    store::save_data(&data)
+}

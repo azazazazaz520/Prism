@@ -186,8 +186,19 @@ export function useTaskStore() {
         }
         allTags.value = tagsFromTasks(tasks.value);
       },
-      (_dc) => {
-        refreshDailyCompletions();
+      (dc, eventType) => {
+        // 远端每日完成变更：先更新本地 data.json，再刷新 UI
+        if (eventType === 'DELETE') {
+          invoke('delete_daily_completion', { taskId: dc.task_id, date: dc.date })
+            .then(() => refreshDailyCompletions())
+            .catch(() => refreshDailyCompletions());
+        } else {
+          invoke('sync_remote_daily_completions', {
+            remoteCompletions: [{ task_id: dc.task_id, date: dc.date }],
+          })
+            .then(() => refreshDailyCompletions())
+            .catch(() => refreshDailyCompletions());
+        }
       },
     );
   }

@@ -7,7 +7,7 @@ import type { Task, DailyCompletion } from '../types';
 const OFFLINE_QUEUE_KEY = 'prism_offline_queue';
 
 interface OfflineQueueItem {
-  type: 'upsert' | 'delete';
+  type: 'upsert';
   table: string;
   data: Record<string, unknown>;
 }
@@ -145,10 +145,9 @@ export function useSync() {
         type: 'upsert',
         table: 'daily_completions',
         data: {
-          task_id: dc.task_id,
-          date: dc.date,
-          user_id: uid,
+          ...(dc as unknown as Record<string, unknown>),
           profile_id: profileId,
+          user_id: uid,
         },
       });
       persistOfflineQueue(offlineQueue);
@@ -166,89 +165,6 @@ export function useSync() {
       if (error) throw error;
     } catch (e) {
       console.error('同步每日完成记录失败:', e);
-      offlineQueue.push({
-        type: 'upsert',
-        table: 'daily_completions',
-        data: {
-          task_id: dc.task_id,
-          date: dc.date,
-          user_id: uid,
-          profile_id: profileId,
-        },
-      });
-      persistOfflineQueue(offlineQueue);
-    }
-  }
-
-  /** 从 Supabase 删除每日完成记录（取消完成时调用） */
-  async function pushDeleteDailyCompletion(taskId: string, date: string): Promise<void> {
-    const uid = userId();
-    if (!uid) return;
-    const profileId = getProfileId();
-    const supabase = getSupabaseClient();
-
-    if (!isOnline.value) {
-      offlineQueue.push({
-        type: 'delete',
-        table: 'daily_completions',
-        data: { task_id: taskId, date, user_id: uid, profile_id: profileId },
-      });
-      persistOfflineQueue(offlineQueue);
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('daily_completions')
-        .delete()
-        .eq('task_id', taskId)
-        .eq('date', date)
-        .eq('user_id', uid)
-        .eq('profile_id', profileId);
-
-      if (error) throw error;
-    } catch (e) {
-      console.error('删除每日完成记录失败:', e);
-      offlineQueue.push({
-        type: 'delete',
-        table: 'daily_completions',
-        data: { task_id: taskId, date, user_id: uid, profile_id: profileId },
-      });
-      persistOfflineQueue(offlineQueue);
-    }
-  }
-
-  /** 拉取远端的每日完成记录 */
-  async function pullDailyCompletions(): Promise<DailyCompletion[]> {
-    const profileId = getProfileId();
-    if (!profileId) return [];
-
-    const supabase = getSupabaseClient();
-    const allDCs: DailyCompletion[] = [];
-    let page = 0;
-
-    try {
-      do {
-        const { data, error } = await supabase
-          .from('daily_completions')
-          .select('*')
-          .eq('profile_id', profileId)
-          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
-          .order('date', { ascending: false });
-
-        if (error) throw error;
-
-        const batch = (data || []) as DailyCompletion[];
-        allDCs.push(...batch);
-        page++;
-
-        if (batch.length < PAGE_SIZE) break;
-      } while (true);
-
-      return allDCs;
-    } catch (e) {
-      console.error('拉取远程每日完成记录失败:', e);
-      return [];
     }
   }
 
@@ -298,10 +214,7 @@ export function useSync() {
 
   async function subscribeToChanges(
     onTaskChange: (task: Task) => void,
-    onDailyCompletionChange: (
-      dc: DailyCompletion,
-      eventType: 'INSERT' | 'UPDATE' | 'DELETE',
-    ) => void,
+    onDailyCompletionChange: (dc: DailyCompletion) => void,
   ): Promise<RealtimeChannel | null> {
     const profileId = getProfileId();
     if (!profileId) return null;
@@ -327,10 +240,8 @@ export function useSync() {
           filter: `profile_id=eq.${profileId}`,
         },
         (payload) => {
-          // DELETE 事件 payload.new 为 null，payload.old 存有被删记录
-          const dc = (payload.new || payload.old) as DailyCompletion;
-          const eventType = payload.eventType as 'INSERT' | 'UPDATE' | 'DELETE';
-          if (dc) onDailyCompletionChange(dc, eventType);
+          const dc = payload.new as DailyCompletion;
+          if (dc) onDailyCompletionChange(dc);
         },
       )
       .subscribe((status) => {
@@ -362,11 +273,7 @@ export function useSync() {
 
     for (const item of queue) {
       try {
-        if (item.type === 'delete') {
-          await supabase.from(item.table).delete().match(item.data);
-        } else {
-          await supabase.from(item.table).upsert(item.data);
-        }
+        await supabase.from(item.table).upsert(item.data);
       } catch (e) {
         offlineQueue.push(item);
         persistOfflineQueue(offlineQueue);
@@ -385,9 +292,7 @@ export function useSync() {
     setProfileId,
     pushTask,
     pushDailyCompletion,
-    pushDeleteDailyCompletion,
     pullTasks,
-    pullDailyCompletions,
     subscribeToChanges,
     flushOfflineQueue,
   };

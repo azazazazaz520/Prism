@@ -1,7 +1,0 @@
-# Rust / Cargo files — require LF for rustfmt, clippy, cargo
-Cargo.toml text eol=lf
-Cargo.lock text eol=lf
-*.rs text eol=lf
-
-# Generated Tauri schema — require LF for cross-platform consistency
-src-tauri/gen/*.json text eol=lf

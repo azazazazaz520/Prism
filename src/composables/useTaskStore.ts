@@ -176,14 +176,42 @@ export function useTaskStore() {
             tasks.value = tasks.value
               .map((t) => (t.id === remoteTask.id ? remoteTask : t))
               .filter((t) => !t.is_deleted);
+            // 安全网：当每日任务的 completed 被远端置为 false 时，
+            // 同步清理 dailyCompletedIds 和本地磁盘，防止 Realtime DELETE
+            // 事件因 REPLICA IDENTITY DEFAULT 丢失字段而被过滤掉
+            if (remoteTask.is_daily && !remoteTask.completed) {
+              dailyCompletedIds.value = dailyCompletedIds.value.filter(
+                (tid) => tid !== remoteTask.id,
+              );
+              // 同时清理本地磁盘，否则 refreshDailyCompletions() 会从磁盘
+              // 重新读回旧数据，覆盖内存中的正确状态
+              invoke('delete_daily_completion', { taskId: remoteTask.id, date: getTodayStr() });
+            }
           }
         } else if (!remoteTask.is_deleted) {
           tasks.value = [...tasks.value, remoteTask];
         }
         allTags.value = [...new Set(tasks.value.flatMap((t) => t.tags))].sort();
       },
-      (_dc) => {
-        refreshDailyCompletions();
+      (dc, eventType) => {
+        if (eventType === 'DELETE') {
+          invoke('delete_daily_completion', { taskId: dc.task_id, date: dc.date });
+          if (dc.date === getTodayStr()) {
+            dailyCompletedIds.value = dailyCompletedIds.value.filter((tid) => tid !== dc.task_id);
+          }
+        } else {
+          invoke('sync_remote_daily_completions', {
+            remoteCompletions: [{ task_id: dc.task_id, date: dc.date }],
+          });
+          if (dc.date === getTodayStr() && !dailyCompletedIds.value.includes(dc.task_id)) {
+            const task = tasks.value.find((t) => t.id === dc.task_id);
+            // 竞态防护：若任务 completed 已为 false，说明取消完成的任务更新
+            // 已先于本 INSERT 到达，不应再将此任务加入 dailyCompletedIds
+            if (!task || task.completed) {
+              dailyCompletedIds.value = [...dailyCompletedIds.value, dc.task_id];
+            }
+          }
+        }
       },
     );
   }

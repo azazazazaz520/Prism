@@ -314,7 +314,8 @@ export function useSync() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'tasks', filter: `profile_id=eq.${profileId}` },
         (payload) => {
-          const task = payload.new as Task;
+          // DELETE 事件 payload.new 为 null，从 payload.old 读取被删任务
+          const task = (payload.new || payload.old) as Task;
           if (task) onTaskChange(task);
         },
       )

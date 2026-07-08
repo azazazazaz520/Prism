@@ -99,6 +99,7 @@ fn bitmap_to_png(
 }
 
 /// 将 RGBA 像素缓冲区编码为 PNG 字节（仅在 Windows 上通过 bitmap_to_png 调用）
+#[allow(dead_code)]
 fn encode_png(pixels: &[u8], width: u32, height: u32) -> Result<Vec<u8>, String> {
     let mut out = Vec::new();
     {

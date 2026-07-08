@@ -26,10 +26,6 @@ pub fn get_config_path() -> PathBuf {
     get_workspace_dir().join("config.json")
 }
 
-pub fn get_legacy_path() -> PathBuf {
-    get_workspace_dir().join("tasks.json")
-}
-
 /// 获取笔记目录（优先使用自定义路径，否则使用默认）
 pub fn get_notes_dir(config: &ConfigStore) -> PathBuf {
     if let Some(ref custom_dir) = config.notes_dir {

@@ -59,7 +59,12 @@ export function useAuth() {
         return;
       }
 
-      // 无会话 → 自动匿名登录
+      // 无会话 → 自动匿名登录（离线时跳过，等网络恢复后在 online 事件中重试）
+      if (!navigator.onLine) {
+        isLoading.value = false;
+        return;
+      }
+
       const { data, error: signInError } = await client.auth.signInAnonymously();
       if (signInError) throw signInError;
 
@@ -77,6 +82,13 @@ export function useAuth() {
     client.auth.onAuthStateChange((_event, newSession) => {
       session.value = newSession;
       user.value = newSession?.user ?? null;
+    });
+
+    // 网络恢复后重试认证（处理离线启动时跳过了匿名登录的情况）
+    window.addEventListener('online', () => {
+      if (!session.value && !isLoading.value) {
+        initAuth();
+      }
     });
   }
 

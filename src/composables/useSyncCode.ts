@@ -176,22 +176,38 @@ export function useSyncCode() {
     }
   }
 
-  /** 恢复已配对的 profile（启动时调用） */
+  /** 恢复已配对的 profile（启动时调用）
+   *  优先使用本地存储的 profile_id（离线安全），
+   *  仅当本地无 profile_id 时才查询 Supabase 验证。 */
   async function restoreProfile(): Promise<boolean> {
     const config = await getSyncConfig();
     if (!config.sync_code) return false;
 
-    const supabase = getSupabaseClient();
+    // 本地已有 profile_id → 直接使用，无需网络验证
+    if (config.profile_id) {
+      setProfileId(config.profile_id);
+      return true;
+    }
 
+    // 本地无 profile_id → 查询 Supabase（仅在线时可用，5s 超时）
+    const supabase = getSupabaseClient();
     try {
-      const { data: profile, error } = await supabase
+      const query = supabase
         .from('profiles')
         .select('id')
         .eq('sync_code', config.sync_code)
         .single();
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), 5_000),
+      );
+      const { data: profile, error } = (await Promise.race([query, timeout])) as Awaited<
+        typeof query
+      >;
 
       if (error || !profile) return false;
 
+      // 回填本地配置，下次启动可离线恢复
+      await invoke('set_sync_config', { syncCode: config.sync_code, profileId: profile.id });
       setProfileId(profile.id);
       return true;
     } catch {
@@ -207,5 +223,6 @@ export function useSyncCode() {
     generateSyncCode,
     joinProfile,
     restoreProfile,
+    mergeLocalToProfile,
   };
 }

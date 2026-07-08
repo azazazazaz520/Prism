@@ -8,12 +8,12 @@ use crate::task_service::{AddTaskInput, TaskService, UpdateTaskInput};
 
 #[tauri::command]
 pub fn get_tasks(state: tauri::State<AppState>) -> Vec<store::Task> {
-    state.read_data(|d| TaskService::list(d))
+    state.read_data(TaskService::list)
 }
 
 #[tauri::command]
 pub fn get_all_tasks_including_deleted(state: tauri::State<AppState>) -> Vec<store::Task> {
-    state.read_data(|d| TaskService::list_all(d))
+    state.read_data(TaskService::list_all)
 }
 
 #[tauri::command]
@@ -23,7 +23,7 @@ pub fn get_tasks_by_date(state: tauri::State<AppState>, date: String) -> Vec<sto
 
 #[tauri::command]
 pub fn get_all_tags(state: tauri::State<AppState>) -> Vec<String> {
-    state.read_data(|d| TaskService::all_tags(d))
+    state.read_data(TaskService::all_tags)
 }
 
 #[tauri::command]

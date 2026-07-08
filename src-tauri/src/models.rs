@@ -115,23 +115,6 @@ pub struct ConfigStore {
     pub notes_dir: Option<PathBuf>,
 }
 
-/// 旧版单文件格式（仅用于迁移）
-#[derive(Debug, Deserialize)]
-pub struct LegacyStore {
-    #[serde(default)]
-    pub tasks: Vec<Task>,
-    #[serde(default)]
-    pub daily_completions: Vec<DailyCompletion>,
-    #[serde(default)]
-    pub vendors: Vec<Vendor>,
-    #[serde(default)]
-    pub active_vendor_id: Option<String>,
-    #[serde(default = "default_theme")]
-    pub theme: String,
-    #[serde(default = "default_reminder_minutes")]
-    pub reminder_minutes: u32,
-}
-
 // ═══════════════════════════════════════════════════════════════
 //  默认值
 // ═══════════════════════════════════════════════════════════════

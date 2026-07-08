@@ -133,6 +133,26 @@ pub fn sync_remote_daily_completions(
     store::save_data(&data)
 }
 
+/// 将远端拉回的任务合并到本地 data.json（LWW），防止离线重启后僵尸任务复活。
+/// 仅覆盖 updated_at 不低于本地的远端任务；本地未同步的新任务不受影响。
+#[tauri::command]
+pub fn sync_local_tasks(
+    state: tauri::State<AppState>,
+    remote_tasks: Vec<store::Task>,
+) -> Result<(), String> {
+    let mut data = state.data.lock().unwrap();
+    for rt in &remote_tasks {
+        if let Some(idx) = data.tasks.iter().position(|t| t.id == rt.id) {
+            if rt.updated_at >= data.tasks[idx].updated_at {
+                data.tasks[idx] = rt.clone();
+            }
+        } else if !rt.is_deleted {
+            data.tasks.push(rt.clone());
+        }
+    }
+    store::save_data(&data)
+}
+
 /// 从本地删除指定每日完成记录（Realtime DELETE 事件时调用）
 #[tauri::command]
 pub fn delete_daily_completion(

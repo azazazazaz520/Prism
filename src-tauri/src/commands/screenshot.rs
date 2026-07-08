@@ -113,7 +113,6 @@ fn encode_png(pixels: &[u8], width: u32, height: u32) -> Result<Vec<u8>, String>
             .map_err(|e| format!("PNG 数据失败: {}", e))?;
     }
     Ok(out)
-    
 }
 
 #[cfg(not(windows))]

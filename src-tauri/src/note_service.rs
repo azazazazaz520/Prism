@@ -1,9 +1,6 @@
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
-use tauri::State;
-
-use crate::{store, AppState};
 
 /// 文件树节点（前端渲染用）
 #[derive(Debug, Serialize, Clone)]
@@ -18,9 +15,13 @@ pub struct FileEntry {
     pub children: Option<Vec<FileEntry>>,
 }
 
-/// 安全解析笔记相对路径，防止路径穿越攻击
-/// 支持不存在的路径：会先规范化最长的存在祖先目录，再拼接剩余部分
-fn resolve_note_path(base: &Path, rel: &str) -> Result<PathBuf, String> {
+// ═══════════════════════════════════════════════════════════════
+//  路径安全
+// ═══════════════════════════════════════════════════════════════
+
+/// 安全解析笔记相对路径，防止路径穿越攻击。
+/// 支持不存在的路径：会先规范化最长的存在祖先目录，再拼接剩余部分。
+pub fn resolve_note_path(base: &Path, rel: &str) -> Result<PathBuf, String> {
     let full = base.join(rel);
 
     // 尝试规范化完整路径（路径存在时）
@@ -65,8 +66,12 @@ fn resolve_note_path(base: &Path, rel: &str) -> Result<PathBuf, String> {
     Ok(final_path)
 }
 
-/// 递归读取目录结构
-fn read_dir_recursive(base: &PathBuf, rel: &str) -> Vec<FileEntry> {
+// ═══════════════════════════════════════════════════════════════
+//  目录操作
+// ═══════════════════════════════════════════════════════════════
+
+/// 递归读取目录结构（仅 .md 文件）
+pub fn read_dir_recursive(base: &PathBuf, rel: &str) -> Vec<FileEntry> {
     let dir = base.join(rel);
     let mut entries = Vec::new();
 
@@ -111,59 +116,38 @@ fn read_dir_recursive(base: &PathBuf, rel: &str) -> Vec<FileEntry> {
     entries
 }
 
-/// 列出 notes/ 目录的完整文件树
-#[tauri::command]
-pub fn list_note_tree(state: State<AppState>) -> Vec<FileEntry> {
-    let config = state.config.lock().unwrap();
-    let base = store::get_notes_dir(&config);
-    read_dir_recursive(&base, "")
-}
-
-/// 读取笔记内容
-#[tauri::command]
-pub fn read_note(path: String, state: State<AppState>) -> Result<String, String> {
-    let config = state.config.lock().unwrap();
-    let base = store::get_notes_dir(&config);
-    let full = resolve_note_path(&base, &path)?;
+/// 读取笔记文件内容
+pub fn read_note_content(base: &Path, rel_path: &str) -> Result<String, String> {
+    let full = resolve_note_path(base, rel_path)?;
     fs::read_to_string(&full).map_err(|e| e.to_string())
 }
 
 /// 写入笔记内容（自动创建父目录）
-#[tauri::command]
-pub fn write_note(path: String, content: String, state: State<AppState>) -> Result<(), String> {
-    let config = state.config.lock().unwrap();
-    let base = store::get_notes_dir(&config);
-    let full = base.join(&path);
+pub fn write_note_content(base: &Path, rel_path: &str, content: &str) -> Result<(), String> {
+    let full = base.join(rel_path);
     // 确保目标路径在笔记目录内
-    let _ = resolve_note_path(&base, &path)?;
-    // resolve_note_path 已确保安全性，但写入前父目录可能不存在
+    let _ = resolve_note_path(base, rel_path)?;
     if let Some(parent) = full.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("创建父目录失败: {}", e))?;
     }
-    fs::write(&full, &content).map_err(|e| format!("写入失败: {}", e))
+    fs::write(&full, content).map_err(|e| format!("写入失败: {}", e))
 }
 
 /// 创建文件夹
-#[tauri::command]
-pub fn create_note_dir(path: String, state: State<AppState>) -> Result<(), String> {
-    let config = state.config.lock().unwrap();
-    let base = store::get_notes_dir(&config);
-    // 先校验路径不越界（需父目录已存在才能 canonicalize）
-    let full = base.join(&path);
-    // 确保父目录存在并在笔记目录内
+pub fn create_note_dir_at(base: &Path, rel_path: &str) -> Result<(), String> {
+    let full = base.join(rel_path);
     if let Some(parent) = full.parent() {
         let parent_rel = parent
-            .strip_prefix(&base)
+            .strip_prefix(base)
             .map_err(|_| "路径越界".to_string())?;
         if !parent_rel.as_os_str().is_empty() {
             fs::create_dir_all(parent).map_err(|e| format!("创建父目录失败: {}", e))?;
         }
     }
-    // 校验目标路径在笔记目录内（通过检查 join + strip_prefix）
+    // 校验目标路径在笔记目录内
     if full
         .canonicalize()
         .or_else(|_| {
-            // 目录尚不存在时，校验父目录即可
             full.parent()
                 .map(|p| p.to_path_buf())
                 .unwrap_or(full.clone())
@@ -178,22 +162,13 @@ pub fn create_note_dir(path: String, state: State<AppState>) -> Result<(), Strin
 }
 
 /// 删除文件或文件夹（移入系统回收站）
-#[tauri::command]
-pub fn delete_note_entry(path: String, state: State<AppState>) -> Result<(), String> {
-    let config = state.config.lock().unwrap();
-    let base = store::get_notes_dir(&config);
-    let full = resolve_note_path(&base, &path)?;
+pub fn delete_note_entry_at(base: &Path, rel_path: &str) -> Result<(), String> {
+    let full = resolve_note_path(base, rel_path)?;
     trash::delete(&full).map_err(|e| format!("删除失败: {}", e))
 }
 
 /// 重命名文件或文件夹
-#[tauri::command]
-pub fn rename_note_entry(
-    path: String,
-    new_name: String,
-    state: State<AppState>,
-) -> Result<(), String> {
-    // 校验新名称不含路径分隔符
+pub fn rename_note_entry_at(base: &Path, rel_path: &str, new_name: &str) -> Result<(), String> {
     if new_name.contains('/') || new_name.contains('\\') {
         return Err("新名称不能包含路径分隔符".into());
     }
@@ -201,13 +176,10 @@ pub fn rename_note_entry(
         return Err("新名称不能为空".into());
     }
 
-    let config = state.config.lock().unwrap();
-    let base = store::get_notes_dir(&config);
-    let full = resolve_note_path(&base, &path)?;
+    let full = resolve_note_path(base, rel_path)?;
     let parent = full.parent().unwrap_or(&full);
-    let new_path = parent.join(&new_name);
+    let new_path = parent.join(new_name);
 
-    // 检查目标路径是否已存在
     if new_path.exists() {
         return Err(format!("「{}」已存在", new_name));
     }
@@ -215,16 +187,8 @@ pub fn rename_note_entry(
     fs::rename(&full, &new_path).map_err(|e| format!("重命名失败: {}", e))
 }
 
-/// 获取当前笔记目录路径
-#[tauri::command]
-pub fn get_notes_directory(state: State<AppState>) -> String {
-    let config = state.config.lock().unwrap();
-    store::get_notes_dir(&config).to_string_lossy().to_string()
-}
-
 /// 校验路径不在系统保护目录中
-fn is_safe_notes_dir(path: &Path) -> Result<(), String> {
-    // 获取系统关键目录
+pub fn is_safe_notes_dir(path: &Path) -> Result<(), String> {
     let system_root = std::env::var("SystemRoot")
         .map(PathBuf::from)
         .unwrap_or(PathBuf::from("C:\\Windows"));
@@ -239,14 +203,12 @@ fn is_safe_notes_dir(path: &Path) -> Result<(), String> {
         .canonicalize()
         .map_err(|e| format!("路径解析失败: {}", e))?;
 
-    // 检查是否在系统目录中
     for blocked in &[&system_root, &program_files, &program_files_x86] {
         if canonical.starts_with(blocked) {
             return Err("不允许将笔记目录设置在系统目录中".into());
         }
     }
 
-    // 检查是否为驱动器根目录
     if canonical.parent().is_none() || canonical.ancestors().count() <= 1 {
         return Err("不允许将笔记目录设置在驱动器根目录".into());
     }
@@ -254,33 +216,9 @@ fn is_safe_notes_dir(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// 设置自定义笔记目录
-#[tauri::command]
-pub fn set_notes_directory(dir_path: String, state: State<AppState>) -> Result<(), String> {
-    // 验证路径是否存在且可写
-    let path = std::path::PathBuf::from(&dir_path);
-    if !path.exists() {
-        return Err(format!("路径不存在: {}", dir_path));
-    }
-    if !path.is_dir() {
-        return Err("路径不是目录".into());
-    }
-
-    // 安全检查：拒绝系统目录
-    is_safe_notes_dir(&path)?;
-
-    // 尝试写入测试文件以验证权限
-    let test_file = path.join(".todo_test_write");
-    if let Err(e) = fs::write(&test_file, "") {
-        return Err(format!("无法写入目录: {}", e));
-    }
-    fs::remove_file(&test_file).ok();
-
-    // 更新配置
-    let mut config = state.config.lock().unwrap();
-    config.notes_dir = Some(path);
-    store::save_config(&config)
-}
+// ═══════════════════════════════════════════════════════════════
+//  测试
+// ═══════════════════════════════════════════════════════════════
 
 #[cfg(test)]
 mod tests {
@@ -320,11 +258,8 @@ mod tests {
         fs::create_dir_all(tmp.join("outside")).unwrap();
 
         let base = tmp.join("notes");
-        // 正常路径应通过
         assert!(resolve_note_path(&base, "test.md").is_ok());
-        // 路径穿越应被拒绝
         assert!(resolve_note_path(&base, "../outside/escape.md").is_err());
-        // 绝对路径越界应被拒绝（unix-only 概念，Windows 也适用）
         assert!(resolve_note_path(&base, "../../outside/escape.md").is_err());
 
         fs::remove_dir_all(&tmp).ok();
@@ -333,8 +268,6 @@ mod tests {
     #[test]
     fn test_is_safe_notes_dir_rejects_drive_root() {
         let path = PathBuf::from("C:\\");
-        // 驱动器根应被拒绝（如果 path 实际存在且可被 canonicalize）
-        // 此测试在 CI 环境中 C:\ 存在
         if path.exists() {
             assert!(is_safe_notes_dir(&path).is_err());
         }

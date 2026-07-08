@@ -1,3 +1,5 @@
+use serde::Deserialize;
+
 use crate::store;
 
 /// ═══════════════════════════════════════════════════════════════
@@ -7,7 +9,9 @@ use crate::store;
 /// ═══════════════════════════════════════════════════════════════
 pub struct TaskService;
 
-/// 新增任务的参数（聚合为 struct 避免参数列表过长）
+/// 新增任务的参数（同时作为 Tauri 命令的请求体）
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AddTaskInput {
     pub title: String,
     pub due_date: Option<String>,
@@ -18,7 +22,9 @@ pub struct AddTaskInput {
     pub parent_id: Option<String>,
 }
 
-/// 更新任务的参数（聚合为 struct 避免参数列表过长）
+/// 更新任务的参数（同时作为 Tauri 命令的请求体）
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateTaskInput {
     pub id: String,
     pub title: String,

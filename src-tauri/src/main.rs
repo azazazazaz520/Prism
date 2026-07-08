@@ -8,7 +8,9 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 use tauri_plugin_notification::NotificationExt;
 
 pub(crate) mod ai;
-pub(crate) mod notes;
+pub(crate) mod models;
+pub(crate) mod note_service;
+pub(crate) mod persistence;
 pub(crate) mod prompt;
 pub(crate) mod store;
 pub(crate) mod task_service;
@@ -16,6 +18,10 @@ pub(crate) mod task_service;
 mod commands;
 
 use commands::AppState;
+
+// ═══════════════════════════════════════════════════════════════
+//  应用入口
+// ═══════════════════════════════════════════════════════════════
 
 /// 应用入口：编排初始化、注册命令、设置回调
 fn main() {
@@ -49,9 +55,10 @@ fn main() {
             commands::tasks::get_daily_completions,
             commands::tasks::sync_remote_daily_completions,
             commands::tasks::delete_daily_completion,
-            // 同步命令 (commands::sync)
-            commands::sync::get_sync_config,
-            commands::sync::set_sync_config,
+            commands::tasks::sync_local_tasks,
+            // 同步命令
+            commands::get_sync_config,
+            commands::set_sync_config,
             // 配置命令 (commands::config)
             commands::config::show_floating_window,
             commands::config::show_main_window,
@@ -71,15 +78,15 @@ fn main() {
             commands::config::set_theme,
             commands::config::get_module_enabled,
             commands::config::set_module_enabled,
-            // 笔记命令 (notes)
-            notes::list_note_tree,
-            notes::read_note,
-            notes::write_note,
-            notes::create_note_dir,
-            notes::delete_note_entry,
-            notes::rename_note_entry,
-            notes::get_notes_directory,
-            notes::set_notes_directory,
+            // 笔记命令
+            commands::notes::list_note_tree,
+            commands::notes::read_note,
+            commands::notes::write_note,
+            commands::notes::create_note_dir,
+            commands::notes::delete_note_entry,
+            commands::notes::rename_note_entry,
+            commands::notes::get_notes_directory,
+            commands::notes::set_notes_directory,
             // AI 命令 (commands::ai)
             commands::ai::ai_parse_input,
             commands::ai::ai_daily_focus,
@@ -99,6 +106,10 @@ fn main() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
+// ═══════════════════════════════════════════════════════════════
+//  全局快捷键
+// ═══════════════════════════════════════════════════════════════
 
 /// 注册全局快捷键：Ctrl+Shift+I（导入）和 Ctrl+Alt+I（截图）
 fn register_shortcuts(app: &tauri::AppHandle) {
@@ -136,6 +147,10 @@ fn register_shortcuts(app: &tauri::AppHandle) {
         )
         .expect("failed to register Ctrl+Alt+I");
 }
+
+// ═══════════════════════════════════════════════════════════════
+//  提醒线程
+// ═══════════════════════════════════════════════════════════════
 
 /// 后台线程：每分钟检查到期任务并推送系统通知
 fn spawn_reminder_thread(handle: tauri::AppHandle) {

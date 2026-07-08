@@ -1,7 +1,7 @@
 use base64::Engine;
 use tauri::Manager;
 
-/// 区域截图：选区 → 裁剪 → 弹出导入窗
+/// 区域截图：选区 → 裁剪为 PNG → 编码 Base64 → 弹出导入窗
 #[tauri::command]
 pub async fn crop_screenshot(
     app: tauri::AppHandle,
@@ -10,24 +10,15 @@ pub async fn crop_screenshot(
     width: i32,
     height: i32,
 ) -> Result<(), String> {
-    eprintln!(
-        "[DEBUG] crop_screenshot called: x={}, y={}, w={}, h={}",
-        x, y, width, height
-    );
     let png_bytes = capture_screen_region(x, y, width, height)?;
-    eprintln!("[DEBUG] captured {} bytes", png_bytes.len());
     let base64_img = base64::engine::general_purpose::STANDARD.encode(&png_bytes);
 
-    // 弹出导入窗（截图预览，文本由用户手动输入）
-    eprintln!("[DEBUG] showing import window...");
+    // 弹出导入窗，注入截图 Base64 数据供前端预览
     if let Some(win) = app.get_webview_window("import") {
         let _ = win.show();
         let _ = win.set_focus();
         let data = serde_json::json!({"text": "", "image_base64": base64_img});
         let _ = win.eval(format!("window.__screenshotResult = {};", data));
-        eprintln!("[DEBUG] import window shown + data sent");
-    } else {
-        eprintln!("[DEBUG] import window not found!");
     }
     Ok(())
 }
@@ -107,6 +98,7 @@ fn bitmap_to_png(
     }
 }
 
+/// 将 RGBA 像素缓冲区编码为 PNG 字节（仅在 Windows 上通过 bitmap_to_png 调用）
 #[allow(dead_code)]
 fn encode_png(pixels: &[u8], width: u32, height: u32) -> Result<Vec<u8>, String> {
     let mut out = Vec::new();

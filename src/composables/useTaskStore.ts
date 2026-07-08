@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { Task, DailyCompletion, SubTask } from '../types';
 import { useAuth } from './useAuth';
@@ -34,6 +34,15 @@ const isLoading = ref(false);
 /** 是否已初始化认证和同步 */
 let syncInitialized = false;
 
+/** 为 sync pull 操作添加超时，离线时快速失败而非等待 HTTP 超时 */
+const PULL_TIMEOUT_MS = 8000;
+function withTimeout<T>(promise: Promise<T>, ms = PULL_TIMEOUT_MS): Promise<T> {
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('timeout')), ms),
+  );
+  return Promise.race([promise, timeout]);
+}
+
 /** 任务看板 composable：组合 TaskRepo + FilterEngine + Sync，只做编排 */
 export function useTaskStore() {
   const { isLoggedIn, initAuth } = useAuth();
@@ -45,6 +54,7 @@ export function useTaskStore() {
     pullDailyCompletions,
     subscribeToChanges,
     syncStatus,
+    getProfileId,
   } = useSync();
   const syncCode = useSyncCode();
 
@@ -114,20 +124,37 @@ export function useTaskStore() {
       let merged = localTasks.filter((t) => !t.is_deleted);
 
       if (isLoggedIn.value) {
+        // restoreProfile 离线安全（优先读本地 sync.json）— 始终调用
         try {
-          await syncCode.restoreProfile();
-          const [remoteTasks, remoteDCs] = await Promise.all([
-            pullTasks(true),
-            pullDailyCompletions(),
-          ]);
-          if (remoteTasks.length > 0) {
-            merged = mergeLWW(merged, remoteTasks);
-          }
-          if (remoteDCs.length > 0) {
-            await mergeDailyCompletions(remoteDCs);
+          const profileRestored = await syncCode.restoreProfile();
+          if (profileRestored) {
+            syncCode
+              .mergeLocalToProfile(getProfileId()!)
+              .catch((e) => console.warn('[sync] mergeLocalToProfile failed:', e));
           }
         } catch (e) {
-          console.warn('[sync] loadAll pull failed:', e);
+          console.warn('[sync] restoreProfile failed:', e);
+        }
+
+        // 离线快速路径：跳过网络拉取，本地数据直接返回
+        if (navigator.onLine) {
+          try {
+            const [remoteTasks, remoteDCs] = await Promise.all([
+              withTimeout(pullTasks(true)),
+              withTimeout(pullDailyCompletions()),
+            ]);
+            if (remoteTasks && remoteTasks.length > 0) {
+              merged = mergeLWW(merged, remoteTasks);
+              invoke('sync_local_tasks', { remoteTasks }).catch((e) =>
+                console.warn('[sync] sync_local_tasks failed:', e),
+              );
+            }
+            if (remoteDCs && remoteDCs.length > 0) {
+              await mergeDailyCompletions(remoteDCs);
+            }
+          } catch (e) {
+            console.warn('[sync] loadAll pull failed:', e);
+          }
         }
       }
 
@@ -146,16 +173,21 @@ export function useTaskStore() {
 
       let merged = localTasks.filter((t) => !t.is_deleted);
 
-      if (isLoggedIn.value) {
+      // 离线快速路径：跳过网络拉取
+      if (isLoggedIn.value && navigator.onLine) {
         try {
           const [remoteTasks, remoteDCs] = await Promise.all([
-            pullTasks(true),
-            pullDailyCompletions(),
+            withTimeout(pullTasks(true)),
+            withTimeout(pullDailyCompletions()),
           ]);
-          if (remoteTasks.length > 0) {
+          if (remoteTasks && remoteTasks.length > 0) {
             merged = mergeLWW(merged, remoteTasks);
+            // 将远端变更持久化到本地 data.json，防止离线重启后僵尸任务复活
+            invoke('sync_local_tasks', { remoteTasks }).catch((e) =>
+              console.warn('[sync] sync_local_tasks failed:', e),
+            );
           }
-          if (remoteDCs.length > 0) {
+          if (remoteDCs && remoteDCs.length > 0) {
             await mergeDailyCompletions(remoteDCs);
           }
         } catch (e) {
@@ -202,6 +234,13 @@ export function useTaskStore() {
               // 重新读回旧数据，覆盖内存中的正确状态
               invoke('delete_daily_completion', { taskId: remoteTask.id, date: getTodayStr() });
             }
+            // 正向安全网：当每日任务的 completed 被远端置为 true 时，
+            // 同步更新 dailyCompletedIds，防止 Realtime DC INSERT 事件延迟/丢失
+            if (remoteTask.is_daily && remoteTask.completed) {
+              if (!dailyCompletedIds.value.includes(remoteTask.id)) {
+                dailyCompletedIds.value = [...dailyCompletedIds.value, remoteTask.id];
+              }
+            }
           }
         } else if (!remoteTask.is_deleted) {
           tasks.value = [...tasks.value, remoteTask];
@@ -237,10 +276,31 @@ export function useTaskStore() {
     });
   }
 
-  /// 将远端每日完成记录合并到本地 store
+  /**
+   * 清理远端已删除但本地残留的每日完成记录。
+   * 对比本地与远端的 daily_completions，按日期逐个清理本地有但远端无的记录。
+   * sync_remote_daily_completions 只增不删，此函数补齐删除路径。
+   */
+  async function cleanStaleDailyCompletions(remoteDCs: Array<{ task_id: string; date: string }>) {
+    const remoteDates = [...new Set(remoteDCs.map((dc) => dc.date))];
+    for (const date of remoteDates) {
+      const remoteIds = remoteDCs.filter((dc) => dc.date === date).map((dc) => dc.task_id);
+      const localIds = await invoke<string[]>('get_daily_completions', { date });
+      for (const taskId of localIds) {
+        if (!remoteIds.includes(taskId)) {
+          await invoke('delete_daily_completion', { taskId, date });
+        }
+      }
+    }
+  }
+
+  /** 将远端每日完成记录合并到本地 store */
   async function mergeDailyCompletions(remoteDCs: DailyCompletion[]) {
     if (remoteDCs.length === 0) return;
     try {
+      // 清理远端已删除但本地残留的每日完成记录
+      // sync_remote_daily_completions 只增不删，必须显式清理
+      await cleanStaleDailyCompletions(remoteDCs);
       await invoke('sync_remote_daily_completions', {
         remoteCompletions: remoteDCs.map((dc) => ({
           task_id: dc.task_id,
@@ -366,6 +426,13 @@ export function useTaskStore() {
     }
     selectedTags.value = [tag];
   }
+
+  // 网络恢复后自动拉取远端变更（弥补 Tauri webview 中 online 事件不可靠）
+  watch(syncStatus, (newVal, oldVal) => {
+    if (newVal === 'idle' && (oldVal === 'offline' || oldVal === 'error')) {
+      pullAndMerge().catch((e) => console.warn('[sync] auto-pull after reconnect failed:', e));
+    }
+  });
 
   return {
     // 数据

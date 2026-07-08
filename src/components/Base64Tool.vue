@@ -8,6 +8,8 @@ const copied = ref(false);
 const output = computed(() => {
   if (!input.value) return '';
   try {
+    // encodeURIComponent + unescape：处理非 Latin-1 字符（如中文）的通用方案
+    // btoa 仅支持 Latin-1，直接传入多字节字符会抛出 InvalidCharacterError
     return mode.value === 'encode'
       ? btoa(unescape(encodeURIComponent(input.value)))
       : decodeURIComponent(escape(atob(input.value)));

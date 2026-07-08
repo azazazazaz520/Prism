@@ -2,6 +2,12 @@ import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { Vendor } from '../types';
 
+/**
+ * AiStatus — AI 供应商可用性检测
+ *
+ * 全局单例：aiEnabled 跨组件共享，load() 在 App.vue 挂载时调用一次。
+ * 不管理供应商 CRUD——只暴露"是否有可用 AI"的布尔状态。
+ */
 /** AI 供应商状态的全局单例 ref */
 const aiEnabled = ref(false);
 

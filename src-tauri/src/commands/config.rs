@@ -18,7 +18,6 @@ pub fn show_floating_window(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// 切换回主窗口模式（隐藏悬浮窗）
 #[tauri::command]
 pub fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
     let main_win = app
@@ -59,7 +58,6 @@ pub fn show_import_window(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// 关闭导入悬浮窗
 #[tauri::command]
 pub fn hide_import_window(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(import_win) = app.get_webview_window("import") {
@@ -87,7 +85,6 @@ pub fn set_reminder_minutes(state: tauri::State<AppState>, minutes: u32) -> Resu
     store::save_config(&config)
 }
 
-/// 获取当前提醒设置（分钟数）
 #[tauri::command]
 pub fn get_reminder_minutes(state: tauri::State<AppState>) -> u32 {
     state.config.lock().unwrap().reminder_minutes
@@ -95,7 +92,7 @@ pub fn get_reminder_minutes(state: tauri::State<AppState>) -> u32 {
 
 // ── AI 设置查询 ──────────────────────────────
 
-/// 获取 AI 配置状态（是否已配置可用供应商）
+/// 获取 AI 配置状态：激活供应商 ID + 是否有启用的供应商
 #[tauri::command]
 pub fn get_ai_settings_all(state: tauri::State<AppState>) -> serde_json::Value {
     let config = state.config.lock().unwrap();
@@ -107,13 +104,11 @@ pub fn get_ai_settings_all(state: tauri::State<AppState>) -> serde_json::Value {
 
 // ── 供应商 CRUD ──────────────────────────────
 
-/// 获取所有供应商
 #[tauri::command]
 pub fn get_vendors(state: tauri::State<AppState>) -> Vec<store::Vendor> {
     state.config.lock().unwrap().vendors.clone()
 }
 
-/// 添加供应商
 #[tauri::command]
 pub fn add_vendor(
     state: tauri::State<AppState>,
@@ -125,7 +120,6 @@ pub fn add_vendor(
     Ok(vendor)
 }
 
-/// 更新供应商
 #[tauri::command]
 pub fn update_vendor(state: tauri::State<AppState>, vendor: store::Vendor) -> Result<(), String> {
     let mut config = state.config.lock().unwrap();
@@ -135,7 +129,7 @@ pub fn update_vendor(state: tauri::State<AppState>, vendor: store::Vendor) -> Re
     store::save_config(&config)
 }
 
-/// 删除供应商
+/// 删除供应商，若为当前激活项则清除激活状态
 #[tauri::command]
 pub fn delete_vendor(state: tauri::State<AppState>, id: String) -> Result<(), String> {
     let mut config = state.config.lock().unwrap();
@@ -147,7 +141,6 @@ pub fn delete_vendor(state: tauri::State<AppState>, id: String) -> Result<(), St
     store::save_config(&config)
 }
 
-/// 设置激活的供应商
 #[tauri::command]
 pub fn set_active_vendor(state: tauri::State<AppState>, id: Option<String>) -> Result<(), String> {
     let mut config = state.config.lock().unwrap();
@@ -157,13 +150,11 @@ pub fn set_active_vendor(state: tauri::State<AppState>, id: Option<String>) -> R
 
 // ── 主题 ──────────────────────────────
 
-/// 获取当前主题设置
 #[tauri::command]
 pub fn get_theme(state: tauri::State<AppState>) -> String {
     state.config.lock().unwrap().theme.clone()
 }
 
-/// 设置主题模式并持久化
 #[tauri::command]
 pub fn set_theme(state: tauri::State<AppState>, theme: String) -> Result<(), String> {
     let mut config = state.config.lock().unwrap();
@@ -173,7 +164,6 @@ pub fn set_theme(state: tauri::State<AppState>, theme: String) -> Result<(), Str
 
 // ── 模块配置 ──────────────────────────────
 
-/// 获取所有模块的启用状态
 #[tauri::command]
 pub fn get_module_enabled(
     state: tauri::State<AppState>,
@@ -181,7 +171,6 @@ pub fn get_module_enabled(
     state.config.lock().unwrap().module_enabled.clone()
 }
 
-/// 设置单个模块的启用状态
 #[tauri::command]
 pub fn set_module_enabled(
     state: tauri::State<AppState>,

@@ -8,7 +8,9 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 use tauri_plugin_notification::NotificationExt;
 
 pub(crate) mod ai;
-pub(crate) mod notes;
+pub(crate) mod models;
+pub(crate) mod note_service;
+pub(crate) mod persistence;
 pub(crate) mod prompt;
 pub(crate) mod store;
 pub(crate) mod task_service;
@@ -54,9 +56,9 @@ fn main() {
             commands::tasks::sync_remote_daily_completions,
             commands::tasks::delete_daily_completion,
             commands::tasks::sync_local_tasks,
-            // 同步命令 (commands::sync)
-            commands::sync::get_sync_config,
-            commands::sync::set_sync_config,
+            // 同步命令
+            commands::get_sync_config,
+            commands::set_sync_config,
             // 配置命令 (commands::config)
             commands::config::show_floating_window,
             commands::config::show_main_window,
@@ -76,15 +78,15 @@ fn main() {
             commands::config::set_theme,
             commands::config::get_module_enabled,
             commands::config::set_module_enabled,
-            // 笔记命令 (notes)
-            notes::list_note_tree,
-            notes::read_note,
-            notes::write_note,
-            notes::create_note_dir,
-            notes::delete_note_entry,
-            notes::rename_note_entry,
-            notes::get_notes_directory,
-            notes::set_notes_directory,
+            // 笔记命令
+            commands::notes::list_note_tree,
+            commands::notes::read_note,
+            commands::notes::write_note,
+            commands::notes::create_note_dir,
+            commands::notes::delete_note_entry,
+            commands::notes::rename_note_entry,
+            commands::notes::get_notes_directory,
+            commands::notes::set_notes_directory,
             // AI 命令 (commands::ai)
             commands::ai::ai_parse_input,
             commands::ai::ai_daily_focus,

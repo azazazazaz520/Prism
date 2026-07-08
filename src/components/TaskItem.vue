@@ -110,6 +110,7 @@ const displayCompleted = computed(() => {
   return props.task.completed;
 });
 
+// 每日任务用 toggleDaily（按日期记录），普通任务用 toggle（直接完成状态切换）
 function handleToggle() {
   if (props.task.is_daily) {
     const today = new Date();

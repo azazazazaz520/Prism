@@ -262,7 +262,7 @@ export function useTaskStore() {
     }
   }
 
-  /// 将远端每日完成记录合并到本地 store
+  /** 将远端每日完成记录合并到本地 store */
   async function mergeDailyCompletions(remoteDCs: DailyCompletion[]) {
     if (remoteDCs.length === 0) return;
     try {

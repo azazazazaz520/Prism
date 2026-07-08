@@ -129,7 +129,7 @@ export function createTaskRepo(
     if (updated) onTaskChanged?.(updated);
   }
 
-  /// 切换每日任务完成状态，返回变动的 DailyCompletion 供同步层推送
+  /** 切换每日任务完成状态，返回变动的 DailyCompletion 供同步层推送 */
   async function toggleDailyTask(id: string, date: string): Promise<DailyCompletion> {
     // 在 invoke 前记录当前状态，判断操作类型
     const wasCompleted = dailyCompletedIds.value.includes(id);

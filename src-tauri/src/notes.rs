@@ -5,6 +5,10 @@ use tauri::State;
 
 use crate::{store, AppState};
 
+// ═══════════════════════════════════════════════════════════════
+//  数据结构
+// ═══════════════════════════════════════════════════════════════
+
 /// 文件树节点（前端渲染用）
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -17,6 +21,10 @@ pub struct FileEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<FileEntry>>,
 }
+
+// ═══════════════════════════════════════════════════════════════
+//  路径安全
+// ═══════════════════════════════════════════════════════════════
 
 /// 安全解析笔记相对路径，防止路径穿越攻击
 /// 支持不存在的路径：会先规范化最长的存在祖先目录，再拼接剩余部分
@@ -64,6 +72,10 @@ fn resolve_note_path(base: &Path, rel: &str) -> Result<PathBuf, String> {
     }
     Ok(final_path)
 }
+
+// ═══════════════════════════════════════════════════════════════
+//  目录操作
+// ═══════════════════════════════════════════════════════════════
 
 /// 递归读取目录结构
 fn read_dir_recursive(base: &PathBuf, rel: &str) -> Vec<FileEntry> {
@@ -254,6 +266,10 @@ fn is_safe_notes_dir(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
+// ═══════════════════════════════════════════════════════════════
+//  配置管理
+// ═══════════════════════════════════════════════════════════════
+
 /// 设置自定义笔记目录
 #[tauri::command]
 pub fn set_notes_directory(dir_path: String, state: State<AppState>) -> Result<(), String> {
@@ -281,6 +297,10 @@ pub fn set_notes_directory(dir_path: String, state: State<AppState>) -> Result<(
     config.notes_dir = Some(path);
     store::save_config(&config)
 }
+
+// ═══════════════════════════════════════════════════════════════
+//  测试
+// ═══════════════════════════════════════════════════════════════
 
 #[cfg(test)]
 mod tests {

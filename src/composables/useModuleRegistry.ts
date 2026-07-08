@@ -43,7 +43,15 @@ const ALL_MODULES: ModuleDescriptor[] = [
 /** 模块启用状态的全局单例 ref —— 确保跨组件共享 */
 const enabledMap = ref<Record<string, boolean>>({});
 
-/** 模块注册表 composable：管理模块列表、启用状态、开关 */
+/**
+ * ModuleRegistry — 数据驱动侧边栏
+ *
+ * 定义所有可用模块元数据（ALL_MODULES），管理启用/禁用状态。
+ * 计算属性将模块分为 topModules（导航视图）、bottomModules（设置）、
+ * actionModules（悬浮窗动作），供 Sidebar 渲染。
+ *
+ * 全局单例：enabledMap 跨组件共享。
+ */
 export function useModuleRegistry() {
   /** 判断模块是否启用（不在 map 中或值为 true 视为启用） */
   function isEnabled(id: string): boolean {

@@ -18,6 +18,8 @@ const emit = defineEmits<{
   decompose: [id: string];
 }>();
 
+// 排序规则：置顶优先 → 重要次之 → 未完成在前 → 新建在上
+// 同级按创建时间倒序，completed 任务沉底
 const sortedTasks = computed(() => {
   const arr = [...props.tasks];
   arr.sort((a, b) => {

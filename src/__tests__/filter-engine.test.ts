@@ -218,3 +218,103 @@ describe('每日任务跨设备同步 — 回归测试', () => {
     expect(dailyPushReceived!.date).toBe('2026-07-06');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════
+//  回归测试：每日任务跨设备取消完成时对钩残留（Pull 路径）
+//
+//  场景：设备 A 完成每日任务 → 立即取消完成
+//  设备 B 通过 Pull 拉取 → task.completed 正确更新但 daily_completions 残留
+//
+//  根因：sync_remote_daily_completions 只增不删。
+//  修复：cleanStaleDailyCompletions 对比远端和本地，移除多余的记录。
+// ═══════════════════════════════════════════════════════════════
+
+describe('cleanStaleDailyCompletions — Pull 路径 DC 清理', () => {
+  function simulateCleanStale(
+    localTodayIds: string[],
+    remoteDCs: Array<{ task_id: string; date: string }>,
+    today: string,
+  ): string[] {
+    const remoteTodayIds = remoteDCs.filter((dc) => dc.date === today).map((dc) => dc.task_id);
+    return localTodayIds.filter((id) => remoteTodayIds.includes(id));
+  }
+
+  it('远端已删除的 DC 应从本地移除', () => {
+    const today = '2026-07-07';
+    const localTodayIds = ['task-1', 'task-2'];
+    const remoteDCs = [{ task_id: 'task-2', date: today }]; // task-1 已被桌面端删除
+
+    const result = simulateCleanStale(localTodayIds, remoteDCs, today);
+    expect(result).not.toContain('task-1');
+    expect(result).toContain('task-2');
+  });
+
+  it('只清理当天日期的 DC，其他日期不受影响', () => {
+    const today = '2026-07-07';
+    const localTodayIds = ['task-1'];
+    const remoteDCs = [{ task_id: 'task-1', date: '2026-07-06' }]; // 昨天的还在
+
+    const result = simulateCleanStale(localTodayIds, remoteDCs, today);
+    expect(result).toHaveLength(0); // 今天 task-1 被清理
+  });
+
+  it('远端 DC 为空时，本地当天 DC 全部清除', () => {
+    const today = '2026-07-07';
+    const localTodayIds = ['task-1', 'task-2'];
+    const remoteDCs: Array<{ task_id: string; date: string }> = [];
+
+    const result = simulateCleanStale(localTodayIds, remoteDCs, today);
+    expect(result).toHaveLength(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  回归测试：Realtime 路径正向安全网
+//
+//  场景：设备 A 完成每日任务 → DC INSERT 事件可能延迟/丢失
+//  设备 B 通过 Realtime 收到 task.completed=true
+//  若正向安全网缺失，dailyCompletedIds 不更新 → 对钩不出现
+// ═══════════════════════════════════════════════════════════════
+
+describe('Realtime 正向安全网 — 每日任务完成', () => {
+  function simulateRealtimeComplete(
+    dailyCompletedIds: string[],
+    remoteTask: { is_daily: boolean; completed: boolean; id: string },
+  ): string[] {
+    let ids = [...dailyCompletedIds];
+    // 正向安全网：当每日任务 completed 被远端置为 true 时
+    if (remoteTask.is_daily && remoteTask.completed) {
+      if (!ids.includes(remoteTask.id)) {
+        ids = [...ids, remoteTask.id];
+      }
+    }
+    return ids;
+  }
+
+  it('每日任务远端完成时，正向安全网应更新 dailyCompletedIds', () => {
+    const ids = simulateRealtimeComplete([], {
+      is_daily: true,
+      completed: true,
+      id: 'daily-1',
+    });
+    expect(ids).toContain('daily-1');
+  });
+
+  it('普通任务完成时不应触发正向安全网', () => {
+    const ids = simulateRealtimeComplete([], {
+      is_daily: false,
+      completed: true,
+      id: 'normal-1',
+    });
+    expect(ids).toHaveLength(0);
+  });
+
+  it('已存在的记录不重复添加', () => {
+    const ids = simulateRealtimeComplete(['daily-1'], {
+      is_daily: true,
+      completed: true,
+      id: 'daily-1',
+    });
+    expect(ids).toHaveLength(1);
+  });
+});

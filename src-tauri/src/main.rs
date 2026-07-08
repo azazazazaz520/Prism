@@ -8,7 +8,10 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 use tauri_plugin_notification::NotificationExt;
 
 pub(crate) mod ai;
+pub(crate) mod migration;
+pub(crate) mod models;
 pub(crate) mod notes;
+pub(crate) mod persistence;
 pub(crate) mod prompt;
 pub(crate) mod store;
 pub(crate) mod task_service;

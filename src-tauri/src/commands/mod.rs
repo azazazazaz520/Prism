@@ -1,13 +1,12 @@
 pub mod ai;
 pub mod config;
 pub mod screenshot;
-pub mod sync;
 pub mod tasks;
 
 use std::collections::HashSet;
 use std::sync::Mutex;
 
-use serde::Deserialize;
+use serde::Serialize;
 
 use crate::ai::AiSettings;
 use crate::store;
@@ -54,30 +53,26 @@ pub struct AppState {
     pub notified_today: Mutex<HashSet<String>>,
 }
 
-/// 新增任务的请求参数（聚合为 struct 避免参数过多）
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AddTaskArgs {
-    pub title: String,
-    pub due_date: Option<String>,
-    pub tags: Option<Vec<String>>,
-    pub important: Option<bool>,
-    pub pinned: Option<bool>,
-    pub is_daily: Option<bool>,
-    pub parent_id: Option<String>,
-}
+impl AppState {
+    /// 读锁快捷方式：锁定 DataStore → 执行只读操作 → 返回结果
+    pub fn read_data<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&store::DataStore) -> R,
+    {
+        let data = self.data.lock().unwrap();
+        f(&data)
+    }
 
-/// 更新任务的请求参数（聚合为 struct 避免参数过多）
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UpdateTaskArgs {
-    pub id: String,
-    pub title: String,
-    pub due_date: Option<String>,
-    pub tags: Vec<String>,
-    pub important: bool,
-    pub pinned: bool,
-    pub is_daily: bool,
+    /// 写锁快捷方式：锁定 DataStore → 执行修改 → 保存 → 返回结果
+    pub fn write_data<F, R>(&self, f: F) -> Result<R, String>
+    where
+        F: FnOnce(&mut store::DataStore) -> R,
+    {
+        let mut data = self.data.lock().unwrap();
+        let result = f(&mut data);
+        store::save_data(&data)?;
+        Ok(result)
+    }
 }
 
 /// 统一的 AI 命令前置：resolve 配置 + 安全获取数据快照。
@@ -90,4 +85,48 @@ where
     let settings = resolve_ai_settings(&config)?;
     let data = state.data.lock().unwrap();
     f(&settings, &data)
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  同步配置命令（从 commands/sync.rs 并入）
+// ═══════════════════════════════════════════════════════════════
+
+/// 聚合同步配置的返回结构
+#[derive(Debug, Serialize)]
+pub struct SyncConfig {
+    pub sync_code: Option<String>,
+    pub profile_id: Option<String>,
+    pub last_sync_at: Option<String>,
+}
+
+/// 获取完整同步配置
+#[tauri::command]
+pub fn get_sync_config(state: tauri::State<AppState>) -> SyncConfig {
+    let sync = state.sync.lock().unwrap();
+    SyncConfig {
+        sync_code: sync.sync_code.clone(),
+        profile_id: sync.profile_id.clone(),
+        last_sync_at: sync.last_sync_at.clone(),
+    }
+}
+
+/// 设置同步配置（部分更新：传入字段替换，未传入字段保持不变）
+#[tauri::command]
+pub fn set_sync_config(
+    state: tauri::State<AppState>,
+    sync_code: Option<String>,
+    profile_id: Option<String>,
+    last_sync_at: Option<String>,
+) -> Result<(), String> {
+    let mut sync = state.sync.lock().unwrap();
+    if sync_code.is_some() {
+        sync.sync_code = sync_code;
+    }
+    if profile_id.is_some() {
+        sync.profile_id = profile_id;
+    }
+    if last_sync_at.is_some() {
+        sync.last_sync_at = last_sync_at;
+    }
+    store::save_sync(&sync)
 }

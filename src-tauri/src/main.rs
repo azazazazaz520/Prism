@@ -57,9 +57,9 @@ fn main() {
             commands::tasks::sync_remote_daily_completions,
             commands::tasks::delete_daily_completion,
             commands::tasks::sync_local_tasks,
-            // 同步命令 (commands::sync)
-            commands::sync::get_sync_config,
-            commands::sync::set_sync_config,
+            // 同步命令
+            commands::get_sync_config,
+            commands::set_sync_config,
             // 配置命令 (commands::config)
             commands::config::show_floating_window,
             commands::config::show_main_window,

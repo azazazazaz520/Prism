@@ -17,6 +17,10 @@ mod commands;
 
 use commands::AppState;
 
+// ═══════════════════════════════════════════════════════════════
+//  应用入口
+// ═══════════════════════════════════════════════════════════════
+
 /// 应用入口：编排初始化、注册命令、设置回调
 fn main() {
     let (data, config) = store::initialize();
@@ -100,6 +104,10 @@ fn main() {
         .expect("error while running tauri application");
 }
 
+// ═══════════════════════════════════════════════════════════════
+//  全局快捷键
+// ═══════════════════════════════════════════════════════════════
+
 /// 注册全局快捷键：Ctrl+Shift+I（导入）和 Ctrl+Alt+I（截图）
 fn register_shortcuts(app: &tauri::AppHandle) {
     // Ctrl+Shift+I → 文本导入
@@ -136,6 +144,10 @@ fn register_shortcuts(app: &tauri::AppHandle) {
         )
         .expect("failed to register Ctrl+Alt+I");
 }
+
+// ═══════════════════════════════════════════════════════════════
+//  提醒线程
+// ═══════════════════════════════════════════════════════════════
 
 /// 后台线程：每分钟检查到期任务并推送系统通知
 fn spawn_reminder_thread(handle: tauri::AppHandle) {

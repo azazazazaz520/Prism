@@ -32,7 +32,8 @@ const emit = defineEmits<{
 
 const editorRef = ref<HTMLDivElement | null>(null);
 let view: EditorView | null = null;
-/** 标记位：避免内部修改触发的 modelValue watch 回写 */
+/** 标记位：防止 modelValue watch 触发的双向绑定写回循环。
+ *  当 EditorView 内部修改文档时设 true，watch 检测到此标记会跳过回写。 */
 let suppressExternal = false;
 
 // ── 主题检测 ───────────────────────────────

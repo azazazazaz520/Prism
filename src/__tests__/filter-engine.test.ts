@@ -142,7 +142,7 @@ describe('countPending', () => {
 // ═══════════════════════════════════════════════════════════════
 //  回归测试：每日任务同步缺陷
 //
-//  ⚠ 这个测试模拟跨设备场景——
+//    这个测试模拟跨设备场景——
 //    设备 A 完成每日任务后，DailyCompletion 未推送到 Supabase，
 //    导致设备 B 看不到完成状态。
 // ═══════════════════════════════════════════════════════════════
@@ -173,12 +173,12 @@ describe('每日任务跨设备同步 — 回归测试', () => {
 
     // 设备 B 从 Supabase 拉取——但 pushDailyCompletion 从未被调用
     const remoteTasks = [...localTasks]; // Task 同步了（因为任务元数据可能通过 Realtime 推送）
-    const remoteDailyCompletions: string[] = []; // ← BUG: 这里应为 ['task-1']
+    const remoteDailyCompletions: string[] = []; // 已知缺陷：此处应为 ['task-1']，当前 pushDailyCompletion 未被触发
 
     // 断言：设备 B 应该看到 task-1 的完成状态
     // 当前缺陷：remoteDailyCompletions 为空 = 设备 B 不知道 task-1 已完成
     const isCompletedOnDeviceA = localDailyCompleted.includes('task-1'); // true
-    const isCompletedOnDeviceB = remoteDailyCompletions.includes('task-1'); // false ← BUG
+    const isCompletedOnDeviceB = remoteDailyCompletions.includes('task-1'); // 已知缺陷：当前为 false，修复后应为 true
 
     expect(isCompletedOnDeviceA).toBe(true);
     // 这个断言暴露了 bug：设备 B 看不到完成状态

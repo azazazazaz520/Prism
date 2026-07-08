@@ -47,6 +47,8 @@ function rgbToAll(val: string) {
   output.value = `HEX: ${hex}\nRGB: rgb(${r}, ${g}, ${b})\nHSL: hsl(${h}, ${s}%, ${l}%)`;
 }
 
+// RGB → HSL 转换（标准算法，参考 CSS Color Level 4）
+// 归一化 RGB → 计算 max/min 差值 → 根据主色通道推导色相
 function rgbToHsl(r: number, g: number, b: number) {
   r /= 255;
   g /= 255;

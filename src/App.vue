@@ -186,7 +186,7 @@ function handleSwitchModule(module: AppModule) {
           </div>
         </div>
 
-        <!-- AI 助手模块（Phase 4） -->
+        <!-- AI 助手模块 -->
         <div
           v-else-if="activeModule === 'ai-assistant' && isEnabled('ai-assistant')"
           key="ai"
@@ -242,7 +242,6 @@ function handleSwitchModule(module: AppModule) {
 /* 模块容器通用样式 */
 .module-tasks,
 .module-settings,
-.module-placeholder,
 .module-ai,
 .module-notes,
 .module-devtools {
@@ -386,18 +385,6 @@ function handleSwitchModule(module: AppModule) {
   border-color: var(--accent);
   background: var(--accent-light);
   color: var(--accent);
-}
-
-/* 占位模块（尚未实现的 Phase） */
-.module-placeholder {
-  padding: var(--space-xl);
-  align-items: center;
-  justify-content: center;
-}
-
-.placeholder-text {
-  color: var(--text-disabled);
-  font-size: var(--text-base);
 }
 
 /* ── 模块切换过渡 ────────────────────── */

@@ -2,21 +2,18 @@ use super::{AddTaskArgs, AppState, UpdateTaskArgs};
 use crate::store;
 use crate::task_service::{AddTaskInput, TaskService, UpdateTaskInput};
 
-/// 获取所有任务列表（过滤已软删除）
 #[tauri::command]
 pub fn get_tasks(state: tauri::State<AppState>) -> Vec<store::Task> {
     let data = state.data.lock().unwrap();
     TaskService::list(&data)
 }
 
-/// 获取所有任务列表（包含已软删除，供同步配对时批量推送）
 #[tauri::command]
 pub fn get_all_tasks_including_deleted(state: tauri::State<AppState>) -> Vec<store::Task> {
     let data = state.data.lock().unwrap();
     TaskService::list_all(&data)
 }
 
-/// 新增任务
 #[tauri::command]
 pub fn add_task(state: tauri::State<AppState>, args: AddTaskArgs) -> Result<store::Task, String> {
     let mut data = state.data.lock().unwrap();
@@ -36,7 +33,7 @@ pub fn add_task(state: tauri::State<AppState>, args: AddTaskArgs) -> Result<stor
     Ok(task)
 }
 
-/// 切换任务完成状态（自动记录完成/取消时间）
+/// 切换完成状态，自动记录完成/取消时间
 #[tauri::command]
 pub fn toggle_task(state: tauri::State<AppState>, id: String) -> Result<(), String> {
     let mut data = state.data.lock().unwrap();
@@ -44,7 +41,7 @@ pub fn toggle_task(state: tauri::State<AppState>, id: String) -> Result<(), Stri
     store::save_data(&data)
 }
 
-/// 切换每日任务的完成状态（按日期记录，支持跨天追踪）
+/// 按日期记录每日完成状态，支持跨天追踪
 #[tauri::command]
 pub fn toggle_daily_task(
     state: tauri::State<AppState>,
@@ -56,7 +53,6 @@ pub fn toggle_daily_task(
     store::save_data(&data)
 }
 
-/// 更新任务的所有字段
 #[tauri::command]
 pub fn update_task(state: tauri::State<AppState>, args: UpdateTaskArgs) -> Result<(), String> {
     let mut data = state.data.lock().unwrap();
@@ -91,7 +87,6 @@ pub fn clear_completed(state: tauri::State<AppState>) -> Result<(), String> {
     store::save_data(&data)
 }
 
-/// 按截止日期筛选任务
 #[tauri::command]
 pub fn get_tasks_by_date(state: tauri::State<AppState>, date: String) -> Vec<store::Task> {
     let data = state.data.lock().unwrap();
@@ -113,15 +108,13 @@ pub fn delete_tag(state: tauri::State<AppState>, tag: String) -> Result<(), Stri
     store::save_data(&data)
 }
 
-/// 获取指定日期已完成的每日任务 ID 列表
 #[tauri::command]
 pub fn get_daily_completions(state: tauri::State<AppState>, date: String) -> Vec<String> {
     let data = state.data.lock().unwrap();
     TaskService::daily_completions(&data, &date)
 }
 
-/// 合并远端每日完成记录到本地（双向 LWW 合并）
-/// 参数 `remote_completions` 为远端的所有 daily_completions 记录
+/// 合并远端每日完成记录到本地（只增不删，清理由 cleanStaleDailyCompletions 补齐）
 #[tauri::command]
 pub fn sync_remote_daily_completions(
     state: tauri::State<AppState>,

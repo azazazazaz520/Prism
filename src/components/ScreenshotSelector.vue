@@ -55,12 +55,6 @@ async function onMouseUp() {
 
   // DPI 缩放补偿：e.clientX/Y 是逻辑像素，截图 API 是物理像素
   const scale = window.devicePixelRatio || 1;
-  console.log('[DEBUG] crop coords:', {
-    x: Math.round(x * scale),
-    y: Math.round(y * scale),
-    w: Math.round(w * scale),
-    h: Math.round(h * scale),
-  });
   try {
     await invoke('crop_screenshot', {
       x: Math.round(x * scale),

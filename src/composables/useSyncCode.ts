@@ -3,6 +3,15 @@ import { invoke } from '@tauri-apps/api/core';
 import { useSync } from './useSync';
 import { useAuth, getSupabaseClient } from './useAuth';
 
+/**
+ * SyncCode — 跨设备配对与 Profile 管理
+ *
+ * 配对流程：
+ * 设备A generateSyncCode() → 创建 Supabase profile + sync_code →
+ * 设备B joinProfile(code) → 查找并加入已有 profile → mergeLocalToProfile()
+ *
+ * 全局单例：isPairing / pairError 跨组件共享。
+ */
 /** 同步配置返回类型 */
 interface SyncConfig {
   sync_code: string | null;

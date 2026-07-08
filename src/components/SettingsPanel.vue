@@ -198,7 +198,7 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
           <VendorList />
         </div>
 
-        <!-- 默认模型（占位） -->
+        <!-- TODO: 默认模型选择器——当前仅展示占位文本 -->
         <div v-else-if="activeSub === 'models'" class="sub-page sub-placeholder">
           <p>默认模型设置将在后续版本中完善。</p>
         </div>

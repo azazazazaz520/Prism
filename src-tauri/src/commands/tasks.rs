@@ -36,8 +36,8 @@ pub fn get_daily_completions(state: tauri::State<AppState>, date: String) -> Vec
 // ═══════════════════════════════════════════════════════════════
 
 #[tauri::command]
-pub fn add_task(state: tauri::State<AppState>, input: AddTaskInput) -> Result<store::Task, String> {
-    state.write_data(|d| TaskService::add(d, input))
+pub fn add_task(state: tauri::State<AppState>, args: AddTaskInput) -> Result<store::Task, String> {
+    state.write_data(|d| TaskService::add(d, args))
 }
 
 /// 切换完成状态，自动记录完成/取消时间
@@ -61,9 +61,9 @@ pub fn toggle_daily_task(
 }
 
 #[tauri::command]
-pub fn update_task(state: tauri::State<AppState>, input: UpdateTaskInput) -> Result<(), String> {
+pub fn update_task(state: tauri::State<AppState>, args: UpdateTaskInput) -> Result<(), String> {
     state.write_data(|d| {
-        TaskService::update(d, input);
+        TaskService::update(d, args);
     })
 }
 

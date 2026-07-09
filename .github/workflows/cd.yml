@@ -42,10 +42,12 @@ jobs:
             echo ""
             git log ${RANGE} --pretty=format:"- %s (%an)" --no-merges
           } > /tmp/changelog.md
-          # 多行输出用 gh action 的特殊方式
-          echo "body<<EOF" >> $GITHUB_OUTPUT
-          cat /tmp/changelog.md >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          # 多行输出；用唯一分隔符避免内容冲突
+          {
+            echo "body<<CHANGELOG_EOF"
+            cat /tmp/changelog.md
+            echo "CHANGELOG_EOF"
+          } >> $GITHUB_OUTPUT
 
   # =========================================================================
   # Windows 构建 + 发布

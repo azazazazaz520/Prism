@@ -10,7 +10,7 @@ use crate::models::*;
 /// 获取 Workspace 根目录
 pub fn get_workspace_dir() -> PathBuf {
     let mut path = dirs::home_dir().unwrap_or_default();
-    path.push(".todo-app");
+    path.push(".prism");
     path
 }
 

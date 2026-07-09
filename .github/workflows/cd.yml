@@ -92,7 +92,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "Prism v${{ env.VERSION }}"
+          name: 'Prism v${{ env.VERSION }}'
           tag_name: ${{ github.ref_name }}
           body: ${{ needs.version.outputs.release_body }}
           files: |

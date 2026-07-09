@@ -14,10 +14,10 @@
       {
         "label": "main",
         "title": "Prism",
-        "width": 1000,
+        "width": 1100,
         "height": 600,
-        "minWidth": 600,
-        "minHeight": 600,
+        "minWidth": 800,
+        "minHeight": 550,
         "resizable": true
       },
       {

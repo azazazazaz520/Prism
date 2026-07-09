@@ -1,16 +1,25 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
+
+const props = withDefaults(
+  defineProps<{
+    /** 初始展开的子模块，外部跳转时指定 */
+    initialSub?: SettingsSubModule;
+  }>(),
+  { initialSub: 'preferences' },
+);
 import { invoke } from '@tauri-apps/api/core';
 import type { SettingsSubModule } from '../types';
 import { useTheme, type ThemeMode } from '../composables/useTheme';
 import { useModuleRegistry } from '../composables/useModuleRegistry';
 import VendorList from './VendorList.vue';
 import SyncSetup from './SyncSetup.vue';
+import PromptEditor from './PromptEditor.vue';
 
 const { theme, setTheme } = useTheme();
 const { allModules, isEnabled, toggle: toggleModule } = useModuleRegistry();
 
-const activeSub = ref<SettingsSubModule>('preferences');
+const activeSub = ref<SettingsSubModule>(props.initialSub);
 
 /** 主题选择器展开状态 */
 const isThemeOpen = ref(false);
@@ -65,6 +74,7 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
   { key: 'preferences', label: '偏好设置' },
   { key: 'vendors', label: '供应商' },
   { key: 'models', label: '默认模型' },
+  { key: 'prompts', label: 'Prompt' },
   { key: 'sync', label: '跨设备同步' },
 ];
 </script>
@@ -108,6 +118,13 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
               <polyline points="1 4 1 10 7 10" />
               <polyline points="23 20 23 14 17 14" />
               <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" />
+            </template>
+            <template v-else-if="m.key === 'prompts'">
+              <polyline points="16 3 21 3 21 8" />
+              <line x1="4" y1="20" x2="21" y2="3" />
+              <polyline points="21 16 21 21 16 21" />
+              <line x1="15" y1="15" x2="21" y2="21" />
+              <line x1="4" y1="4" x2="9" y2="9" />
             </template>
             <template v-else>
               <path d="M12 2a4 4 0 0 1 4 4v1h4v14H4V7h4V6a4 4 0 0 1 4-4z" />
@@ -207,6 +224,11 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
         <div v-else-if="activeSub === 'sync'" class="sub-page">
           <SyncSetup />
         </div>
+
+        <!-- Prompt 管理 -->
+        <div v-else-if="activeSub === 'prompts'" class="sub-page sub-page-full">
+          <PromptEditor />
+        </div>
       </div>
     </div>
   </div>
@@ -280,6 +302,13 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
 
 .sub-page {
   max-width: 480px;
+}
+
+.sub-page-full {
+  max-width: none;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .sub-placeholder {

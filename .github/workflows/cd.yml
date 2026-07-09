@@ -42,10 +42,11 @@ jobs:
             echo ""
             git log ${RANGE} --pretty=format:"- %s (%an)" --no-merges
           } > /tmp/changelog.md
-          # 多行输出；用唯一分隔符避免内容冲突
+          # 多行输出；git log --format 末尾无换行，需补空行确保分隔符独立
           {
             echo "body<<CHANGELOG_EOF"
             cat /tmp/changelog.md
+            echo ""
             echo "CHANGELOG_EOF"
           } >> $GITHUB_OUTPUT
 

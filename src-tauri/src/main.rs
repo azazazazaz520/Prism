@@ -2,7 +2,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::collections::HashSet;
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use tauri::Manager;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_notification::NotificationExt;
@@ -28,6 +29,7 @@ fn main() {
     let (data, config) = store::initialize();
     let sync = store::load_sync();
     prompt::create_defaults();
+    let running = Arc::new(AtomicBool::new(true));
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
@@ -103,9 +105,20 @@ fn main() {
             commands::prompt::update_prompt,
             commands::prompt::reset_prompt,
         ])
-        .setup(|app| {
+        .setup(move |app| {
+            // 主窗口关闭 → 停止提醒线程 → 退出进程
+            let handle = app.handle().clone();
+            let running_flag = running.clone();
+            if let Some(main_window) = app.get_webview_window("main") {
+                main_window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { .. } = event {
+                        running_flag.store(false, Ordering::SeqCst);
+                        handle.exit(0);
+                    }
+                });
+            }
             register_shortcuts(app.handle());
-            spawn_reminder_thread(app.handle().clone());
+            spawn_reminder_thread(app.handle().clone(), running);
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -158,10 +171,13 @@ fn register_shortcuts(app: &tauri::AppHandle) {
 // ═══════════════════════════════════════════════════════════════
 
 /// 后台线程：每分钟检查到期任务并推送系统通知
-fn spawn_reminder_thread(handle: tauri::AppHandle) {
+fn spawn_reminder_thread(handle: tauri::AppHandle, running: Arc<AtomicBool>) {
     std::thread::spawn(move || {
-        loop {
+        while running.load(Ordering::SeqCst) {
             std::thread::sleep(std::time::Duration::from_secs(60));
+            if !running.load(Ordering::SeqCst) {
+                break;
+            }
 
             let reminder;
             let tasks_snapshot: Vec<(String, String, Option<String>)>;

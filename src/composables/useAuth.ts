@@ -45,23 +45,22 @@ export function useAuth() {
    * 在应用启动时调用一次
    */
   async function initAuth(): Promise<void> {
-    const client = getSupabaseClient();
     isLoading.value = true;
     error.value = null;
 
     try {
+      const client = getSupabaseClient();
+
       // 尝试恢复已有会话
       const { data: sessionData } = await client.auth.getSession();
       if (sessionData.session) {
         session.value = sessionData.session;
         user.value = sessionData.session.user;
-        isLoading.value = false;
         return;
       }
 
       // 无会话 → 自动匿名登录（离线时跳过，等网络恢复后在 online 事件中重试）
       if (!navigator.onLine) {
-        isLoading.value = false;
         return;
       }
 
@@ -70,6 +69,19 @@ export function useAuth() {
 
       session.value = data.session;
       user.value = data.session?.user ?? null;
+
+      // 监听后续状态变化（token 刷新、登出等）
+      client.auth.onAuthStateChange((_event, newSession) => {
+        session.value = newSession;
+        user.value = newSession?.user ?? null;
+      });
+
+      // 网络恢复后重试认证（处理离线启动时跳过了匿名登录的情况）
+      window.addEventListener('online', () => {
+        if (!session.value && !isLoading.value) {
+          initAuth();
+        }
+      });
     } catch (e) {
       const message = e instanceof Error ? e.message : '匿名登录失败';
       error.value = message;
@@ -77,19 +89,6 @@ export function useAuth() {
     } finally {
       isLoading.value = false;
     }
-
-    // 监听后续状态变化（token 刷新、登出等）
-    client.auth.onAuthStateChange((_event, newSession) => {
-      session.value = newSession;
-      user.value = newSession?.user ?? null;
-    });
-
-    // 网络恢复后重试认证（处理离线启动时跳过了匿名登录的情况）
-    window.addEventListener('online', () => {
-      if (!session.value && !isLoading.value) {
-        initAuth();
-      }
-    });
   }
 
   return {

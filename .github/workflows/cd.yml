@@ -85,6 +85,9 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-
 
       - name: Build Tauri app (NSIS installer)
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: npm run tauri build -- --bundles nsis
 
       - name: List build artifacts

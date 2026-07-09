@@ -3,7 +3,7 @@ import { ref, onMounted, computed } from 'vue';
 import { useAuth } from '../composables/useAuth';
 import { useSyncCode } from '../composables/useSyncCode';
 
-const { isLoggedIn } = useAuth();
+const { isLoggedIn, isLoading: authLoading, error: authError, initAuth } = useAuth();
 const { isPairing, pairError, getSyncConfig, generateSyncCode, joinProfile } = useSyncCode();
 
 const syncCode = ref<string | null>(null);
@@ -72,8 +72,19 @@ async function handleCopy() {
       </p>
     </div>
 
+    <!-- Auth error -->
+    <div v-if="authError && !isLoggedIn && !authLoading" class="error-banner">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--danger)" stroke="none">
+        <path
+          d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
+        />
+      </svg>
+      <span>{{ authError }}</span>
+      <button class="btn-retry" @click="initAuth()">重试</button>
+    </div>
+
     <!-- Connecting -->
-    <div v-if="!isLoggedIn" class="status-bar">
+    <div v-else-if="!isLoggedIn" class="status-bar">
       <svg
         width="16"
         height="16"
@@ -502,6 +513,26 @@ async function handleCopy() {
 
 .icon-btn:active {
   transform: scale(0.94);
+}
+
+.btn-retry {
+  margin-left: auto;
+  padding: 2px 12px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--danger);
+  font-size: var(--text-xs);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all var(--transition-fast);
+}
+
+.btn-retry:hover {
+  background: var(--danger);
+  color: #fff;
 }
 
 /* ── Error banner ───────────────────────── */

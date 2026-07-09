@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import type { AppModule } from './types';
+import type { AppModule, SettingsSubModule } from './types';
 import Sidebar from './components/Sidebar.vue';
 import TaskInput from './components/TaskInput.vue';
 import TaskList from './components/TaskList.vue';
@@ -15,6 +15,7 @@ import AiFocusBar from './components/AiFocusBar.vue';
 import AiAssistant from './components/AiAssistant.vue';
 import NoteEditor from './components/NoteEditor.vue';
 import Toolbox from './components/Toolbox.vue';
+import ConfirmDialog from './components/ConfirmDialog.vue';
 import { useModuleRegistry } from './composables/useModuleRegistry';
 import { useTaskStore } from './composables/useTaskStore';
 import { useAiStatus } from './composables/useAiStatus';
@@ -93,7 +94,23 @@ function handleSwitchModule(module: AppModule) {
     return;
   }
   if (!isEnabled(module)) return;
+  // 正常切换时清除外部指定的子模块，使用默认行为
+  settingsInitialSub.value = undefined;
   activeModule.value = module;
+}
+
+/** 未配置 AI 时点击导入按钮 → 弹窗提示添加供应商 */
+const showVendorDialog = ref(false);
+const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
+
+function showVendorHint() {
+  showVendorDialog.value = true;
+}
+
+function goToVendorSettings() {
+  showVendorDialog.value = false;
+  settingsInitialSub.value = 'vendors';
+  activeModule.value = 'settings';
 }
 </script>
 
@@ -146,10 +163,9 @@ function handleSwitchModule(module: AppModule) {
                 <div class="task-input-row">
                   <TaskInput :ai-enabled="aiEnabled" @add="addTask" />
                   <button
-                    v-if="aiEnabled"
                     class="import-btn"
-                    title="从聊天记录导入任务"
-                    @click="invoke('show_import_window')"
+                    :title="aiEnabled ? '从聊天记录导入任务' : '需要先配置 AI 供应商'"
+                    @click="aiEnabled ? invoke('show_import_window') : showVendorHint()"
                   >
                     <svg
                       width="14"
@@ -214,10 +230,19 @@ function handleSwitchModule(module: AppModule) {
 
         <!-- 设置模块 -->
         <div v-else key="settings" class="module-settings">
-          <SettingsPanel />
+          <SettingsPanel :initial-sub="settingsInitialSub" />
         </div>
       </Transition>
     </main>
+    <ConfirmDialog
+      :visible="showVendorDialog"
+      title="未配置 AI 供应商"
+      message="导入功能需要 AI 来解析聊天记录。请先在设置中添加并启用一个 AI 供应商。"
+      confirm-text="去设置"
+      cancel-text="取消"
+      @confirm="goToVendorSettings"
+      @cancel="showVendorDialog = false"
+    />
   </div>
 </template>
 

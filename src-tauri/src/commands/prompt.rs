@@ -1,5 +1,6 @@
 use serde::Serialize;
 use std::fs;
+use std::io::ErrorKind;
 
 use crate::prompt;
 use crate::store;
@@ -35,11 +36,14 @@ pub fn get_prompt(name: String) -> Result<String, String> {
     let path = store::get_workspace_dir().join("prompts").join(&name);
     match fs::read_to_string(&path) {
         Ok(content) => Ok(content),
-        Err(_) => prompt::all()
-            .iter()
-            .find(|t| t.name == name)
-            .map(|t| t.default_content.to_string())
-            .ok_or_else(|| format!("未知的 Prompt: {}", name)),
+        Err(err) => match err.kind() {
+            ErrorKind::NotFound => prompt::all()
+                .iter()
+                .find(|t| t.name == name)
+                .map(|t| t.default_content.to_string())
+                .ok_or_else(|| format!("未知的 Prompt: {}", name)),
+            _ => Err(format!("读取 Prompt 文件失败: {}: {}", path.display(), err)),
+        },
     }
 }
 

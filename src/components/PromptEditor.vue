@@ -11,6 +11,10 @@ const isDirty = ref(false);
 const saving = ref(false);
 const statusMsg = ref('');
 
+function normalizeError(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
 onMounted(() => {
   loadAll();
 });
@@ -22,7 +26,8 @@ async function selectPrompt(p: PromptMeta) {
     isDirty.value = false;
     statusMsg.value = '';
   } catch (e) {
-    statusMsg.value = `加载失败: ${e}`;
+    console.error('加载 Prompt 失败:', e);
+    statusMsg.value = `加载失败: ${normalizeError(e)}`;
   }
 }
 
@@ -38,7 +43,8 @@ async function save() {
     isDirty.value = false;
     statusMsg.value = '已保存 ✓';
   } catch (e) {
-    statusMsg.value = `保存失败: ${e}`;
+    console.error('保存 Prompt 失败:', e);
+    statusMsg.value = `保存失败: ${normalizeError(e)}`;
   } finally {
     saving.value = false;
   }
@@ -58,7 +64,8 @@ async function resetPrompt() {
     isDirty.value = false;
     statusMsg.value = '已恢复默认 ✓';
   } catch (e) {
-    statusMsg.value = `重置失败: ${e}`;
+    console.error('重置 Prompt 失败:', e);
+    statusMsg.value = `重置失败: ${normalizeError(e)}`;
   } finally {
     saving.value = false;
   }

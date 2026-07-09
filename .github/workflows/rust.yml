@@ -58,7 +58,13 @@ jobs:
         run: |
           git fetch origin ${{ github.event.pull_request.base.ref }}
           LAST_SYNC=$(git merge-base origin/${{ github.event.pull_request.base.ref }} HEAD)
-          npx commitlint --from $LAST_SYNC --to HEAD --verbose
+          # 排除 GitHub PR 合成的 merge commit，只检查非 merge 提交
+          TO_COMMIT=$(git rev-list --no-merges -1 HEAD 2>/dev/null || echo "")
+          if [ -z "$TO_COMMIT" ]; then
+            echo "No non-merge commits to check."
+          else
+            npx commitlint --from "$LAST_SYNC" --to "$TO_COMMIT" --verbose
+          fi
 
   # =========================================================================
   # Rust 后端：格式检查、编译、测试

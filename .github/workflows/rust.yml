@@ -58,7 +58,22 @@ jobs:
         run: |
           git fetch origin ${{ github.event.pull_request.base.ref }}
           LAST_SYNC=$(git merge-base origin/${{ github.event.pull_request.base.ref }} HEAD)
-          npx commitlint --from $LAST_SYNC --to HEAD --verbose
+          # 逐个检查非 merge 提交，避免 GitHub 合成的 PR merge commit 干扰
+          COMMITS=$(git rev-list --no-merges ${LAST_SYNC}..HEAD)
+          if [ -z "$COMMITS" ]; then
+            echo "No non-merge commits to check."
+            exit 0
+          fi
+          FAIL=0
+          for hash in $COMMITS; do
+            echo "::group::Checking $hash"
+            git --no-pager log -1 --oneline "$hash"
+            if ! npx commitlint --from "$hash~1" --to "$hash" --verbose; then
+              FAIL=1
+            fi
+            echo "::endgroup::"
+          done
+          exit $FAIL
 
   # =========================================================================
   # Rust 后端：格式检查、编译、测试

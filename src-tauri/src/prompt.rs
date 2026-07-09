@@ -3,7 +3,7 @@ use std::fs;
 use crate::store;
 
 // ═══════════════════════════════════════════════════════════════
-//  模板文件名常量
+//  模板文件名常量（保留 pub 以兼容 ai.rs 调用方）
 // ═══════════════════════════════════════════════════════════════
 
 pub const PARSE_INPUT: &str = "parse-input.md";
@@ -126,24 +126,84 @@ const DEFAULT_WECHAT_PARSE: &str = "\
 {{tags_hint}}
 
 请**只**返回一个 JSON 数组，每个元素是一个任务对象，不要包含其他文字。格式示例：
-[{\"title\":\"提交项目报告\",\"due_date\":\"2026-06-29\",\"tags\":[\"工作\"],\"important\":true,\"pinned\":false,\"is_daily\":false}]\n如果没有发现任何任务，返回空数组 []。";
+[{\"title\":\"提交项目报告\",\"due_date\":\"2026-06-29\",\"tags\":[\"工作\"],\"important\":true,\"pinned\":false,\"is_daily\":false}]
+如果没有发现任何任务，返回空数组 []。";
+
+// ═══════════════════════════════════════════════════════════════
+//  Prompt 注册表 — 单一真相来源
+// ═══════════════════════════════════════════════════════════════
+
+/// 一个 Prompt 模板的完整元数据：文件名、默认内容、接受的变量列表。
+pub struct PromptTemplate {
+    pub name: &'static str,
+    pub default_content: &'static str,
+    /// 该模板接受的 `{{variable}}` 占位符列表（用于验证和文档）。
+    pub vars: &'static [&'static str],
+}
+
+/// 所有已注册 Prompt 模板的单一真相来源。
+/// 新增 Prompt：在此数组中加一条即可——`get_default` 和 `create_defaults` 自动覆盖。
+fn registry() -> Vec<PromptTemplate> {
+    vec![
+        PromptTemplate {
+            name: PARSE_INPUT,
+            default_content: DEFAULT_PARSE_INPUT,
+            vars: &["tags_hint"],
+        },
+        PromptTemplate {
+            name: DAILY_FOCUS,
+            default_content: DEFAULT_DAILY_FOCUS,
+            vars: &["today"],
+        },
+        PromptTemplate {
+            name: DECOMPOSE,
+            default_content: DEFAULT_DECOMPOSE,
+            vars: &["subtask_hint"],
+        },
+        PromptTemplate {
+            name: OVERDUE_SUGGEST,
+            default_content: DEFAULT_OVERDUE_SUGGEST,
+            vars: &["today"],
+        },
+        PromptTemplate {
+            name: CHAT,
+            default_content: DEFAULT_CHAT,
+            vars: &["context"],
+        },
+        PromptTemplate {
+            name: JSON_EXPLAIN,
+            default_content: DEFAULT_JSON_EXPLAIN,
+            vars: &[],
+        },
+        PromptTemplate {
+            name: REGEX_GENERATE,
+            default_content: DEFAULT_REGEX_GENERATE,
+            vars: &[],
+        },
+        PromptTemplate {
+            name: WECHAT_PARSE,
+            default_content: DEFAULT_WECHAT_PARSE,
+            vars: &["tags_hint"],
+        },
+    ]
+}
+
+/// 公开的注册表访问器，供命令层和外部使用。
+pub fn all() -> Vec<PromptTemplate> {
+    registry()
+}
 
 // ═══════════════════════════════════════════════════════════════
 //  加载与渲染
 // ═══════════════════════════════════════════════════════════════
 
+/// 从注册表查找默认 Prompt 内容。未找到返回空字符串。
 fn get_default(name: &str) -> &'static str {
-    match name {
-        PARSE_INPUT => DEFAULT_PARSE_INPUT,
-        DAILY_FOCUS => DEFAULT_DAILY_FOCUS,
-        DECOMPOSE => DEFAULT_DECOMPOSE,
-        OVERDUE_SUGGEST => DEFAULT_OVERDUE_SUGGEST,
-        CHAT => DEFAULT_CHAT,
-        JSON_EXPLAIN => DEFAULT_JSON_EXPLAIN,
-        REGEX_GENERATE => DEFAULT_REGEX_GENERATE,
-        WECHAT_PARSE => DEFAULT_WECHAT_PARSE,
-        _ => "",
-    }
+    registry()
+        .iter()
+        .find(|t| t.name == name)
+        .map(|t| t.default_content)
+        .unwrap_or("")
 }
 
 /// 替换模板中的 `{{variable}}` 占位符
@@ -167,20 +227,10 @@ pub fn load(name: &str, vars: &[(&str, &str)]) -> String {
 pub fn create_defaults() {
     let dir = store::get_workspace_dir().join("prompts");
     fs::create_dir_all(&dir).ok();
-    let defaults = [
-        (PARSE_INPUT, DEFAULT_PARSE_INPUT),
-        (DAILY_FOCUS, DEFAULT_DAILY_FOCUS),
-        (DECOMPOSE, DEFAULT_DECOMPOSE),
-        (OVERDUE_SUGGEST, DEFAULT_OVERDUE_SUGGEST),
-        (CHAT, DEFAULT_CHAT),
-        (JSON_EXPLAIN, DEFAULT_JSON_EXPLAIN),
-        (REGEX_GENERATE, DEFAULT_REGEX_GENERATE),
-        (WECHAT_PARSE, DEFAULT_WECHAT_PARSE),
-    ];
-    for (name, content) in defaults {
-        let path = dir.join(name);
+    for template in &registry() {
+        let path = dir.join(template.name);
         if !path.exists() {
-            fs::write(&path, content).ok();
+            fs::write(&path, template.default_content).ok();
         }
     }
 }
@@ -247,16 +297,29 @@ mod tests {
         );
     }
 
+    // ── 注册表完整性测试 ──
+
     #[test]
-    fn test_get_default_returns_non_empty() {
-        assert!(!get_default(PARSE_INPUT).is_empty());
-        assert!(!get_default(DAILY_FOCUS).is_empty());
-        assert!(!get_default(DECOMPOSE).is_empty());
-        assert!(!get_default(OVERDUE_SUGGEST).is_empty());
-        assert!(!get_default(CHAT).is_empty());
-        assert!(!get_default(JSON_EXPLAIN).is_empty());
-        assert!(!get_default(REGEX_GENERATE).is_empty());
-        assert!(!get_default(WECHAT_PARSE).is_empty());
+    fn test_registry_all_have_non_empty_defaults() {
+        for template in &registry() {
+            assert!(
+                !template.default_content.is_empty(),
+                "Prompt '{}' has empty default content",
+                template.name
+            );
+        }
+    }
+
+    #[test]
+    fn test_get_default_returns_content_for_every_registered_prompt() {
+        for template in &registry() {
+            let content = get_default(template.name);
+            assert!(
+                !content.is_empty(),
+                "get_default('{}') returned empty",
+                template.name
+            );
+        }
     }
 
     #[test]
@@ -265,11 +328,53 @@ mod tests {
     }
 
     #[test]
-    fn test_default_prompts_contain_variable_placeholders() {
-        assert!(DEFAULT_PARSE_INPUT.contains("{{tags_hint}}"));
-        assert!(DEFAULT_DAILY_FOCUS.contains("{{today}}"));
-        assert!(DEFAULT_DECOMPOSE.contains("{{subtask_hint}}"));
-        assert!(DEFAULT_OVERDUE_SUGGEST.contains("{{today}}"));
-        assert!(DEFAULT_CHAT.contains("{{context}}"));
+    fn test_all_prompts_declare_expected_variable_placeholders() {
+        for template in &registry() {
+            for var in template.vars {
+                let placeholder = format!("{{{{{}}}}}", var);
+                assert!(
+                    template.default_content.contains(&placeholder),
+                    "Prompt '{}' declares var '{}' but default content doesn't contain '{}'",
+                    template.name,
+                    var,
+                    placeholder
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_registry_covers_all_name_constants() {
+        // 确保每个 pub const 名称都有对应的注册表条目
+        let all_names: Vec<&str> = registry().iter().map(|t| t.name).collect();
+        for expected in &[
+            PARSE_INPUT,
+            DAILY_FOCUS,
+            DECOMPOSE,
+            OVERDUE_SUGGEST,
+            CHAT,
+            JSON_EXPLAIN,
+            REGEX_GENERATE,
+            WECHAT_PARSE,
+        ] {
+            assert!(
+                all_names.contains(expected),
+                "registry() missing entry for name constant '{}'",
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn test_registry_entry_count_matches_name_constants() {
+        // 注册表条目数应等于名称常量数（防止多余条目）
+        let expected_count = 8;
+        assert_eq!(
+            registry().len(),
+            expected_count,
+            "registry has {} entries, expected {}",
+            registry().len(),
+            expected_count
+        );
     }
 }

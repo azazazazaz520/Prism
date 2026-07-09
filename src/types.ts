@@ -82,7 +82,7 @@ export interface VendorPreset {
 }
 
 /** 设置页子模块 */
-export type SettingsSubModule = 'preferences' | 'vendors' | 'models' | 'sync';
+export type SettingsSubModule = 'preferences' | 'vendors' | 'models' | 'sync' | 'prompts';
 
 /** AI 自然语言解析后的结构化任务 */
 export interface ParsedTask {
@@ -128,4 +128,15 @@ export interface FileEntry {
   path: string;
   isDir: boolean;
   children?: FileEntry[];
+}
+
+// ── Prompt 管理相关类型 ──────────────────────────────
+
+/** 单个 Prompt 模板的元数据（前端可见，不含完整内容） */
+export interface PromptMeta {
+  name: string;
+  /** 该模板接受的 `{{variable}}` 占位符列表 */
+  vars: string[];
+  /** 用户是否已在文件系统中自定义此 Prompt */
+  is_customized: boolean;
 }

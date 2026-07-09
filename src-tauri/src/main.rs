@@ -97,6 +97,11 @@ fn main() {
             commands::ai::ai_regex_generate,
             commands::ai::ai_parse_wechat,
             commands::screenshot::crop_screenshot,
+            // Prompt 管理命令
+            commands::prompt::list_prompts,
+            commands::prompt::get_prompt,
+            commands::prompt::update_prompt,
+            commands::prompt::reset_prompt,
         ])
         .setup(|app| {
             register_shortcuts(app.handle());

@@ -176,9 +176,43 @@ export function useSyncCode() {
     }
   }
 
+  /**
+   * 确保当前用户在 user_profiles 中有记录。
+   * 匿名登录 session 过期/重建后 auth.uid() 会变化，
+   * 若 restoreProfile 只恢复 profile_id 而不重新关联用户，
+   * RLS 会拒绝后续 push 操作。
+   * 此函数 fire-and-forget：成功则消除 RLS 拒绝，
+   * 失败（离线等）由 pushTask 的离线队列兜底。
+   */
+  async function ensureProfileMembership(profileId: string): Promise<void> {
+    if (!user.value) return;
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
+
+    try {
+      const { data: existing } = await supabase
+        .from('user_profiles')
+        .select('user_id')
+        .eq('user_id', user.value.id)
+        .eq('profile_id', profileId)
+        .maybeSingle();
+
+      if (!existing) {
+        await supabase.from('user_profiles').insert({
+          user_id: user.value.id,
+          profile_id: profileId,
+        });
+      }
+    } catch (e) {
+      console.warn('[syncCode] ensureProfileMembership failed:', e);
+    }
+  }
+
   /** 恢复已配对的 profile（启动时调用）
    *  优先使用本地存储的 profile_id（离线安全），
-   *  仅当本地无 profile_id 时才查询 Supabase 验证。 */
+   *  仅当本地无 profile_id 时才查询 Supabase 验证。
+   *  恢复后异步确保 user_profiles 成员关系，
+   *  防止匿名 session 变化导致 RLS 拒绝后续操作。 */
   async function restoreProfile(): Promise<boolean> {
     const config = await getSyncConfig();
     if (!config.sync_code) return false;
@@ -186,6 +220,9 @@ export function useSyncCode() {
     // 本地已有 profile_id → 直接使用，无需网络验证
     if (config.profile_id) {
       setProfileId(config.profile_id);
+      // 异步确保当前用户仍在 user_profiles 中
+      // fire-and-forget — 失败由 pushTask 离线队列兜底
+      ensureProfileMembership(config.profile_id);
       return true;
     }
 
@@ -209,6 +246,8 @@ export function useSyncCode() {
       // 回填本地配置，下次启动可离线恢复
       await invoke('set_sync_config', { syncCode: config.sync_code, profileId: profile.id });
       setProfileId(profile.id);
+      // 同样确保当前用户在 user_profiles 中
+      ensureProfileMembership(profile.id);
       return true;
     } catch {
       return false;

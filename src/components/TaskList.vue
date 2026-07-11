@@ -14,7 +14,7 @@ const emit = defineEmits<{
   toggleDaily: [id: string, date: string];
   update: [id: string, title: string];
   delete: [id: string];
-  updateMeta: [id: string, tags: string[], important: boolean, pinned: boolean];
+  updateMeta: [id: string, tags: string[], important: boolean, pinned: boolean, isDaily: boolean];
   decompose: [id: string];
 }>();
 
@@ -68,7 +68,8 @@ const normalTasks = computed(() => sortedTasks.value.filter((t) => !t.pinned || 
           @update="(id, title) => emit('update', id, title)"
           @delete="(id) => emit('delete', id)"
           @update-meta="
-            (id, tags, important, pinned) => emit('updateMeta', id, tags, important, pinned)
+            (id, tags, important, pinned, isDaily) =>
+              emit('updateMeta', id, tags, important, pinned, isDaily)
           "
           @decompose="(id) => emit('decompose', id)"
         />
@@ -88,7 +89,8 @@ const normalTasks = computed(() => sortedTasks.value.filter((t) => !t.pinned || 
         @update="(id, title) => emit('update', id, title)"
         @delete="(id) => emit('delete', id)"
         @update-meta="
-          (id, tags, important, pinned) => emit('updateMeta', id, tags, important, pinned)
+          (id, tags, important, pinned, isDaily) =>
+            emit('updateMeta', id, tags, important, pinned, isDaily)
         "
         @decompose="(id) => emit('decompose', id)"
       />

@@ -391,7 +391,7 @@ export function useTaskStore() {
   }, 'updateTask');
 
   const updateTaskMeta = wrap(
-    async (id: string, tags: string[], important: boolean, pinned: boolean) => {
+    async (id: string, tags: string[], important: boolean, pinned: boolean, isDaily: boolean) => {
       if (!tasks.value.find((t) => t.id === id)) return;
       const task = tasks.value.find((t) => t.id === id)!;
       await invoke('update_task', {
@@ -402,11 +402,20 @@ export function useTaskStore() {
           tags,
           important,
           pinned,
-          isDaily: task.is_daily,
+          isDaily,
         },
       });
       tasks.value = tasks.value.map((t) =>
-        t.id === id ? { ...t, tags, important, pinned, updated_at: new Date().toISOString() } : t,
+        t.id === id
+          ? {
+              ...t,
+              tags,
+              important,
+              pinned,
+              is_daily: isDaily,
+              updated_at: new Date().toISOString(),
+            }
+          : t,
       );
       syncAllTags();
       const updated = tasks.value.find((t) => t.id === id);

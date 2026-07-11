@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, nextTick, computed, onMounted, onUnmounted } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
 import type { Task } from '../types';
 
 const props = defineProps<{
@@ -14,7 +13,7 @@ const emit = defineEmits<{
   toggleDaily: [id: string, date: string];
   update: [id: string, title: string];
   delete: [id: string];
-  updateMeta: [id: string, tags: string[], important: boolean, pinned: boolean];
+  updateMeta: [id: string, tags: string[], important: boolean, pinned: boolean, isDaily: boolean];
   decompose: [id: string];
 }>();
 
@@ -43,28 +42,38 @@ function closeMenu() {
 }
 
 function toggleMenuImportant() {
-  emit('updateMeta', props.task.id, [...menuTags.value], !props.task.important, props.task.pinned);
+  emit(
+    'updateMeta',
+    props.task.id,
+    [...menuTags.value],
+    !props.task.important,
+    props.task.pinned,
+    props.task.is_daily,
+  );
   showMenu.value = false;
 }
 
 function toggleMenuPinned() {
-  emit('updateMeta', props.task.id, [...menuTags.value], props.task.important, !props.task.pinned);
+  emit(
+    'updateMeta',
+    props.task.id,
+    [...menuTags.value],
+    props.task.important,
+    !props.task.pinned,
+    props.task.is_daily,
+  );
   showMenu.value = false;
 }
 
 function toggleMenuDaily() {
-  const task = props.task;
-  invoke('update_task', {
-    args: {
-      id: task.id,
-      title: task.title,
-      dueDate: task.due_date,
-      tags: task.tags,
-      important: task.important,
-      pinned: task.pinned,
-      isDaily: !task.is_daily,
-    },
-  }).catch((e) => console.error('toggleMenuDaily failed:', e));
+  emit(
+    'updateMeta',
+    props.task.id,
+    [...menuTags.value],
+    props.task.important,
+    props.task.pinned,
+    !props.task.is_daily,
+  );
   showMenu.value = false;
 }
 
@@ -72,14 +81,28 @@ function addMenuTag() {
   const t = menuNewTag.value.trim();
   if (t && !menuTags.value.includes(t)) {
     menuTags.value.push(t);
-    emit('updateMeta', props.task.id, [...menuTags.value], props.task.important, props.task.pinned);
+    emit(
+      'updateMeta',
+      props.task.id,
+      [...menuTags.value],
+      props.task.important,
+      props.task.pinned,
+      props.task.is_daily,
+    );
   }
   menuNewTag.value = '';
 }
 
 function removeMenuTag(tag: string) {
   menuTags.value = menuTags.value.filter((tg) => tg !== tag);
-  emit('updateMeta', props.task.id, [...menuTags.value], props.task.important, props.task.pinned);
+  emit(
+    'updateMeta',
+    props.task.id,
+    [...menuTags.value],
+    props.task.important,
+    props.task.pinned,
+    props.task.is_daily,
+  );
 }
 
 function onClickOutside(e: MouseEvent) {

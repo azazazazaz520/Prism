@@ -1,6 +1,7 @@
 use super::AppState;
 use crate::store;
-use crate::task_service::{AddTaskInput, TaskService, UpdateTaskInput};
+use crate::task_service;
+use crate::task_service::{AddTaskInput, UpdateTaskInput};
 
 // ═══════════════════════════════════════════════════════════════
 //  只读命令 — 通过 AppState::read_data 一行委托
@@ -8,27 +9,27 @@ use crate::task_service::{AddTaskInput, TaskService, UpdateTaskInput};
 
 #[tauri::command]
 pub fn get_tasks(state: tauri::State<AppState>) -> Vec<store::Task> {
-    state.read_data(TaskService::list)
+    state.read_data(task_service::list)
 }
 
 #[tauri::command]
 pub fn get_all_tasks_including_deleted(state: tauri::State<AppState>) -> Vec<store::Task> {
-    state.read_data(TaskService::list_all)
+    state.read_data(task_service::list_all)
 }
 
 #[tauri::command]
 pub fn get_tasks_by_date(state: tauri::State<AppState>, date: String) -> Vec<store::Task> {
-    state.read_data(|d| TaskService::list_by_date(d, &date))
+    state.read_data(|d| task_service::list_by_date(d, &date))
 }
 
 #[tauri::command]
 pub fn get_all_tags(state: tauri::State<AppState>) -> Vec<String> {
-    state.read_data(TaskService::all_tags)
+    state.read_data(task_service::all_tags)
 }
 
 #[tauri::command]
 pub fn get_daily_completions(state: tauri::State<AppState>, date: String) -> Vec<String> {
-    state.read_data(|d| TaskService::daily_completions(d, &date))
+    state.read_data(|d| task_service::daily_completions(d, &date))
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -37,14 +38,14 @@ pub fn get_daily_completions(state: tauri::State<AppState>, date: String) -> Vec
 
 #[tauri::command]
 pub fn add_task(state: tauri::State<AppState>, args: AddTaskInput) -> Result<store::Task, String> {
-    state.write_data(|d| TaskService::add(d, args))
+    state.write_data(|d| task_service::add(d, args))
 }
 
 /// 切换完成状态，自动记录完成/取消时间
 #[tauri::command]
 pub fn toggle_task(state: tauri::State<AppState>, id: String) -> Result<(), String> {
     state.write_data(|d| {
-        TaskService::toggle(d, &id);
+        task_service::toggle(d, &id);
     })
 }
 
@@ -56,14 +57,14 @@ pub fn toggle_daily_task(
     date: String,
 ) -> Result<(), String> {
     state.write_data(|d| {
-        TaskService::toggle_daily(d, &id, &date);
+        task_service::toggle_daily(d, &id, &date);
     })
 }
 
 #[tauri::command]
 pub fn update_task(state: tauri::State<AppState>, args: UpdateTaskInput) -> Result<(), String> {
     state.write_data(|d| {
-        TaskService::update(d, args);
+        task_service::update(d, args);
     })
 }
 
@@ -71,7 +72,7 @@ pub fn update_task(state: tauri::State<AppState>, args: UpdateTaskInput) -> Resu
 #[tauri::command]
 pub fn delete_task(state: tauri::State<AppState>, id: String) -> Result<(), String> {
     state.write_data(|d| {
-        TaskService::delete(d, &id);
+        task_service::delete(d, &id);
     })
 }
 
@@ -79,7 +80,7 @@ pub fn delete_task(state: tauri::State<AppState>, id: String) -> Result<(), Stri
 #[tauri::command]
 pub fn clear_completed(state: tauri::State<AppState>) -> Result<(), String> {
     state.write_data(|d| {
-        TaskService::clear_completed(d);
+        task_service::clear_completed(d);
     })
 }
 
@@ -87,7 +88,7 @@ pub fn clear_completed(state: tauri::State<AppState>) -> Result<(), String> {
 #[tauri::command]
 pub fn delete_tag(state: tauri::State<AppState>, tag: String) -> Result<(), String> {
     state.write_data(|d| {
-        TaskService::delete_tag(d, &tag);
+        task_service::delete_tag(d, &tag);
     })
 }
 

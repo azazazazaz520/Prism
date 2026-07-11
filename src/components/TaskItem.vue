@@ -521,16 +521,16 @@ const dueLabel = computed(() => {
 
 .task-title-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-xs);
 }
 
 .task-title {
+  flex: 1;
+  min-width: 0;
   font-size: var(--text-base);
   color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-word;
 }
 
 [data-theme='dark'] .task-title,
@@ -548,6 +548,7 @@ const dueLabel = computed(() => {
 .icon-star {
   flex-shrink: 0;
   color: var(--warning);
+  margin-top: 3px;
 }
 
 [data-theme='dark'] .icon-star,
@@ -557,6 +558,7 @@ const dueLabel = computed(() => {
 .icon-daily {
   flex-shrink: 0;
   color: var(--warning);
+  margin-top: 3px;
 }
 .icon-daily.done {
   opacity: 0.4;

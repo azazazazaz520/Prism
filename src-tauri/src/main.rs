@@ -28,7 +28,6 @@ use commands::AppState;
 fn main() {
     let (data, config) = store::initialize();
     let sync = store::load_sync();
-    prompt::create_defaults();
     let running = Arc::new(AtomicBool::new(true));
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())

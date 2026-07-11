@@ -116,93 +116,180 @@ function goToVendorSettings() {
 
 <template>
   <div class="app-layout">
-    <!-- 侧边栏导航 -->
-    <Sidebar
-      :active-module="activeModule"
-      :top-modules="topModules"
-      :bottom-modules="bottomModules"
-      :action-modules="actionModules"
-      @switch-module="handleSwitchModule"
-    />
+    <!-- 图标轨 - 56px -->
+    <nav class="icon-rail">
+      <div class="rail-brand">
+        <svg
+          width="22"
+          height="22"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+        >
+          <path d="M12 2.5L4 7v10l8 4.5 8-4.5V7L12 2.5z" />
+          <path d="M12 12L4 7" />
+          <path d="M12 12l8-5" />
+          <path d="M12 12v9.5" />
+        </svg>
+      </div>
+      <button
+        :class="['rail-btn', { active: activeModule === 'tasks' || activeModule === 'settings' }]"
+        title="Tasks"
+        @click="handleSwitchModule('tasks')"
+      >
+        <svg viewBox="0 0 24 24">
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+          <rect x="14" y="14" width="7" height="7" rx="1" />
+        </svg>
+      </button>
+      <button
+        :class="['rail-btn', { active: activeModule === 'notes' }]"
+        title="Notes"
+        @click="handleSwitchModule('notes')"
+      >
+        <svg viewBox="0 0 24 24">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+          <line x1="16" y1="13" x2="8" y2="13" />
+          <line x1="16" y1="17" x2="8" y2="17" />
+        </svg>
+      </button>
+      <button
+        :class="['rail-btn', { active: activeModule === 'ai-assistant' }]"
+        title="AI"
+        @click="handleSwitchModule('ai-assistant')"
+      >
+        <svg viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="3" />
+          <path
+            d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"
+          />
+        </svg>
+      </button>
+      <button
+        :class="['rail-btn', { active: activeModule === 'devtools' }]"
+        title="Toolbox"
+        @click="handleSwitchModule('devtools')"
+      >
+        <svg viewBox="0 0 24 24">
+          <path
+            d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
+          />
+        </svg>
+      </button>
+      <div class="rail-spacer"></div>
+      <button
+        :class="['rail-btn', { active: activeModule === 'settings' }]"
+        title="Settings"
+        @click="handleSwitchModule('settings')"
+      >
+        <svg viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="3" />
+          <path
+            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+          />
+        </svg>
+      </button>
+    </nav>
 
-    <!-- 主内容区（根据选中模块切换显示） -->
-    <main class="main-content">
+    <!-- Sidebar: 280px 分组任务列表 + 内联输入 -->
+    <aside v-if="activeModule === 'tasks'" class="task-sidebar">
+      <div class="sidebar-header">
+        <span class="sidebar-label">Operations</span>
+        <span class="sidebar-count">{{ tasks.length }}</span>
+      </div>
+      <div class="sidebar-list">
+        <TaskList
+          :tasks="filteredTasks"
+          :daily-completions-map="dailyCompletionsMap"
+          :ai-enabled="aiEnabled"
+          @toggle="toggleTask"
+          @toggle-daily="toggleDailyTask"
+          @update="updateTask"
+          @delete="deleteTask"
+          @update-meta="updateTaskMeta"
+          @decompose="decomposeTask"
+        />
+      </div>
+      <div class="input-bar">
+        <TaskInput :ai-enabled="aiEnabled" @add="addTask" />
+      </div>
+    </aside>
+
+    <!-- 主内容区 -->
+    <main class="main-area">
       <Transition name="module-fade" mode="out-in">
-        <!-- 任务看板模块 -->
         <div v-if="activeModule === 'tasks' && isEnabled('tasks')" key="tasks" class="module-tasks">
-          <div class="module-header">
-            <div>
-              <h2 class="module-title">任务看板</h2>
-              <span class="module-subtitle"
-                >{{ pendingCount }} 项待办 · {{ overdueCount }} 项已过期</span
-              >
-            </div>
-            <span v-if="aiEnabled" class="ai-status">AI 已连接</span>
+          <div v-if="isLoading" class="loading-overlay">
+            <span class="loading-spinner"></span>
+            <span class="loading-text">加载任务数据…</span>
           </div>
-          <div class="module-body">
-            <!-- 左侧工具栏：日历 + 标签筛选 -->
-            <aside class="task-sidebar">
-              <MiniCalendar :tasks="tasks" @select-date="selectDate" />
-              <TagFilterBar
-                :tags="allTags"
-                :selected="selectedTags"
-                @toggle-tag="toggleTag"
-                @add-tag="addTag"
-              />
-            </aside>
-
-            <!-- 右侧任务区：输入 + 列表 + 统计 -->
-            <div class="task-main">
-              <!-- 初始加载中遮罩，无过渡动画避免闪烁 -->
-              <div v-if="isLoading" class="loading-overlay">
-                <span class="loading-spinner"></span>
-                <span class="loading-text">加载任务数据…</span>
-              </div>
-              <template v-else>
-                <AiFocusBar v-if="aiEnabled" :tasks="tasks" />
-                <div class="task-input-row">
-                  <TaskInput :ai-enabled="aiEnabled" @add="addTask" />
-                  <button
-                    class="import-btn"
-                    :title="aiEnabled ? '从聊天记录导入任务' : '需要先配置 AI 供应商'"
-                    @click="aiEnabled ? invoke('show_import_window') : showVendorHint()"
-                  >
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-                      <polyline points="7 10 12 15 17 10" />
-                      <line x1="12" y1="15" x2="12" y2="3" />
-                    </svg>
-                    导入
-                  </button>
+          <template v-else>
+            <div class="main-header">
+              <div>
+                <h1 class="main-title">重构同步模块 LWW 合并逻辑</h1>
+                <div class="main-subtitle">
+                  OPS-2026-0711 · SECTOR: SYNC-CORE · STATUS: IN PROGRESS
                 </div>
-                <TaskList
-                  :tasks="filteredTasks"
-                  :daily-completions-map="dailyCompletionsMap"
-                  :ai-enabled="aiEnabled"
-                  @toggle="toggleTask"
-                  @toggle-daily="toggleDailyTask"
-                  @update="updateTask"
-                  @delete="deleteTask"
-                  @update-meta="updateTaskMeta"
-                  @decompose="decomposeTask"
-                />
-                <TaskStats :tasks="tasks" @clear-completed="clearCompleted" />
-                <SyncStatus />
-              </template>
+              </div>
+              <div class="main-actions">
+                <button class="btn">
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="14"
+                    height="14"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg
+                  >EDIT
+                </button>
+                <button class="btn btn-primary">
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="14"
+                    height="14"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <polyline points="9 11 12 14 22 4" />
+                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg
+                  >COMPLETE
+                </button>
+              </div>
             </div>
-          </div>
+            <div class="task-detail">
+              <div class="detail-section">
+                <div class="detail-section-header">
+                  <span class="detail-section-label">Briefing</span>
+                  <span class="detail-section-line"></span>
+                </div>
+                <AiFocusBar v-if="aiEnabled" :tasks="tasks" />
+              </div>
+              <div class="detail-section">
+                <div class="detail-section-header">
+                  <span class="detail-section-label">Telemetry</span>
+                  <span class="detail-section-line"></span>
+                </div>
+                <TaskStats :tasks="tasks" @clear-completed="clearCompleted" />
+              </div>
+              <div class="detail-section">
+                <div class="detail-section-header">
+                  <span class="detail-section-label">Sync</span>
+                  <span class="detail-section-line"></span>
+                </div>
+                <SyncStatus />
+              </div>
+            </div>
+          </template>
         </div>
 
-        <!-- AI 助手模块 -->
         <div
           v-else-if="activeModule === 'ai-assistant' && isEnabled('ai-assistant')"
           key="ai"
@@ -211,7 +298,6 @@ function goToVendorSettings() {
           <AiAssistant />
         </div>
 
-        <!-- 笔记模块 -->
         <div
           v-else-if="activeModule === 'notes' && isEnabled('notes')"
           key="notes"
@@ -228,12 +314,33 @@ function goToVendorSettings() {
           <Toolbox :ai-enabled="aiEnabled" />
         </div>
 
-        <!-- 设置模块 -->
         <div v-else key="settings" class="module-settings">
           <SettingsPanel :initial-sub="settingsInitialSub" />
         </div>
       </Transition>
     </main>
+
+    <!-- 右侧面板 (仅任务模块) -->
+    <aside v-if="activeModule === 'tasks'" class="right-panel">
+      <div class="right-panel-header">
+        <span class="right-panel-label"><span class="rp-dot"></span>AI ADVISORY</span>
+        <span class="data-stream">0xF5C5...18A0</span>
+      </div>
+      <div class="right-panel-content">
+        <MiniCalendar :tasks="tasks" @select-date="selectDate" />
+        <div class="detail-section-header" style="margin-top: var(--sp-md)">
+          <span class="detail-section-label">Filter Tags</span>
+          <span class="detail-section-line"></span>
+        </div>
+        <TagFilterBar
+          :tags="allTags"
+          :selected="selectedTags"
+          @toggle-tag="toggleTag"
+          @add-tag="addTag"
+        />
+      </div>
+    </aside>
+
     <ConfirmDialog
       :visible="showVendorDialog"
       title="未配置 AI 供应商"
@@ -247,49 +354,190 @@ function goToVendorSettings() {
 </template>
 
 <style scoped>
-/* 整体布局：侧边栏 + 主内容区 flex 布局 */
+/* 四栏 Grid 布局 */
 .app-layout {
-  display: flex;
+  display: grid;
+  grid-template-columns: 56px 280px 1fr 300px;
+  grid-template-rows: 1fr;
   height: 100vh;
   overflow: hidden;
-  background: var(--bg-primary);
+  gap: 0;
 }
 
-.main-content {
-  flex: 1;
+/* ── 图标轨 56px ──────────────────────── */
+.icon-rail {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  align-items: center;
+  padding: var(--space-md) 0;
+  gap: var(--space-xs);
   background: var(--bg-secondary);
-  transition: background var(--transition-normal);
+  border-right: 1px solid var(--border-subtle);
 }
 
-/* 模块容器通用样式 */
-.module-tasks,
-.module-settings,
-.module-ai,
-.module-notes,
-.module-devtools {
+[data-theme='dark'] .icon-rail,
+[data-theme='auto'] .icon-rail {
+  background:
+    linear-gradient(90deg, rgba(245, 197, 24, 0.05) 0%, transparent 30%), var(--bg-deep, #0f1118);
+}
+
+.rail-brand {
+  margin-bottom: var(--space-md);
+  color: var(--accent);
+}
+
+[data-theme='dark'] .rail-brand,
+[data-theme='auto'] .rail-brand {
+  filter: drop-shadow(0 0 6px rgba(245, 197, 24, 0.4));
+}
+
+.rail-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s;
+}
+
+[data-theme='dark'] .rail-btn,
+[data-theme='auto'] .rail-btn {
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+  color: var(--text-tertiary);
+}
+
+.rail-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.5;
+}
+
+.rail-btn:hover {
+  background: var(--accent-glow-s);
+  color: var(--text-secondary);
+}
+
+.rail-btn.active {
+  background: var(--accent-glow);
+  color: var(--accent);
+}
+
+.rail-btn.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 25%;
+  height: 50%;
+  width: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+
+.rail-spacer {
   flex: 1;
+}
+
+/* ── 任务侧栏 280px ───────────────────── */
+.task-sidebar {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border-subtle);
+}
+
+[data-theme='dark'] .task-sidebar,
+[data-theme='auto'] .task-sidebar {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(245, 197, 24, 0.04) 0%,
+      transparent 40%,
+      transparent 70%,
+      rgba(0, 0, 0, 0.3) 100%
+    ),
+    var(--bg-tertiary);
+}
+
+.sidebar-header {
+  padding: var(--sp-md) var(--sp-md) var(--sp-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.sidebar-label {
+  font-family: var(--font-heading);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.sidebar-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent-dim);
+  background: var(--accent-glow-s);
+  padding: 1px 6px;
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+}
+
+.sidebar-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 var(--sp-sm);
+}
+
+.sidebar-list::-webkit-scrollbar {
+  width: 3px;
+}
+.sidebar-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-list::-webkit-scrollbar-thumb {
+  background: var(--border-line);
+}
+
+.input-bar {
+  padding: var(--sp-md);
+  border-top: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+/* ── 主内容区 ─────────────────────────── */
+.main-area {
   display: flex;
   flex-direction: column;
   overflow: hidden;
   background: var(--bg-primary);
-  border-radius: var(--radius-xl) 0 0 0;
-  box-shadow: -1px 0 0 var(--border-light);
-  z-index: 1;
 }
 
-[data-theme='dark'] .module-tasks,
-[data-theme='auto'] .module-tasks,
-[data-theme='dark'] .module-ai,
-[data-theme='auto'] .module-ai,
-[data-theme='dark'] .module-notes,
-[data-theme='auto'] .module-notes,
-[data-theme='dark'] .module-devtools,
-[data-theme='auto'] .module-devtools,
-[data-theme='dark'] .module-settings,
-[data-theme='auto'] .module-settings {
+[data-theme='dark'] .main-area,
+[data-theme='auto'] .main-area {
   background:
     linear-gradient(
       135deg,
@@ -299,128 +547,228 @@ function goToVendorSettings() {
       rgba(0, 0, 0, 0.25) 100%
     ),
     var(--bg-primary);
-  border-radius: 0;
-  box-shadow: none;
 }
 
-/* 任务看板头部：标题 + 统计 + AI 状态 */
-.module-header {
-  padding: var(--space-2xl) var(--space-xl) var(--space-lg);
+.module-tasks,
+.module-ai,
+.module-notes,
+.module-devtools,
+.module-settings {
+  flex: 1;
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  border-bottom: 1px solid transparent;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-[data-theme='dark'] .module-header,
-[data-theme='auto'] .module-header {
+.main-header {
+  padding: var(--sp-lg) var(--sp-xl) var(--sp-md);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   border-bottom: 1px solid var(--border-subtle);
 }
 
-.module-title {
-  font-weight: 700;
-  font-size: 24px;
-  color: var(--text-primary);
-  margin: 0;
-}
-
-[data-theme='dark'] .module-title,
-[data-theme='auto'] .module-title {
+.main-title {
   font-family: var(--font-heading);
   font-size: 28px;
+  font-weight: 700;
   letter-spacing: 1px;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.1;
 }
 
-.module-subtitle {
-  font-size: var(--text-sm);
-  color: var(--text-muted);
-  margin-top: 4px;
-  display: block;
-}
-
-[data-theme='dark'] .module-subtitle,
-[data-theme='auto'] .module-subtitle {
+.main-subtitle {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-tertiary);
   letter-spacing: 1px;
+  margin-top: 4px;
 }
 
-.ai-status {
-  font-size: var(--text-xs);
-  color: var(--gray-600);
-  padding: 3px var(--space-sm);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  white-space: nowrap;
+.main-actions {
+  display: flex;
+  gap: var(--sp-sm);
 }
 
-[data-theme='dark'] .ai-status,
-[data-theme='auto'] .ai-status {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--text-tertiary);
-  border-color: var(--border-subtle);
+.btn {
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 8px 16px;
+  border: 1px solid var(--border-line);
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  cursor: pointer;
   clip-path: polygon(
-    6px 0%,
+    12px 0%,
     100% 0%,
-    100% calc(100% - 6px),
-    calc(100% - 6px) 100%,
+    100% calc(100% - 12px),
+    calc(100% - 12px) 100%,
     0% 100%,
-    0% 6px
+    0% 12px
   );
-  border-radius: 0;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn:hover {
+  background: var(--bg-panel-hover);
+  color: var(--text-primary);
+  border-color: var(--border-active);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #0f1118;
+  border-color: var(--accent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    0 0 12px rgba(245, 197, 24, 0.15);
+}
+
+.btn-primary:hover {
+  background: #ffd633;
+  color: #0f1118;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 0 24px rgba(245, 197, 24, 0.35);
+}
+
+.task-detail {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--sp-xl);
+}
+
+.task-detail::-webkit-scrollbar {
+  width: 3px;
+}
+.task-detail::-webkit-scrollbar-track {
+  background: transparent;
+}
+.task-detail::-webkit-scrollbar-thumb {
+  background: var(--border-line);
+}
+
+/* ── 右侧面板 300px ───────────────────── */
+.right-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border-subtle);
+}
+
+[data-theme='dark'] .right-panel,
+[data-theme='auto'] .right-panel {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(245, 197, 24, 0.03) 0%,
+      transparent 35%,
+      transparent 75%,
+      rgba(0, 0, 0, 0.25) 100%
+    ),
+    var(--bg-tertiary);
+}
+
+.right-panel-header {
+  padding: var(--sp-md);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.right-panel-label {
+  font-family: var(--font-heading);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--accent-dim);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+}
+
+.rp-dot {
+  width: 5px;
+  height: 5px;
+  background: var(--accent);
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+  animation: breathe 3s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.data-stream {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-tertiary);
+  opacity: 0.4;
   letter-spacing: 1px;
 }
 
-.module-subtitle {
-  font-size: var(--text-sm);
-  color: var(--text-muted);
-  margin-top: 4px;
-  display: block;
-}
-
-.ai-status {
-  font-size: var(--text-xs);
-  color: var(--gray-600);
-  padding: 3px var(--space-sm);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  white-space: nowrap;
-}
-
-/* 任务看板内容区：左右分区布局 */
-.module-body {
+.right-panel-content {
   flex: 1;
-  padding: 0 var(--space-2xl) var(--space-2xl);
-  overflow: hidden;
-  display: flex;
-  gap: var(--space-xl);
-  max-width: 1280px;
-  margin: 0 auto;
-  width: 100%;
+  overflow-y: auto;
+  padding: var(--sp-md);
 }
 
-/* 左侧工具栏：日历 + 标签筛选，固定宽度 */
-.task-sidebar {
-  width: 240px;
+.right-panel-content::-webkit-scrollbar {
+  width: 3px;
+}
+.right-panel-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+.right-panel-content::-webkit-scrollbar-thumb {
+  background: var(--border-line);
+}
+
+/* ── Detail sections ──────────────────── */
+.detail-section {
+  margin-bottom: var(--sp-xl);
+}
+
+.detail-section-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+  margin-bottom: var(--sp-md);
+}
+
+.detail-section-label {
+  font-family: var(--font-heading);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent-dim);
   flex-shrink: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-lg);
 }
 
-/* 右侧任务区：输入 + 列表 + 统计，flex 填充 */
-.task-main {
+.detail-section-line {
   flex: 1;
-  overflow-y: auto;
-  min-width: 0;
-  padding-top: var(--space-sm);
-  position: relative;
+  height: 1px;
+  background: linear-gradient(90deg, var(--border-line), transparent);
 }
 
-/* 加载中遮罩 */
+/* ── 加载遮罩 ─────────────────────────── */
 .loading-overlay {
   position: absolute;
   inset: 0;
@@ -431,7 +779,6 @@ function goToVendorSettings() {
   gap: var(--space-md);
   background: var(--bg-primary);
   z-index: 10;
-  border-radius: var(--radius-xl) 0 0 0;
 }
 
 .loading-spinner {
@@ -452,41 +799,6 @@ function goToVendorSettings() {
 .loading-text {
   font-size: var(--text-sm);
   color: var(--text-muted);
-}
-
-.task-input-row {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-sm);
-  margin-bottom: var(--space-lg);
-}
-
-.task-input-row > :first-child {
-  flex: 1;
-  margin-bottom: 0;
-}
-
-.import-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  padding: 12px var(--space-lg);
-  background: var(--bg-primary);
-  border: 1px dashed var(--border-default);
-  border-radius: var(--radius-full);
-  font-size: var(--text-base);
-  color: var(--text-secondary);
-  cursor: pointer;
-  white-space: nowrap;
-  font-weight: 500;
-  transition: all var(--transition-fast);
-  flex-shrink: 0;
-}
-
-.import-btn:hover {
-  border-color: var(--accent);
-  background: var(--accent-light);
-  color: var(--accent);
 }
 
 /* ── 模块切换过渡 ────────────────────── */

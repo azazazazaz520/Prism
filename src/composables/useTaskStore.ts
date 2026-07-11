@@ -370,6 +370,9 @@ export function useTaskStore() {
 
     if (wasCompleted) {
       onDailyDeleted(id, date);
+    } else {
+      // 推送 daily_completion 到 Supabase，防止 cleanStaleDailyCompletions 误删
+      onDailyChanged({ task_id: id, date });
     }
   }, 'toggleDailyTask');
 

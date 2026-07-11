@@ -206,6 +206,7 @@ const dueLabel = computed(() => {
       type="checkbox"
       class="task-checkbox"
       :checked="displayCompleted"
+      autocomplete="off"
       @change="handleToggle"
     />
 

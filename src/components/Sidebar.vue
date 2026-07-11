@@ -34,11 +34,12 @@ function handleClick(item: ModuleDescriptor) {
         stroke-linecap="round"
         stroke-linejoin="round"
       >
-        <path d="M12 2L2 7l10 5 10-5-10-5z" />
-        <path d="M2 17l10 5 10-5" />
-        <path d="M2 12l10 5 10-5" />
+        <path d="M12 2.5L4 7v10l8 4.5 8-4.5V7L12 2.5z" />
+        <path d="M12 12L4 7" />
+        <path d="M12 12l8-5" />
+        <path d="M12 12v9.5" />
       </svg>
-      <span class="brand-name">WorkForge</span>
+      <span class="brand-name">Prism</span>
     </div>
 
     <!-- 顶部导航区：视图模块 -->

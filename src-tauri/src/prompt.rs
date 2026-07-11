@@ -142,7 +142,7 @@ pub struct PromptTemplate {
 }
 
 /// 所有已注册 Prompt 模板的单一真相来源。
-/// 新增 Prompt：在此数组中加一条即可——`get_default` 和 `create_defaults` 自动覆盖。
+/// 新增 Prompt：在此数组中加一条即可——`get_default` 自动覆盖。
 fn registry() -> Vec<PromptTemplate> {
     vec![
         PromptTemplate {
@@ -221,18 +221,6 @@ pub fn load(name: &str, vars: &[(&str, &str)]) -> String {
     let path = store::get_workspace_dir().join("prompts").join(name);
     let template = fs::read_to_string(&path).unwrap_or_else(|_| get_default(name).to_string());
     render(&template, vars)
-}
-
-/// 首次启动时创建默认 Prompt 文件（已存在则跳过）
-pub fn create_defaults() {
-    let dir = store::get_workspace_dir().join("prompts");
-    fs::create_dir_all(&dir).ok();
-    for template in &registry() {
-        let path = dir.join(template.name);
-        if !path.exists() {
-            fs::write(&path, template.default_content).ok();
-        }
-    }
 }
 
 // ═══════════════════════════════════════════════════════════════

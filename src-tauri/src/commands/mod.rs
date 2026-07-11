@@ -121,14 +121,14 @@ pub fn set_sync_config(
     last_sync_at: Option<String>,
 ) -> Result<(), String> {
     let mut sync = state.sync.lock().unwrap();
-    if sync_code.is_some() {
-        sync.sync_code = sync_code;
+    if let Some(v) = sync_code {
+        sync.sync_code = Some(v);
     }
-    if profile_id.is_some() {
-        sync.profile_id = profile_id;
+    if let Some(v) = profile_id {
+        sync.profile_id = Some(v);
     }
-    if last_sync_at.is_some() {
-        sync.last_sync_at = last_sync_at;
+    if let Some(v) = last_sync_at {
+        sync.last_sync_at = Some(v);
     }
     store::save_sync(&sync)
 }

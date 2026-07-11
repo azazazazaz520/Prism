@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 
 const props = withDefaults(
   defineProps<{
@@ -24,6 +24,12 @@ const activeSub = ref<SettingsSubModule>(props.initialSub);
 /** 主题选择器展开状态 */
 const isThemeOpen = ref(false);
 
+/** 触发器 DOM 引用，用于计算下拉菜单位置 */
+const themeTriggerRef = ref<HTMLElement | null>(null);
+
+/** 下拉菜单 fixed 定位样式 */
+const dropdownStyle = ref({ top: '0px', left: '0px', minWidth: '0px' });
+
 const themeOptions = [
   { value: 'auto', label: '跟随系统' },
   { value: 'light', label: '浅色' },
@@ -35,20 +41,49 @@ function selectTheme(value: ThemeMode) {
   isThemeOpen.value = false;
 }
 
+/** 切换下拉菜单并计算 fixed 定位 */
+function toggleThemeDropdown() {
+  isThemeOpen.value = !isThemeOpen.value;
+  if (isThemeOpen.value) {
+    // nextTick 等 DOM 更新后再取位置
+    nextTick(() => {
+      if (themeTriggerRef.value) {
+        const rect = themeTriggerRef.value.getBoundingClientRect();
+        dropdownStyle.value = {
+          top: `${rect.bottom + 4}px`,
+          left: `${rect.left}px`,
+          minWidth: `${rect.width}px`,
+        };
+      }
+    });
+  }
+}
+
 /** 点击外部关闭下拉菜单 */
 function handleClickOutside(event: MouseEvent) {
   const target = event.target as HTMLElement;
-  if (!target.closest('.custom-select')) {
+  if (!target.closest('.custom-select') && !target.closest('.select-dropdown')) {
+    isThemeOpen.value = false;
+  }
+}
+
+/** 滚动/缩放时关闭下拉，避免位置错位 */
+function handleScrollOrResize() {
+  if (isThemeOpen.value) {
     isThemeOpen.value = false;
   }
 }
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside);
+  window.addEventListener('scroll', handleScrollOrResize, true);
+  window.addEventListener('resize', handleScrollOrResize);
 });
 
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside);
+  window.removeEventListener('scroll', handleScrollOrResize, true);
+  window.removeEventListener('resize', handleScrollOrResize);
 });
 
 /** 提醒提前分钟数 */
@@ -146,7 +181,12 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
             <div class="setting-row">
               <label>主题模式</label>
               <div class="custom-select" :class="{ open: isThemeOpen }">
-                <button type="button" class="select-trigger" @click="isThemeOpen = !isThemeOpen">
+                <button
+                  ref="themeTriggerRef"
+                  type="button"
+                  class="select-trigger"
+                  @click="toggleThemeDropdown"
+                >
                   {{ themeOptions.find((o) => o.value === theme)?.label || '跟随系统' }}
                   <svg
                     width="12"
@@ -161,17 +201,19 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
                     <polyline points="6 9 12 15 18 9" />
                   </svg>
                 </button>
-                <div v-if="isThemeOpen" class="select-dropdown">
-                  <button
-                    v-for="opt in themeOptions"
-                    :key="opt.value"
-                    type="button"
-                    :class="['dropdown-item', { selected: theme === opt.value }]"
-                    @click="selectTheme(opt.value)"
-                  >
-                    {{ opt.label }}
-                  </button>
-                </div>
+                <Teleport to="body">
+                  <div v-if="isThemeOpen" class="select-dropdown" :style="dropdownStyle">
+                    <button
+                      v-for="opt in themeOptions"
+                      :key="opt.value"
+                      type="button"
+                      :class="['dropdown-item', { selected: theme === opt.value }]"
+                      @click="selectTheme(opt.value)"
+                    >
+                      {{ opt.label }}
+                    </button>
+                  </div>
+                </Teleport>
               </div>
             </div>
           </div>
@@ -440,11 +482,8 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
 }
 
 .select-dropdown {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  z-index: 100;
+  position: fixed;
+  z-index: 1000;
   background: var(--bg-primary);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);

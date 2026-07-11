@@ -85,7 +85,7 @@ function removeMenuTag(tag: string) {
 function onClickOutside(e: MouseEvent) {
   if (showMenu.value) {
     const el = e.target as HTMLElement;
-    if (!el.closest('.menu-wrapper') && !el.closest('.task-menu-btn')) {
+    if (!el.closest('.task-menu') && !el.closest('.task-menu-btn')) {
       showMenu.value = false;
     }
   }
@@ -266,93 +266,95 @@ const dueLabel = computed(() => {
       </svg>
       <div class="menu-wrapper">
         <button class="task-menu-btn" title="更多操作" @click="openMenu">⋯</button>
-        <div v-if="showMenu" class="task-menu" :style="menuStyle" @click.stop>
-          <div class="menu-item" @click="toggleMenuImportant">
-            <span>
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <polygon
-                  points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
-                />
-              </svg>
-              重要
-            </span>
-            <span :class="['menu-toggle', { on: task.important }]">{{
-              task.important ? '开' : '关'
-            }}</span>
-          </div>
-          <div class="menu-item" @click="toggleMenuPinned">
-            <span>
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M12 17v-7" />
-                <path d="M8 10l4-4 4 4" />
-                <path d="M5 21h14" />
-              </svg>
-              置顶
-            </span>
-            <span :class="['menu-toggle', { on: task.pinned }]">{{
-              task.pinned ? '开' : '关'
-            }}</span>
-          </div>
-          <div class="menu-item" @click="toggleMenuDaily">
-            <span>
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <polyline points="23 4 23 10 17 10" />
-                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-              </svg>
-              每日
-            </span>
-            <span :class="['menu-toggle', { on: task.is_daily }]">{{
-              task.is_daily ? '开' : '关'
-            }}</span>
-          </div>
-          <div class="menu-divider"></div>
-          <div class="menu-tags">
-            <div class="menu-tags-header">标签</div>
-            <div class="menu-tags-list">
-              <span v-for="tag in menuTags" :key="tag" class="menu-tag-chip">
-                {{ tag }}
-                <button class="menu-tag-x" @click="removeMenuTag(tag)">×</button>
+        <Teleport to="body">
+          <div v-if="showMenu" class="task-menu" :style="menuStyle" @click.stop>
+            <div class="menu-item" @click="toggleMenuImportant">
+              <span>
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polygon
+                    points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+                  />
+                </svg>
+                重要
               </span>
+              <span :class="['menu-toggle', { on: task.important }]">{{
+                task.important ? '开' : '关'
+              }}</span>
             </div>
-            <div class="menu-tag-input-row">
-              <input
-                v-model="menuNewTag"
-                type="text"
-                class="menu-tag-input"
-                placeholder="新标签"
-                @keydown.enter.prevent="addMenuTag"
-              />
-              <button class="menu-tag-add" @click="addMenuTag">+</button>
+            <div class="menu-item" @click="toggleMenuPinned">
+              <span>
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 17v-7" />
+                  <path d="M8 10l4-4 4 4" />
+                  <path d="M5 21h14" />
+                </svg>
+                置顶
+              </span>
+              <span :class="['menu-toggle', { on: task.pinned }]">{{
+                task.pinned ? '开' : '关'
+              }}</span>
+            </div>
+            <div class="menu-item" @click="toggleMenuDaily">
+              <span>
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="23 4 23 10 17 10" />
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                </svg>
+                每日
+              </span>
+              <span :class="['menu-toggle', { on: task.is_daily }]">{{
+                task.is_daily ? '开' : '关'
+              }}</span>
+            </div>
+            <div class="menu-divider"></div>
+            <div class="menu-tags">
+              <div class="menu-tags-header">标签</div>
+              <div class="menu-tags-list">
+                <span v-for="tag in menuTags" :key="tag" class="menu-tag-chip">
+                  {{ tag }}
+                  <button class="menu-tag-x" @click="removeMenuTag(tag)">×</button>
+                </span>
+              </div>
+              <div class="menu-tag-input-row">
+                <input
+                  v-model="menuNewTag"
+                  type="text"
+                  class="menu-tag-input"
+                  placeholder="新标签"
+                  @keydown.enter.prevent="addMenuTag"
+                />
+                <button class="menu-tag-add" @click="addMenuTag">+</button>
+              </div>
             </div>
           </div>
-        </div>
+        </Teleport>
       </div>
       <button class="task-delete-btn" title="删除" @click="emit('delete', task.id)">×</button>
     </div>
@@ -637,9 +639,9 @@ const dueLabel = computed(() => {
   background: none;
   border: none;
   color: var(--gray-400);
-  font-size: var(--text-sm);
+  font-size: 14px;
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 2px 5px;
   line-height: 1;
   flex-shrink: 0;
   border-radius: var(--radius-sm);
@@ -654,7 +656,7 @@ const dueLabel = computed(() => {
 .task-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   flex-shrink: 0;
   opacity: 0;
   transition: opacity var(--transition-fast);
@@ -672,9 +674,9 @@ const dueLabel = computed(() => {
   background: none;
   border: none;
   color: var(--gray-400);
-  font-size: 14px;
+  font-size: 13px;
   cursor: pointer;
-  padding: 4px 6px;
+  padding: 2px 4px;
   line-height: 1;
   border-radius: var(--radius-sm);
   transition: all var(--transition-fast);

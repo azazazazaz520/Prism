@@ -181,17 +181,17 @@ pub fn delete(data: &mut store::DataStore, id: &str) -> Option<()> {
     Some(())
 }
 
-/// 一键软删除所有已完成任务
+/// 一键软删除所有已完成任务（跳过每日任务，每日任务每天自动重置）
 pub fn clear_completed(data: &mut store::DataStore) {
     let now = chrono::Utc::now().to_rfc3339();
     let completed_ids: Vec<String> = data
         .tasks
         .iter()
-        .filter(|t| t.completed && !t.is_deleted)
+        .filter(|t| t.completed && !t.is_deleted && !t.is_daily)
         .map(|t| t.id.clone())
         .collect();
     for task in data.tasks.iter_mut() {
-        if task.completed && !task.is_deleted {
+        if task.completed && !task.is_deleted && !task.is_daily {
             task.is_deleted = true;
             task.updated_at = now.clone();
         }

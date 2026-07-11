@@ -326,7 +326,7 @@ export function useTaskStore() {
       });
       tasks.value = [...tasks.value, task];
       if (tags.length > 0) {
-        allTags.value = await invoke<string[]>('get_all_tags');
+        syncAllTags();
       }
       onTaskChanged(task);
     },
@@ -415,7 +415,7 @@ export function useTaskStore() {
       tasks.value = tasks.value.map((t) =>
         t.id === id ? { ...t, tags, important, pinned, updated_at: new Date().toISOString() } : t,
       );
-      allTags.value = await invoke<string[]>('get_all_tags');
+      syncAllTags();
       const updated = tasks.value.find((t) => t.id === id);
       if (updated) onTaskChanged(updated);
     },
@@ -424,26 +424,41 @@ export function useTaskStore() {
 
   const deleteTask = wrap(async (id: string) => {
     await invoke('delete_task', { id });
-    tasks.value = tasks.value.map((t) =>
-      t.id === id ? { ...t, is_deleted: true, updated_at: new Date().toISOString() } : t,
-    );
-    const deleted = tasks.value.find((t) => t.id === id);
-    if (deleted) onTaskChanged(deleted);
-    tasks.value = tasks.value.filter((t) => t.id !== id);
-    allTags.value = await invoke<string[]>('get_all_tags');
+    const now = new Date().toISOString();
+    // 标记父任务 + 子任务为已删除
+    const deletedIds = new Set<string>();
+    tasks.value = tasks.value.map((t) => {
+      if (t.id === id || t.parent_id === id) {
+        deletedIds.add(t.id);
+        return { ...t, is_deleted: true, updated_at: now };
+      }
+      return t;
+    });
+    for (const tid of deletedIds) {
+      const t = tasks.value.find((x) => x.id === tid);
+      if (t) onTaskChanged(t);
+    }
+    tasks.value = tasks.value.filter((t) => !deletedIds.has(t.id));
+    syncAllTags();
   }, 'deleteTask');
 
   const clearCompleted = wrap(async () => {
+    // 跳过每日任务（is_daily），每日任务每天自动重置，不应被清除
+    const clearedIds = tasks.value
+      .filter((t) => t.completed && !t.is_deleted && !t.is_daily)
+      .map((t) => t.id);
     await invoke('clear_completed');
     const now = new Date().toISOString();
     tasks.value = tasks.value.map((t) =>
-      t.completed && !t.is_deleted ? { ...t, is_deleted: true, updated_at: now } : t,
+      t.completed && !t.is_deleted && !t.is_daily ? { ...t, is_deleted: true, updated_at: now } : t,
     );
     const cleared = tasks.value.filter((t) => t.completed && t.is_deleted);
     for (const task of cleared) {
       onTaskChanged(task);
     }
     tasks.value = tasks.value.filter((t) => !t.is_deleted);
+    // 清理已清除任务的 daily completion 记录
+    dailyCompletedIds.value = dailyCompletedIds.value.filter((tid) => !clearedIds.includes(tid));
   }, 'clearCompleted');
 
   const decomposeTask = wrap(async (parentId: string) => {

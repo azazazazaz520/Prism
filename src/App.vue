@@ -77,7 +77,7 @@ onMounted(async () => {
     const now = Date.now();
     if (now - lastRefresh < 5000) return;
     lastRefresh = now;
-    refreshTasks();
+    refreshTasks(true);
     loadAiSettings();
   });
   // 监听手动同步事件

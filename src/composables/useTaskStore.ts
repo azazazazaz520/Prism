@@ -182,8 +182,8 @@ export function useTaskStore() {
     }
   }
 
-  async function refreshTasks() {
-    isLoading.value = true;
+  async function refreshTasks(silent = false) {
+    if (!silent) isLoading.value = true;
     try {
       const localTasks = await invoke<Task[]>('get_tasks');
       await refreshDailyCompletions();
@@ -213,7 +213,7 @@ export function useTaskStore() {
       tasks.value = merged;
       syncAllTags(merged);
     } finally {
-      isLoading.value = false;
+      if (!silent) isLoading.value = false;
     }
   }
 

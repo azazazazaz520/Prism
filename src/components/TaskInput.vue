@@ -254,6 +254,65 @@ function openImport() {
             </svg>
             标签
           </button>
+          <button
+            v-if="props.aiEnabled"
+            :class="['qa-btn', { parsing: aiParsing }]"
+            :disabled="aiParsing"
+            title="AI 解析"
+            @click="handleAiParse"
+          >
+            <svg
+              v-if="!aiParsing"
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
+              />
+            </svg>
+            <svg
+              v-else
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              class="ai-icon spinning"
+            >
+              <line x1="12" y1="2" x2="12" y2="6" />
+              <line x1="12" y1="18" x2="12" y2="22" />
+              <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
+              <line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
+              <line x1="2" y1="12" x2="6" y2="12" />
+              <line x1="18" y1="12" x2="22" y2="12" />
+            </svg>
+            AI
+          </button>
+          <button class="qa-btn" title="导入聊天记录" @click="openImport">
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            导入
+          </button>
         </div>
 
         <!-- 标签输入行 -->
@@ -278,7 +337,7 @@ function openImport() {
           </span>
         </div>
 
-        <!-- 底部操作栏：日期 / AI / 导入 / 添加 -->
+        <!-- 底部操作栏：日期 + 添加 -->
         <div class="action-bar">
           <div class="date-btn-wrapper">
             <button
@@ -288,8 +347,8 @@ function openImport() {
               @click="showPicker = !showPicker"
             >
               <svg
-                width="13"
-                height="13"
+                width="12"
+                height="12"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -306,66 +365,6 @@ function openImport() {
             </button>
             <DatePicker :visible="showPicker" :anchor-el="dateBtnRef" @select="onDateSelect" />
           </div>
-          <button
-            v-if="props.aiEnabled"
-            :class="['ai-btn', { parsing: aiParsing }]"
-            :disabled="aiParsing"
-            title="AI 解析自然语言"
-            @click="handleAiParse"
-          >
-            <svg
-              v-if="!aiParsing"
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="ai-icon"
-            >
-              <path
-                d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
-              />
-            </svg>
-            <svg
-              v-else
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              class="ai-icon spinning"
-            >
-              <line x1="12" y1="2" x2="12" y2="6" />
-              <line x1="12" y1="18" x2="12" y2="22" />
-              <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
-              <line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
-              <line x1="2" y1="12" x2="6" y2="12" />
-              <line x1="18" y1="12" x2="22" y2="12" />
-            </svg>
-            <span class="btn-label">AI</span>
-          </button>
-          <button class="import-btn" title="导入聊天记录" @click="openImport">
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-            <span class="btn-label">导入</span>
-          </button>
           <button class="task-input-btn" @click="handleSubmit">添加</button>
         </div>
       </div>
@@ -504,6 +503,21 @@ function openImport() {
 [data-theme='auto'] .qa-btn.active {
   color: #0f1118;
   box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.qa-btn.parsing {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.qa-btn .ai-icon.spinning {
+  animation: ai-spin 1.5s linear infinite;
+}
+
+@keyframes ai-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ── 标签输入 ────────────────────────── */
@@ -692,107 +706,6 @@ function openImport() {
   font-weight: 700;
   letter-spacing: 1px;
   white-space: nowrap;
-}
-
-/* ── AI / 导入 共用按钮样式 ──────────── */
-.ai-btn,
-.import-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 10px var(--space-md);
-  background: none;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-full);
-  cursor: pointer;
-  line-height: 1;
-  transition: all var(--transition-normal);
-  color: var(--text-secondary);
-  position: relative;
-  overflow: hidden;
-}
-
-[data-theme='dark'] .ai-btn,
-[data-theme='auto'] .ai-btn,
-[data-theme='dark'] .import-btn,
-[data-theme='auto'] .import-btn {
-  border-color: var(--border-subtle);
-  clip-path: polygon(
-    8px 0%,
-    100% 0%,
-    100% calc(100% - 8px),
-    calc(100% - 8px) 100%,
-    0% 100%,
-    0% 8px
-  );
-  border-radius: 0;
-  color: var(--accent-dim);
-}
-
-[data-theme='dark'] .ai-btn::before,
-[data-theme='auto'] .ai-btn::before,
-[data-theme='dark'] .import-btn::before,
-[data-theme='auto'] .import-btn::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    135deg,
-    transparent 30%,
-    rgba(245, 197, 24, 0.06) 50%,
-    transparent 70%
-  );
-  opacity: 0;
-  transition: opacity var(--transition-normal);
-}
-
-.ai-btn:hover,
-.import-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-[data-theme='dark'] .ai-btn:hover,
-[data-theme='auto'] .ai-btn:hover,
-[data-theme='dark'] .import-btn:hover,
-[data-theme='auto'] .import-btn:hover {
-  background: var(--accent-glow-s);
-  border-color: var(--accent);
-  color: var(--accent);
-  box-shadow: 0 0 16px var(--accent-glow);
-}
-
-[data-theme='dark'] .ai-btn:hover::before,
-[data-theme='auto'] .ai-btn:hover::before,
-[data-theme='dark'] .import-btn:hover::before,
-[data-theme='auto'] .import-btn:hover::before {
-  opacity: 1;
-}
-
-.btn-label {
-  font-family: var(--font-heading);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1px;
-}
-
-.ai-icon {
-  flex-shrink: 0;
-}
-
-.ai-icon.spinning {
-  animation: ai-spin 1.5s linear infinite;
-}
-
-@keyframes ai-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.ai-btn.parsing {
-  opacity: 0.6;
-  cursor: wait;
 }
 
 /* ── 添加按钮 ────────────────────────── */

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { AppModule, SettingsSubModule } from './types';
@@ -21,7 +21,7 @@ import { useAiStatus } from './composables/useAiStatus';
 
 // ── 模块注册表 ──────────────────────────────
 
-const { isEnabled } = useModuleRegistry();
+const { isEnabled, load: loadModules } = useModuleRegistry();
 
 // ── 任务看板 Store ──────────────────────────────
 
@@ -60,10 +60,15 @@ const { aiEnabled, load: loadAiSettings } = useAiStatus();
 /** 当前侧边栏选中的功能模块 */
 const activeModule = ref<AppModule>('tasks');
 
+/** 非 tasks 模块时 grid 只保留 icon-rail + 主内容区 */
+const gridColumns = computed(() =>
+  activeModule.value === 'tasks' ? '56px 280px 1fr 300px' : '56px 1fr',
+);
+
 // ── 生命周期 ──────────────────────────────
 
 onMounted(async () => {
-  await Promise.all([loadAll(), loadAiSettings()]);
+  await Promise.all([loadAll(), loadAiSettings(), loadModules()]);
   initSync();
   const appWindow = getCurrentWindow();
   let lastRefresh = 0;
@@ -229,38 +234,10 @@ function goToVendorSettings() {
           <template v-else>
             <div class="main-header">
               <div>
-                <h1 class="main-title">重构同步模块 LWW 合并逻辑</h1>
+                <h1 class="main-title">任务看板</h1>
                 <div class="main-subtitle">
-                  OPS-2026-0711 · SECTOR: SYNC-CORE · STATUS: IN PROGRESS
+                  {{ pendingCount }} 待完成 · {{ overdueCount }} 已过期
                 </div>
-              </div>
-              <div class="main-actions">
-                <button class="btn">
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="14"
-                    height="14"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg
-                  >EDIT
-                </button>
-                <button class="btn btn-primary">
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="14"
-                    height="14"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <polyline points="9 11 12 14 22 4" />
-                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg
-                  >COMPLETE
-                </button>
               </div>
             </div>
             <div class="task-detail">
@@ -327,7 +304,7 @@ function goToVendorSettings() {
       </div>
       <div class="right-panel-content">
         <MiniCalendar :tasks="tasks" @select-date="selectDate" />
-        <div class="detail-section-header" style="margin-top: var(--sp-md)">
+        <div class="detail-section-header" style="margin-top: var(--space-md)">
           <span class="detail-section-label">Filter Tags</span>
           <span class="detail-section-line"></span>
         </div>
@@ -353,10 +330,15 @@ function goToVendorSettings() {
 </template>
 
 <style scoped>
-/* 四栏 Grid 布局 */
+/* 四栏布局 — icon-rail + sidebar + main + right-panel */
 .app-layout {
   display: grid;
   grid-template-columns: 56px 280px 1fr 300px;
+}
+
+.app-layout {
+  display: grid;
+  grid-template-columns: v-bind(gridColumns);
   grid-template-rows: 1fr;
   height: 100vh;
   overflow: hidden;
@@ -473,7 +455,7 @@ function goToVendorSettings() {
 }
 
 .sidebar-header {
-  padding: var(--sp-md) var(--sp-md) var(--sp-sm);
+  padding: var(--space-md) var(--space-md) var(--space-sm);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -508,7 +490,7 @@ function goToVendorSettings() {
 .sidebar-list {
   flex: 1;
   overflow-y: auto;
-  padding: 0 var(--sp-sm);
+  padding: 0 var(--space-sm);
 }
 
 .sidebar-list::-webkit-scrollbar {
@@ -522,7 +504,7 @@ function goToVendorSettings() {
 }
 
 .input-bar {
-  padding: var(--sp-md);
+  padding: var(--space-md);
   border-top: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
@@ -560,7 +542,7 @@ function goToVendorSettings() {
 }
 
 .main-header {
-  padding: var(--sp-lg) var(--sp-xl) var(--sp-md);
+  padding: var(--space-lg) var(--space-xl) var(--space-md);
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -585,63 +567,10 @@ function goToVendorSettings() {
   margin-top: 4px;
 }
 
-.main-actions {
-  display: flex;
-  gap: var(--sp-sm);
-}
-
-.btn {
-  font-family: var(--font-heading);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  padding: 8px 16px;
-  border: 1px solid var(--border-line);
-  background: var(--bg-panel);
-  color: var(--text-secondary);
-  cursor: pointer;
-  clip-path: polygon(
-    12px 0%,
-    100% 0%,
-    100% calc(100% - 12px),
-    calc(100% - 12px) 100%,
-    0% 100%,
-    0% 12px
-  );
-  transition: all 0.15s;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.btn:hover {
-  background: var(--bg-panel-hover);
-  color: var(--text-primary);
-  border-color: var(--border-active);
-}
-
-.btn-primary {
-  background: var(--accent);
-  color: #0f1118;
-  border-color: var(--accent);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.15),
-    0 0 12px rgba(245, 197, 24, 0.15);
-}
-
-.btn-primary:hover {
-  background: #ffd633;
-  color: #0f1118;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.2),
-    0 0 24px rgba(245, 197, 24, 0.35);
-}
-
 .task-detail {
   flex: 1;
   overflow-y: auto;
-  padding: var(--sp-xl);
+  padding: var(--space-xl);
 }
 
 .task-detail::-webkit-scrollbar {
@@ -677,7 +606,7 @@ function goToVendorSettings() {
 }
 
 .right-panel-header {
-  padding: var(--sp-md);
+  padding: var(--space-md);
   border-bottom: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
@@ -694,7 +623,7 @@ function goToVendorSettings() {
   color: var(--accent-dim);
   display: flex;
   align-items: center;
-  gap: var(--sp-sm);
+  gap: var(--space-sm);
 }
 
 .rp-dot {
@@ -726,7 +655,7 @@ function goToVendorSettings() {
 .right-panel-content {
   flex: 1;
   overflow-y: auto;
-  padding: var(--sp-md);
+  padding: var(--space-md);
 }
 
 .right-panel-content::-webkit-scrollbar {
@@ -741,14 +670,14 @@ function goToVendorSettings() {
 
 /* ── Detail sections ──────────────────── */
 .detail-section {
-  margin-bottom: var(--sp-xl);
+  margin-bottom: var(--space-xl);
 }
 
 .detail-section-header {
   display: flex;
   align-items: center;
-  gap: var(--sp-sm);
-  margin-bottom: var(--sp-md);
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
 }
 
 .detail-section-label {

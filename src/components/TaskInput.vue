@@ -493,7 +493,7 @@ function formatDueDate(d: string): string {
 
 [data-theme='dark'] .task-input-btn,
 [data-theme='auto'] .task-input-btn {
-  color: var(--bg-void, #08090c);
+  color: #0f1118;
   clip-path: polygon(
     var(--cut-lg) 0%,
     100% 0%,
@@ -614,7 +614,7 @@ function formatDueDate(d: string): string {
 
 [data-theme='dark'] .qa-btn.active,
 [data-theme='auto'] .qa-btn.active {
-  color: var(--bg-void, #08090c);
+  color: #0f1118;
   box-shadow: 0 0 8px var(--accent-glow);
 }
 
@@ -657,7 +657,7 @@ function formatDueDate(d: string): string {
 [data-theme='dark'] .tag-add-btn,
 [data-theme='auto'] .tag-add-btn {
   background: var(--accent);
-  color: var(--bg-void, #08090c);
+  color: #0f1118;
   clip-path: polygon(
     6px 0%,
     100% 0%,

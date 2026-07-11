@@ -739,7 +739,7 @@ async function deleteEntry(path: string) {
       transparent 75%,
       rgba(0, 0, 0, 0.25) 100%
     ),
-    var(--bg-void, #08090c);
+    var(--bg-primary);
 }
 
 [data-theme='dark'] .file-tree,

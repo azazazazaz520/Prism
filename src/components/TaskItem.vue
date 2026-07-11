@@ -437,7 +437,7 @@ const dueLabel = computed(() => {
 
 [data-theme='dark'] .task-checkbox:checked::after,
 [data-theme='auto'] .task-checkbox:checked::after {
-  border-color: var(--bg-void, #08090c);
+  border-color: #0f1118;
 }
 
 .task-body {

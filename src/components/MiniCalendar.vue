@@ -298,7 +298,7 @@ function isSelected(day: number): boolean {
 [data-theme='dark'] .mc-day.selected,
 [data-theme='auto'] .mc-day.selected {
   background: var(--accent);
-  color: var(--bg-void, #08090c);
+  color: #0f1118;
 }
 
 .mc-day.has-task::after {

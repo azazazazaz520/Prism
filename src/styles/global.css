@@ -41,6 +41,7 @@ body {
   inset: 0;
   z-index: 0;
   pointer-events: none;
+  /* 终末地风格 — 低频工业轮廓曲线 */
   background-image:
     linear-gradient(rgba(245, 197, 24, 0.025) 1px, transparent 1px),
     linear-gradient(90deg, rgba(245, 197, 24, 0.025) 1px, transparent 1px);

@@ -12,24 +12,38 @@ const emit = defineEmits<{
 
 const total = computed(() => props.tasks.length);
 const completedCount = computed(() => props.tasks.filter((t) => t.completed).length);
+const activeCount = computed(() => props.tasks.filter((t) => !t.completed && !t.is_deleted).length);
+const progressPct = computed(() =>
+  total.value > 0 ? Math.round((completedCount.value / total.value) * 100) : 0,
+);
 </script>
 
 <template>
   <div v-if="total > 0" class="task-stats">
-    <span class="stats-text">共 {{ total }} 项 | {{ completedCount }} 项已完成</span>
-    <button v-if="completedCount > 0" class="clear-btn" @click="emit('clearCompleted')">
-      清除已完成
-    </button>
+    <div class="stats-row">
+      <span class="stats-text"
+        >共 {{ total }} 项 · {{ completedCount }} 已完成 · {{ activeCount }} 进行中</span
+      >
+      <button v-if="completedCount > 0" class="clear-btn" @click="emit('clearCompleted')">
+        清除已完成
+      </button>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-fill" :style="{ width: progressPct + '%' }"></div>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .task-stats {
+  padding: var(--space-sm) 2px;
+  margin-top: var(--space-sm);
+}
+
+.stats-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--space-sm) 2px;
-  margin-top: var(--space-sm);
 }
 
 .stats-text {
@@ -50,5 +64,36 @@ const completedCount = computed(() => props.tasks.filter((t) => t.completed).len
 
 .clear-btn:hover {
   color: var(--danger);
+}
+
+/* ── 渐变能量进度条 ──────────────────── */
+.progress-bar {
+  margin-top: var(--space-sm);
+  height: 3px;
+  background: rgba(128, 128, 128, 0.1);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    var(--accent-dim) 0%,
+    var(--accent) 30%,
+    var(--accent) 70%,
+    #fff3b0 100%
+  );
+  box-shadow: 0 0 6px var(--accent-glow);
+  transition: width 0.4s ease;
+}
+
+[data-theme='dark'] .progress-bar,
+[data-theme='auto'] .progress-bar {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme='dark'] .progress-fill,
+[data-theme='auto'] .progress-fill {
+  box-shadow: 0 0 8px var(--accent-glow);
 }
 </style>

@@ -119,6 +119,37 @@ function goToVendorSettings() {
 </script>
 
 <template>
+  <!-- 终末地风格 — 背景工业轮廓曲线 -->
+  <svg
+    class="bg-contour"
+    viewBox="0 0 1200 600"
+    preserveAspectRatio="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <defs>
+      <filter id="contour-glow">
+        <feGaussianBlur stdDeviation="2" result="blur" />
+        <feMerge>
+          <feMergeNode in="blur" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+    </defs>
+    <g
+      fill="none"
+      stroke="var(--accent-dim)"
+      stroke-width="0.5"
+      filter="url(#contour-glow)"
+      opacity="0.15"
+    >
+      <path d="M0,300 Q150,260 300,290 T600,280 T900,310 T1200,290" />
+      <path d="M0,320 Q200,290 400,310 T700,300 T1000,330 T1200,310" opacity="0.6" />
+      <path d="M0,270 Q100,240 250,260 T550,250 T850,280 T1200,260" opacity="0.4" />
+      <ellipse cx="200" cy="290" rx="80" ry="40" opacity="0.4" />
+      <ellipse cx="800" cy="310" rx="120" ry="50" opacity="0.3" />
+      <ellipse cx="500" cy="270" rx="60" ry="30" opacity="0.3" />
+    </g>
+  </svg>
   <div class="app-layout">
     <!-- 图标轨 - 56px -->
     <nav class="icon-rail">
@@ -345,6 +376,16 @@ function goToVendorSettings() {
   gap: 0;
 }
 
+/* ── 背景轮廓曲线 ────────────────────── */
+.bg-contour {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
 /* ── 图标轨 56px ──────────────────────── */
 .icon-rail {
   display: flex;
@@ -541,12 +582,50 @@ function goToVendorSettings() {
   overflow: hidden;
 }
 
+/* ── HUD 角标 ─────────────────────────── */
+.main-area::before {
+  content: '';
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  width: 40px;
+  height: 40px;
+  border-bottom: 1px solid var(--border-line);
+  border-left: 1px solid var(--border-line);
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.4;
+}
+
+[data-theme='light'] .main-area::before {
+  opacity: 0.25;
+}
+
 .main-header {
   padding: var(--space-lg) var(--space-xl) var(--space-md);
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   border-bottom: 1px solid var(--border-subtle);
+  position: relative;
+}
+
+/* 扫描线 — 终末地风格能量线 */
+.main-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 5%;
+  width: 90%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--accent-dim) 20%,
+    var(--border-line) 80%,
+    transparent
+  );
+  opacity: 0.5;
 }
 
 .main-title {

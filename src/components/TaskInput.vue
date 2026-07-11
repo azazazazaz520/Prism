@@ -407,9 +407,29 @@ function formatDueDate(d: string): string {
   background: var(--bg-primary);
 }
 
+[data-theme='dark'] .task-input-field,
+[data-theme='auto'] .task-input-field {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  clip-path: polygon(
+    var(--cut-lg) 0%,
+    100% 0%,
+    100% calc(100% - var(--cut-lg)),
+    calc(100% - var(--cut-lg)) 100%,
+    0% 100%,
+    0% var(--cut-lg)
+  );
+}
+
 .task-input-field:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent-muted);
+}
+
+[data-theme='dark'] .task-input-field:focus,
+[data-theme='auto'] .task-input-field:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
 }
 .task-input-field.error {
   border-color: var(--danger);
@@ -430,11 +450,32 @@ function formatDueDate(d: string): string {
   transition: all var(--transition-fast);
 }
 
+[data-theme='dark'] .date-btn,
+[data-theme='auto'] .date-btn {
+  background: var(--bg-secondary);
+  border-color: var(--border-subtle);
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+}
+
 .date-btn:hover,
 .date-btn.active {
   border-color: var(--accent);
   background: var(--accent-bg);
   color: var(--accent);
+}
+
+[data-theme='dark'] .date-btn:hover,
+[data-theme='auto'] .date-btn:hover,
+[data-theme='dark'] .date-btn.active,
+[data-theme='auto'] .date-btn.active {
+  background: var(--accent-glow-s);
 }
 
 .task-input-btn {
@@ -450,10 +491,37 @@ function formatDueDate(d: string): string {
   font-weight: 500;
 }
 
+[data-theme='dark'] .task-input-btn,
+[data-theme='auto'] .task-input-btn {
+  color: var(--bg-void, #08090c);
+  clip-path: polygon(
+    var(--cut-lg) 0%,
+    100% 0%,
+    100% calc(100% - var(--cut-lg)),
+    calc(100% - var(--cut-lg)) 100%,
+    0% 100%,
+    0% var(--cut-lg)
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    0 0 12px rgba(245, 197, 24, 0.15);
+  font-family: var(--font-heading);
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
 .task-input-btn:hover {
   background: var(--accent-hover);
   transform: translateY(-1px);
   box-shadow: var(--shadow-sm);
+}
+
+[data-theme='dark'] .task-input-btn:hover,
+[data-theme='auto'] .task-input-btn:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 0 24px rgba(245, 197, 24, 0.35);
 }
 
 .ai-btn {
@@ -467,9 +535,28 @@ function formatDueDate(d: string): string {
   transition: all var(--transition-normal);
 }
 
+[data-theme='dark'] .ai-btn,
+[data-theme='auto'] .ai-btn {
+  border-color: var(--border-subtle);
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+}
+
 .ai-btn:hover {
   border-color: var(--accent);
   background: var(--accent-light);
+}
+
+[data-theme='dark'] .ai-btn:hover,
+[data-theme='auto'] .ai-btn:hover {
+  background: var(--accent-glow-s);
+  border-color: var(--accent);
 }
 .ai-btn.parsing {
   opacity: 0.5;
@@ -497,6 +584,22 @@ function formatDueDate(d: string): string {
   color: var(--text-secondary);
 }
 
+[data-theme='dark'] .qa-btn,
+[data-theme='auto'] .qa-btn {
+  background: transparent;
+  border-color: var(--border-subtle);
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+  font-family: var(--font-heading);
+  letter-spacing: 1px;
+}
+
 .qa-btn:hover {
   border-color: var(--accent);
   background: var(--accent-bg);
@@ -507,6 +610,12 @@ function formatDueDate(d: string): string {
   background: var(--accent);
   border-color: var(--accent);
   color: white;
+}
+
+[data-theme='dark'] .qa-btn.active,
+[data-theme='auto'] .qa-btn.active {
+  color: var(--bg-void, #08090c);
+  box-shadow: 0 0 8px var(--accent-glow);
 }
 
 .tag-input-row {
@@ -528,6 +637,13 @@ function formatDueDate(d: string): string {
   border-color: var(--gray-600);
 }
 
+[data-theme='dark'] .tag-input,
+[data-theme='auto'] .tag-input {
+  background: var(--bg-secondary);
+  border-color: var(--border-subtle);
+  color: var(--text-primary);
+}
+
 .tag-add-btn {
   padding: var(--space-sm) var(--space-md);
   background: var(--gray-900);
@@ -536,6 +652,20 @@ function formatDueDate(d: string): string {
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
   cursor: pointer;
+}
+
+[data-theme='dark'] .tag-add-btn,
+[data-theme='auto'] .tag-add-btn {
+  background: var(--accent);
+  color: var(--bg-void, #08090c);
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
 }
 
 .tag-preview {
@@ -556,6 +686,24 @@ function formatDueDate(d: string): string {
   gap: var(--space-xs);
 }
 
+[data-theme='dark'] .tag-chip,
+[data-theme='auto'] .tag-chip {
+  background: rgba(245, 197, 24, 0.12);
+  border: 1px solid rgba(245, 197, 24, 0.3);
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+  color: #e8e6e1;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+}
+
 .tag-chip-x {
   background: none;
   border: none;
@@ -574,6 +722,12 @@ function formatDueDate(d: string): string {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-sm);
+}
+
+[data-theme='dark'] .summary,
+[data-theme='auto'] .summary {
+  font-family: var(--font-mono);
+  letter-spacing: 0.5px;
 }
 
 .summary-item {

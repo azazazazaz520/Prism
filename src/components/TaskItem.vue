@@ -325,9 +325,60 @@ const dueLabel = computed(() => {
   margin-bottom: var(--space-xs);
 }
 
+[data-theme='dark'] .task-item,
+[data-theme='auto'] .task-item {
+  background: transparent;
+  border-radius: 0;
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+  border: 1px solid transparent;
+  animation: fadeSlideIn 0.3s ease both;
+}
+
+[data-theme='dark'] .task-item:nth-child(2),
+[data-theme='auto'] .task-item:nth-child(2) {
+  animation-delay: 0.05s;
+}
+[data-theme='dark'] .task-item:nth-child(3),
+[data-theme='auto'] .task-item:nth-child(3) {
+  animation-delay: 0.1s;
+}
+[data-theme='dark'] .task-item:nth-child(4),
+[data-theme='auto'] .task-item:nth-child(4) {
+  animation-delay: 0.15s;
+}
+[data-theme='dark'] .task-item:nth-child(5),
+[data-theme='auto'] .task-item:nth-child(5) {
+  animation-delay: 0.2s;
+}
+
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .task-item:hover {
   background: var(--bg-secondary);
   box-shadow: var(--shadow-sm);
+}
+
+[data-theme='dark'] .task-item:hover,
+[data-theme='auto'] .task-item:hover {
+  background: var(--bg-panel-hover);
+  border-color: var(--border-subtle);
+  box-shadow: none;
 }
 
 .task-item.completed {
@@ -349,6 +400,20 @@ const dueLabel = computed(() => {
   position: relative;
 }
 
+[data-theme='dark'] .task-checkbox,
+[data-theme='auto'] .task-checkbox {
+  border-color: var(--text-tertiary);
+  clip-path: polygon(
+    3px 0%,
+    100% 0%,
+    100% calc(100% - 3px),
+    calc(100% - 3px) 100%,
+    0% 100%,
+    0% 3px
+  );
+  border-radius: 0;
+}
+
 .task-checkbox:hover {
   border-color: var(--accent);
 }
@@ -368,6 +433,11 @@ const dueLabel = computed(() => {
   border: solid white;
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
+}
+
+[data-theme='dark'] .task-checkbox:checked::after,
+[data-theme='auto'] .task-checkbox:checked::after {
+  border-color: var(--bg-void, #08090c);
 }
 
 .task-body {
@@ -392,6 +462,13 @@ const dueLabel = computed(() => {
   white-space: nowrap;
 }
 
+[data-theme='dark'] .task-title,
+[data-theme='auto'] .task-title {
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 500;
+}
+
 .task-title.done {
   text-decoration: line-through;
   color: var(--text-disabled);
@@ -400,6 +477,11 @@ const dueLabel = computed(() => {
 .icon-star {
   flex-shrink: 0;
   color: var(--warning);
+}
+
+[data-theme='dark'] .icon-star,
+[data-theme='auto'] .icon-star {
+  color: var(--status-danger);
 }
 .icon-daily {
   flex-shrink: 0;
@@ -422,11 +504,25 @@ const dueLabel = computed(() => {
   color: var(--text-disabled);
 }
 
+[data-theme='dark'] .task-time,
+[data-theme='auto'] .task-time {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+
 .due-badge {
   font-size: var(--text-xs);
   padding: 0 5px;
   border-radius: var(--radius-sm);
   font-weight: 500;
+}
+
+[data-theme='dark'] .due-badge,
+[data-theme='auto'] .due-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  border-radius: 0;
 }
 
 .due-badge.overdue {
@@ -451,9 +547,35 @@ const dueLabel = computed(() => {
   transition: all var(--transition-fast);
 }
 
+[data-theme='dark'] .tag-badge,
+[data-theme='auto'] .tag-badge {
+  background: rgba(245, 197, 24, 0.12);
+  border: 1px solid rgba(245, 197, 24, 0.3);
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 0;
+  color: #e8e6e1;
+}
+
 .tag-badge:hover {
   background: var(--accent-light);
   color: var(--accent);
+}
+
+[data-theme='dark'] .tag-badge:hover,
+[data-theme='auto'] .tag-badge:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-glow);
 }
 
 .task-edit-input {
@@ -544,6 +666,12 @@ const dueLabel = computed(() => {
   padding: var(--space-sm);
   z-index: 10;
   width: 200px;
+}
+
+[data-theme='dark'] .task-menu,
+[data-theme='auto'] .task-menu {
+  background: var(--bg-elevated);
+  border-color: var(--border-line);
 }
 
 .menu-item {

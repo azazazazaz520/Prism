@@ -117,12 +117,30 @@ function handleClick(item: ModuleDescriptor) {
   transition: all var(--transition-normal);
 }
 
+[data-theme='dark'] .sidebar,
+[data-theme='auto'] .sidebar {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(245, 197, 24, 0.04) 0%,
+      transparent 40%,
+      transparent 70%,
+      rgba(0, 0, 0, 0.3) 100%
+    ),
+    var(--bg-tertiary);
+}
+
 .sidebar-brand {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-md);
   margin-bottom: var(--space-lg);
+}
+
+[data-theme='dark'] .sidebar-brand,
+[data-theme='auto'] .sidebar-brand {
+  margin-bottom: var(--space-xl);
 }
 
 .brand-icon {
@@ -132,11 +150,23 @@ function handleClick(item: ModuleDescriptor) {
   stroke-width: 1.5;
 }
 
+[data-theme='dark'] .brand-icon,
+[data-theme='auto'] .brand-icon {
+  filter: drop-shadow(0 0 6px rgba(245, 197, 24, 0.4));
+}
+
 .brand-name {
   font-size: var(--text-h2);
   font-weight: var(--font-weight-bold);
   color: var(--text-primary);
   letter-spacing: -0.3px;
+}
+
+[data-theme='dark'] .brand-name,
+[data-theme='auto'] .brand-name {
+  font-family: var(--font-heading);
+  letter-spacing: 3px;
+  text-transform: uppercase;
 }
 
 .sidebar-divider {
@@ -169,6 +199,23 @@ function handleClick(item: ModuleDescriptor) {
   transition: all var(--transition-fast);
 }
 
+[data-theme='dark'] .nav-item,
+[data-theme='auto'] .nav-item {
+  border-radius: 0;
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+  font-family: var(--font-heading);
+  font-size: var(--text-sm);
+  letter-spacing: 1px;
+  font-weight: 500;
+}
+
 .nav-item:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
@@ -180,6 +227,11 @@ function handleClick(item: ModuleDescriptor) {
   font-weight: var(--font-weight-semibold);
 }
 
+[data-theme='dark'] .nav-item.active,
+[data-theme='auto'] .nav-item.active {
+  background: var(--accent-glow);
+}
+
 .nav-accent-bar {
   position: absolute;
   left: 0;
@@ -188,6 +240,13 @@ function handleClick(item: ModuleDescriptor) {
   width: 3px;
   border-radius: 2px;
   background: var(--accent);
+}
+
+[data-theme='dark'] .nav-accent-bar,
+[data-theme='auto'] .nav-accent-bar {
+  border-radius: 0;
+  width: 2px;
+  box-shadow: 0 0 8px var(--accent);
 }
 
 .nav-icon {

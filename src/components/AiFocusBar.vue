@@ -143,6 +143,14 @@ const hasItems = computed(() => (suggestion.value?.items?.length ?? 0) > 0);
   gap: var(--space-xs);
 }
 
+[data-theme='dark'] .focus-trigger,
+[data-theme='auto'] .focus-trigger {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
 .trigger-icon {
   flex-shrink: 0;
 }
@@ -168,6 +176,33 @@ const hasItems = computed(() => (suggestion.value?.items?.length ?? 0) > 0);
   background: var(--accent-bg);
   border-radius: var(--radius-lg);
   border: 1px solid var(--accent-muted);
+}
+
+[data-theme='dark'] .focus-content,
+[data-theme='auto'] .focus-content {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0;
+  clip-path: polygon(
+    12px 0%,
+    100% 0%,
+    100% calc(100% - 12px),
+    calc(100% - 12px) 100%,
+    0% 100%,
+    0% 12px
+  );
+  position: relative;
+}
+
+[data-theme='dark'] .focus-content::before,
+[data-theme='auto'] .focus-content::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2px;
+  height: 100%;
+  background: linear-gradient(180deg, var(--accent), transparent);
 }
 
 .focus-header {
@@ -196,6 +231,13 @@ const hasItems = computed(() => (suggestion.value?.items?.length ?? 0) > 0);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+[data-theme='dark'] .focus-summary,
+[data-theme='auto'] .focus-summary {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
 }
 
 .focus-refresh {

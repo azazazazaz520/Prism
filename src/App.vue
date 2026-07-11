@@ -280,6 +280,29 @@ function goToVendorSettings() {
   z-index: 1;
 }
 
+[data-theme='dark'] .module-tasks,
+[data-theme='auto'] .module-tasks,
+[data-theme='dark'] .module-ai,
+[data-theme='auto'] .module-ai,
+[data-theme='dark'] .module-notes,
+[data-theme='auto'] .module-notes,
+[data-theme='dark'] .module-devtools,
+[data-theme='auto'] .module-devtools,
+[data-theme='dark'] .module-settings,
+[data-theme='auto'] .module-settings {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(245, 197, 24, 0.03) 0%,
+      transparent 35%,
+      transparent 75%,
+      rgba(0, 0, 0, 0.25) 100%
+    ),
+    var(--bg-void, #08090c);
+  border-radius: 0;
+  box-shadow: none;
+}
+
 /* 任务看板头部：标题 + 统计 + AI 状态 */
 .module-header {
   padding: var(--space-2xl) var(--space-xl) var(--space-lg);
@@ -289,11 +312,65 @@ function goToVendorSettings() {
   border-bottom: 1px solid transparent;
 }
 
+[data-theme='dark'] .module-header,
+[data-theme='auto'] .module-header {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
 .module-title {
   font-weight: 700;
   font-size: 24px;
   color: var(--text-primary);
   margin: 0;
+}
+
+[data-theme='dark'] .module-title,
+[data-theme='auto'] .module-title {
+  font-family: var(--font-heading);
+  font-size: 28px;
+  letter-spacing: 1px;
+}
+
+.module-subtitle {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin-top: 4px;
+  display: block;
+}
+
+[data-theme='dark'] .module-subtitle,
+[data-theme='auto'] .module-subtitle {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-tertiary);
+  letter-spacing: 1px;
+}
+
+.ai-status {
+  font-size: var(--text-xs);
+  color: var(--gray-600);
+  padding: 3px var(--space-sm);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+[data-theme='dark'] .ai-status,
+[data-theme='auto'] .ai-status {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-tertiary);
+  border-color: var(--border-subtle);
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+  border-radius: 0;
+  letter-spacing: 1px;
 }
 
 .module-subtitle {

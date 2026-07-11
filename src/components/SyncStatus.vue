@@ -39,6 +39,14 @@ function forceSync() {
   transition: background 0.15s;
 }
 
+[data-theme='dark'] .sync-status,
+[data-theme='auto'] .sync-status {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  border-radius: 0;
+}
+
 .sync-status:hover {
   background: var(--bg-subtle);
 }
@@ -54,9 +62,20 @@ function forceSync() {
   background: var(--accent);
 }
 
+[data-theme='dark'] .sync-indicator.idle,
+[data-theme='auto'] .sync-indicator.idle {
+  box-shadow: 0 0 6px var(--accent);
+  animation: breathe 3s ease-in-out infinite;
+}
+
 .sync-indicator.syncing {
   background: var(--accent);
   animation: spin 1s linear infinite;
+}
+
+[data-theme='dark'] .sync-indicator.syncing,
+[data-theme='auto'] .sync-indicator.syncing {
+  animation: heartbeat 1.5s ease-in-out infinite;
 }
 
 .sync-indicator.error,
@@ -77,6 +96,40 @@ function forceSync() {
   }
   100% {
     opacity: 1;
+  }
+}
+
+@keyframes heartbeat {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  12% {
+    opacity: 0.25;
+    transform: scale(0.85);
+  }
+  22% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  32% {
+    opacity: 0.35;
+    transform: scale(0.9);
+  }
+  42% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
   }
 }
 

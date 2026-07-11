@@ -83,9 +83,15 @@ onMounted(async () => {
   // 监听手动同步事件
   const handleForceSync = () => refreshTasks();
   window.addEventListener('prism:force-sync', handleForceSync);
+  // 监听导入按钮（未配置 AI 时弹窗提示）
+  const handleImportNoAi = () => {
+    showVendorDialog.value = true;
+  };
+  window.addEventListener('prism:import-no-ai', handleImportNoAi);
   onUnmounted(() => {
     unlistenFocus();
     window.removeEventListener('prism:force-sync', handleForceSync);
+    window.removeEventListener('prism:import-no-ai', handleImportNoAi);
   });
 });
 
@@ -97,7 +103,7 @@ function handleSwitchModule(module: AppModule) {
     invoke('show_floating_window');
     return;
   }
-  if (!isEnabled(module)) return;
+  if (module !== 'settings' && !isEnabled(module)) return;
   // 正常切换时清除外部指定的子模块，使用默认行为
   settingsInitialSub.value = undefined;
   activeModule.value = module;
@@ -249,9 +255,6 @@ function goToVendorSettings() {
           @decompose="decomposeTask"
         />
       </div>
-      <div class="input-bar">
-        <TaskInput :ai-enabled="aiEnabled" @add="addTask" />
-      </div>
     </aside>
 
     <!-- 主内容区 -->
@@ -270,6 +273,9 @@ function goToVendorSettings() {
                   {{ pendingCount }} 待完成 · {{ overdueCount }} 已过期
                 </div>
               </div>
+            </div>
+            <div class="main-input">
+              <TaskInput :ai-enabled="aiEnabled" @add="addTask" />
             </div>
             <div class="task-detail">
               <div class="detail-section">
@@ -544,9 +550,10 @@ function goToVendorSettings() {
   background: var(--border-line);
 }
 
-.input-bar {
-  padding: var(--space-md);
-  border-top: 1px solid var(--border-subtle);
+/* ── 主内容区任务输入 ──────────────────── */
+.main-input {
+  padding: var(--space-lg) var(--space-xl) var(--space-md);
+  border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
 

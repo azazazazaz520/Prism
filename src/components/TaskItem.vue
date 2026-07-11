@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, nextTick, computed, onMounted, onUnmounted } from 'vue';
+import { invoke } from '@tauri-apps/api/core';
 import type { Task } from '../types';
 
 const props = defineProps<{
@@ -22,10 +23,18 @@ const editTitle = ref('');
 const showMenu = ref(false);
 const menuTags = ref<string[]>([]);
 const menuNewTag = ref('');
+const menuStyle = ref<Record<string, string>>({});
 
-function openMenu() {
+function openMenu(e: MouseEvent) {
+  e.stopPropagation();
   menuTags.value = [...props.task.tags];
   menuNewTag.value = '';
+  const btn = e.currentTarget as HTMLElement;
+  const rect = btn.getBoundingClientRect();
+  menuStyle.value = {
+    top: rect.bottom + 4 + 'px',
+    right: window.innerWidth - rect.right + 'px',
+  };
   showMenu.value = true;
 }
 
@@ -40,6 +49,22 @@ function toggleMenuImportant() {
 
 function toggleMenuPinned() {
   emit('updateMeta', props.task.id, [...menuTags.value], props.task.important, !props.task.pinned);
+  showMenu.value = false;
+}
+
+function toggleMenuDaily() {
+  const task = props.task;
+  invoke('update_task', {
+    args: {
+      id: task.id,
+      title: task.title,
+      dueDate: task.due_date,
+      tags: task.tags,
+      important: task.important,
+      pinned: task.pinned,
+      isDaily: !task.is_daily,
+    },
+  }).catch((e) => console.error('toggleMenuDaily failed:', e));
   showMenu.value = false;
 }
 
@@ -60,7 +85,7 @@ function removeMenuTag(tag: string) {
 function onClickOutside(e: MouseEvent) {
   if (showMenu.value) {
     const el = e.target as HTMLElement;
-    if (!el.closest('.menu-wrapper')) {
+    if (!el.closest('.menu-wrapper') && !el.closest('.task-menu-btn')) {
       showMenu.value = false;
     }
   }
@@ -240,8 +265,8 @@ const dueLabel = computed(() => {
         <rect x="14" y="14" width="7" height="7" rx="1" />
       </svg>
       <div class="menu-wrapper">
-        <button class="task-menu-btn" title="更多操作" @click.stop="openMenu">⋯</button>
-        <div v-if="showMenu" class="task-menu" @click.stop>
+        <button class="task-menu-btn" title="更多操作" @click="openMenu">⋯</button>
+        <div v-if="showMenu" class="task-menu" :style="menuStyle" @click.stop>
           <div class="menu-item" @click="toggleMenuImportant">
             <span>
               <svg
@@ -284,6 +309,27 @@ const dueLabel = computed(() => {
             </span>
             <span :class="['menu-toggle', { on: task.pinned }]">{{
               task.pinned ? '开' : '关'
+            }}</span>
+          </div>
+          <div class="menu-item" @click="toggleMenuDaily">
+            <span>
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="23 4 23 10 17 10" />
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+              </svg>
+              每日
+            </span>
+            <span :class="['menu-toggle', { on: task.is_daily }]">{{
+              task.is_daily ? '开' : '关'
             }}</span>
           </div>
           <div class="menu-divider"></div>
@@ -591,9 +637,9 @@ const dueLabel = computed(() => {
   background: none;
   border: none;
   color: var(--gray-400);
-  font-size: 18px;
+  font-size: var(--text-sm);
   cursor: pointer;
-  padding: 4px 6px;
+  padding: 2px 4px;
   line-height: 1;
   flex-shrink: 0;
   border-radius: var(--radius-sm);
@@ -655,16 +701,13 @@ const dueLabel = computed(() => {
 }
 
 .task-menu {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: var(--space-xs);
+  position: fixed;
+  z-index: 1000;
   background: var(--bg-primary);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-subtle);
-  box-shadow: 0 4px var(--space-lg) rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   padding: var(--space-sm);
-  z-index: 10;
   width: 200px;
 }
 

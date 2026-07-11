@@ -68,40 +68,39 @@ const gridColumns = computed(() =>
 
 // ── 生命周期 ──────────────────────────────
 
+// 在 setup 顶层注册清理，避免 async onMounted 中 await 后丢失组件上下文
+let _unlistenFocus: (() => void) | null = null;
+let _pollInterval: ReturnType<typeof setInterval> | null = null;
+const _handleForceSync = () => refreshTasks();
+const _handleImportNoAi = () => {
+  showVendorDialog.value = true;
+};
+
+onUnmounted(() => {
+  _unlistenFocus?.();
+  window.removeEventListener('prism:force-sync', _handleForceSync);
+  window.removeEventListener('prism:import-no-ai', _handleImportNoAi);
+  if (_pollInterval) clearInterval(_pollInterval);
+});
+
 onMounted(async () => {
   await Promise.all([loadAll(), loadAiSettings(), loadModules()]);
   initSync();
   const appWindow = getCurrentWindow();
   let lastRefresh = 0;
-  const unlistenFocus = await appWindow.listen('tauri://focus', () => {
-    // 去抖：拖拽窗口等连续焦点事件 5 秒内只刷新一次
+  _unlistenFocus = await appWindow.listen('tauri://focus', () => {
     const now = Date.now();
     if (now - lastRefresh < 5000) return;
     lastRefresh = now;
     refreshTasks(true);
     loadAiSettings();
   });
-  // 监听手动同步事件
-  const handleForceSync = () => refreshTasks();
-  window.addEventListener('prism:force-sync', handleForceSync);
-  // 监听导入按钮（未配置 AI 时弹窗提示）
-  const handleImportNoAi = () => {
-    showVendorDialog.value = true;
-  };
-  window.addEventListener('prism:import-no-ai', handleImportNoAi);
-  // ── 定时轮询：Realtime 兜底 ──────────────────────
-  // 每 30 秒静默拉取远端变更，确保移动端操作能自动同步到桌面端
-  const pollInterval = setInterval(() => {
-    pullAndMerge().catch(() => {
-      /* 离线或网络异常，静默忽略 */
-    });
+  window.addEventListener('prism:force-sync', _handleForceSync);
+  window.addEventListener('prism:import-no-ai', _handleImportNoAi);
+  // 每 30 秒静默拉取远端变更，作为 Realtime WebSocket 的兜底
+  _pollInterval = setInterval(() => {
+    pullAndMerge().catch(() => {});
   }, 30_000);
-  onUnmounted(() => {
-    unlistenFocus();
-    window.removeEventListener('prism:force-sync', handleForceSync);
-    window.removeEventListener('prism:import-no-ai', handleImportNoAi);
-    clearInterval(pollInterval);
-  });
 });
 
 // ── 模块切换 ──────────────────────────────

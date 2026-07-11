@@ -242,7 +242,9 @@ export function useTaskStore() {
               dailyCompletedIds.value = dailyCompletedIds.value.filter(
                 (tid) => tid !== remoteTask.id,
               );
-              invoke('delete_daily_completion', { taskId: remoteTask.id, date: getTodayStr() });
+              if (remoteTask.id) {
+                invoke('delete_daily_completion', { taskId: remoteTask.id, date: getTodayStr() });
+              }
             }
             if (remoteTask.is_daily && remoteTask.completed) {
               if (!dailyCompletedIds.value.includes(remoteTask.id)) {
@@ -257,7 +259,9 @@ export function useTaskStore() {
       },
       (dc, eventType) => {
         if (eventType === 'DELETE') {
-          invoke('delete_daily_completion', { taskId: dc.task_id, date: dc.date });
+          if (dc.task_id && dc.date) {
+            invoke('delete_daily_completion', { taskId: dc.task_id, date: dc.date });
+          }
           if (dc.date === getTodayStr()) {
             dailyCompletedIds.value = dailyCompletedIds.value.filter((tid) => tid !== dc.task_id);
           }

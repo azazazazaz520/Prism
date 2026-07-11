@@ -123,29 +123,29 @@
    ═══════════════════════════════════════════ */
 
 [data-theme='dark'] {
-  /* ── 背景 ──────────────────────────── */
-  --bg-primary: #14171e;
-  --bg-secondary: #0f1118;
-  --bg-tertiary: rgba(20, 23, 30, 0.85);
-  --bg-hover: rgba(28, 31, 40, 0.9);
-  --bg-active: rgba(32, 36, 46, 0.95);
-  --bg-panel: rgba(16, 19, 26, 0.82);
-  --bg-panel-hover: rgba(28, 31, 40, 0.9);
-  --bg-elevated: #1a1e2a;
-  --bg-subtle: rgba(20, 23, 30, 0.5);
+  /* ── 背景 — 自底向上提亮每层 ───────── */
+  --bg-primary: #1a1e27;
+  --bg-secondary: #151921;
+  --bg-tertiary: #1e2330;
+  --bg-hover: rgba(40, 46, 58, 0.8);
+  --bg-active: rgba(50, 56, 70, 0.9);
+  --bg-panel: #1e2433;
+  --bg-panel-hover: #252c3d;
+  --bg-elevated: #262d40;
+  --bg-subtle: rgba(30, 35, 46, 0.6);
 
-  /* ── 文字 ──────────────────────────── */
-  --text-primary: #e8e6e1;
-  --text-secondary: #8a8d94;
-  --text-muted: #4a4d55;
-  --text-disabled: #3a3d44;
-  --text-tertiary: #6a6f78;
+  /* ── 文字 — 提高对比度 ─────────────── */
+  --text-primary: #edece7;
+  --text-secondary: #a8abb5;
+  --text-muted: #6b6f7a;
+  --text-disabled: #4a4e58;
+  --text-tertiary: #7e838e;
 
-  /* ── 边框 ──────────────────────────── */
-  --border-light: rgba(245, 197, 24, 0.08);
-  --border-default: rgba(245, 197, 24, 0.18);
-  --border-subtle: rgba(245, 197, 24, 0.08);
-  --border-line: rgba(245, 197, 24, 0.15);
+  /* ── 边框 — 增强可见度 ─────────────── */
+  --border-light: rgba(200, 200, 210, 0.08);
+  --border-default: rgba(200, 200, 210, 0.18);
+  --border-subtle: rgba(200, 200, 210, 0.12);
+  --border-line: rgba(200, 200, 210, 0.16);
   --border-active: #f5c518;
 
   /* ── 强调色（琥珀） ────────────────── */
@@ -170,14 +170,14 @@
   --status-info: #5b9bf5;
 
   /* ── 灰度阶梯 ──────────────────────── */
-  --gray-100: #0d0f14;
-  --gray-200: #181c26;
-  --gray-300: #2a3040;
-  --gray-400: #4a4f5a;
-  --gray-500: #6a6f78;
-  --gray-600: #8a8f96;
-  --gray-700: #a8abb2;
-  --gray-800: #c8cacf;
+  --gray-100: #151921;
+  --gray-200: #1e2430;
+  --gray-300: #2e3545;
+  --gray-400: #4a505f;
+  --gray-500: #6b7180;
+  --gray-600: #8a909c;
+  --gray-700: #a8acb5;
+  --gray-800: #c5c8ce;
   --gray-900: #e8e6e1;
 
   /* ── 切角（clip-path 用） ──────────── */
@@ -201,29 +201,29 @@
 /* 跟随系统暗色模式 — data-theme="auto" */
 @media (prefers-color-scheme: dark) {
   [data-theme='auto'] {
-    /* ── 背景 ──────────────────────────── */
-    --bg-primary: #14171e;
-    --bg-secondary: #0f1118;
-    --bg-tertiary: rgba(20, 23, 30, 0.85);
-    --bg-hover: rgba(28, 31, 40, 0.9);
-    --bg-active: rgba(32, 36, 46, 0.95);
-    --bg-panel: rgba(16, 19, 26, 0.82);
-    --bg-panel-hover: rgba(28, 31, 40, 0.9);
-    --bg-elevated: #1a1e2a;
-    --bg-subtle: rgba(20, 23, 30, 0.5);
+    /* ── 背景 — 自底向上提亮每层 ───────── */
+    --bg-primary: #1a1e27;
+    --bg-secondary: #151921;
+    --bg-tertiary: #1e2330;
+    --bg-hover: rgba(40, 46, 58, 0.8);
+    --bg-active: rgba(50, 56, 70, 0.9);
+    --bg-panel: #1e2433;
+    --bg-panel-hover: #252c3d;
+    --bg-elevated: #262d40;
+    --bg-subtle: rgba(30, 35, 46, 0.6);
 
-    /* ── 文字 ──────────────────────────── */
-    --text-primary: #e8e6e1;
-    --text-secondary: #8a8d94;
-    --text-muted: #4a4d55;
-    --text-disabled: #3a3d44;
-    --text-tertiary: #6a6f78;
+    /* ── 文字 — 提高对比度 ─────────────── */
+    --text-primary: #edece7;
+    --text-secondary: #a8abb5;
+    --text-muted: #6b6f7a;
+    --text-disabled: #4a4e58;
+    --text-tertiary: #7e838e;
 
-    /* ── 边框 ──────────────────────────── */
-    --border-light: rgba(245, 197, 24, 0.08);
-    --border-default: rgba(245, 197, 24, 0.18);
-    --border-subtle: rgba(245, 197, 24, 0.08);
-    --border-line: rgba(245, 197, 24, 0.15);
+    /* ── 边框 — 增强可见度 ─────────────── */
+    --border-light: rgba(200, 200, 210, 0.08);
+    --border-default: rgba(200, 200, 210, 0.18);
+    --border-subtle: rgba(200, 200, 210, 0.12);
+    --border-line: rgba(200, 200, 210, 0.16);
     --border-active: #f5c518;
 
     /* ── 强调色（琥珀） ────────────────── */
@@ -248,14 +248,14 @@
     --status-info: #5b9bf5;
 
     /* ── 灰度阶梯 ──────────────────────── */
-    --gray-100: #0f1118;
-    --gray-200: #181c26;
-    --gray-300: #2a3040;
-    --gray-400: #4a4f5a;
-    --gray-500: #6a6f78;
-    --gray-600: #8a8f96;
-    --gray-700: #a8abb2;
-    --gray-800: #c8cacf;
+    --gray-100: #151921;
+    --gray-200: #1e2430;
+    --gray-300: #2e3545;
+    --gray-400: #4a505f;
+    --gray-500: #6b7180;
+    --gray-600: #8a909c;
+    --gray-700: #a8acb5;
+    --gray-800: #c5c8ce;
     --gray-900: #e8e6e1;
 
     /* ── 切角（clip-path 用） ──────────── */

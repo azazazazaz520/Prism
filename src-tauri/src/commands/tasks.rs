@@ -41,12 +41,13 @@ pub fn add_task(state: tauri::State<AppState>, args: AddTaskInput) -> Result<sto
     state.write_data(|d| task_service::add(d, args))
 }
 
-/// 切换完成状态，自动记录完成/取消时间
+/// 切换完成状态，返回后端时间戳规范化的任务快照供前端 LWW 使用
 #[tauri::command]
-pub fn toggle_task(state: tauri::State<AppState>, id: String) -> Result<(), String> {
+pub fn toggle_task(state: tauri::State<AppState>, id: String) -> Result<store::Task, String> {
     state.write_data(|d| {
-        task_service::toggle(d, &id);
+        task_service::toggle(d, &id)
     })
+    .and_then(|opt| opt.ok_or_else(|| format!("task not found: {id}")))
 }
 
 /// 按日期记录每日完成状态，支持跨天追踪

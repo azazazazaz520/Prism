@@ -91,8 +91,8 @@ pub fn add(data: &mut store::DataStore, input: AddTaskInput) -> store::Task {
     task
 }
 
-/// 切换任务完成状态（自动记录完成/取消时间）
-pub fn toggle(data: &mut store::DataStore, id: &str) -> Option<()> {
+/// 切换任务完成状态（自动记录完成/取消时间），返回更新后的任务快照
+pub fn toggle(data: &mut store::DataStore, id: &str) -> Option<store::Task> {
     let now = chrono::Utc::now().to_rfc3339();
     let task = data.tasks.iter_mut().find(|t| t.id == id)?;
     task.completed = !task.completed;
@@ -102,7 +102,7 @@ pub fn toggle(data: &mut store::DataStore, id: &str) -> Option<()> {
         None
     };
     task.updated_at = now;
-    Some(())
+    Some(task.clone())
 }
 
 /// 切换每日任务的完成状态（按日期记录，支持跨天追踪）

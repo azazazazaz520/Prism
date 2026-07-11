@@ -87,15 +87,18 @@ export function useTaskStore() {
 
   // ── 通用 CRUD 错误包裹（ponytail: 一个闭包替代 8 个重复函数） ──
 
-  function wrap<T extends (...args: any[]) => Promise<any>>(fn: T, label: string): T {
-    return (async (...args: any[]) => {
+  function wrap<A extends any[], R>(
+    fn: (...args: A) => Promise<R>,
+    label: string,
+  ): (...args: A) => Promise<R | undefined> {
+    return async (...args: A) => {
       try {
         return await fn(...args);
       } catch (e) {
         console.error(`[${label}] failed:`, e);
         await loadAll();
       }
-    }) as T;
+    };
   }
 
   /**
@@ -334,19 +337,9 @@ export function useTaskStore() {
   );
 
   const toggleTask = wrap(async (id: string) => {
-    await invoke('toggle_task', { id });
-    tasks.value = tasks.value.map((t) =>
-      t.id === id
-        ? {
-            ...t,
-            completed: !t.completed,
-            completed_at: !t.completed ? new Date().toISOString() : null,
-            updated_at: new Date().toISOString(),
-          }
-        : t,
-    );
-    const updated = tasks.value.find((t) => t.id === id);
-    if (updated) onTaskChanged(updated);
+    const canonical = await invoke<Task>('toggle_task', { id });
+    tasks.value = tasks.value.map((t) => (t.id === id ? canonical : t));
+    onTaskChanged(canonical);
   }, 'toggleTask');
 
   const toggleDailyTask = wrap(async (id: string, date: string) => {

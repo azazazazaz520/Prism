@@ -3,7 +3,6 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { AppModule, SettingsSubModule } from './types';
-import Sidebar from './components/Sidebar.vue';
 import TaskInput from './components/TaskInput.vue';
 import TaskList from './components/TaskList.vue';
 import TaskStats from './components/TaskStats.vue';
@@ -22,7 +21,7 @@ import { useAiStatus } from './composables/useAiStatus';
 
 // ── 模块注册表 ──────────────────────────────
 
-const { topModules, bottomModules, actionModules, isEnabled } = useModuleRegistry();
+const { isEnabled } = useModuleRegistry();
 
 // ── 任务看板 Store ──────────────────────────────
 

@@ -241,7 +241,7 @@ pub async fn daily_focus(
     if task_summaries.is_empty() {
         return Ok(FocusSuggestion {
             items: vec![],
-            summary: "当前没有待办任务，享受清闲时光 ☀️".into(),
+            summary: "当前没有待办任务，享受清闲时光".into(),
         });
     }
 

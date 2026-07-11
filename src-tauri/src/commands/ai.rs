@@ -33,7 +33,14 @@ pub async fn ai_daily_focus(
     state: tauri::State<'_, AppState>,
 ) -> Result<ai::FocusSuggestion, String> {
     let (settings, tasks) = with_ai_context(&state, |settings, data| {
-        Ok((settings.clone(), data.tasks.clone()))
+        // 仅发送活跃任务（排除已完成和已删除）
+        let active: Vec<store::Task> = data
+            .tasks
+            .iter()
+            .filter(|t| !t.completed && !t.is_deleted)
+            .cloned()
+            .collect();
+        Ok((settings.clone(), active))
     })?;
     ai::daily_focus(&settings, &tasks).await
 }

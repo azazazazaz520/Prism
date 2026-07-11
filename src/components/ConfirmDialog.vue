@@ -196,6 +196,56 @@ function handleKeydown(e: KeyboardEvent) {
   border-color: #c0392b;
 }
 
+[data-theme='dark'] .dialog-container,
+[data-theme='auto'] .dialog-container {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-line);
+  clip-path: polygon(
+    12px 0%,
+    100% 0%,
+    100% calc(100% - 12px),
+    calc(100% - 12px) 100%,
+    0% 100%,
+    0% 12px
+  );
+  border-radius: 0;
+}
+
+[data-theme='dark'] .dialog-btn,
+[data-theme='auto'] .dialog-btn {
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+  border-radius: 0;
+  background: var(--bg-secondary);
+  border-color: var(--border-line);
+}
+
+[data-theme='dark'] .dialog-btn-confirm,
+[data-theme='auto'] .dialog-btn-confirm {
+  background: var(--accent);
+  color: #0f1118;
+  border-color: var(--accent);
+}
+
+[data-theme='dark'] .dialog-btn-confirm:hover:not(:disabled),
+[data-theme='auto'] .dialog-btn-confirm:hover:not(:disabled) {
+  background: var(--accent-hover);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+[data-theme='dark'] .dialog-btn-danger,
+[data-theme='auto'] .dialog-btn-danger {
+  background: transparent;
+  border-color: var(--status-danger);
+  color: var(--status-danger);
+}
+
 /* 过渡动画 */
 .dialog-fade-enter-active,
 .dialog-fade-leave-active {

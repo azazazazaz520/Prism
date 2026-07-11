@@ -518,4 +518,94 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
 .toggle-btn.on .toggle-knob {
   transform: translateX(20px);
 }
+
+/* ── 暗色适配 ──────────────────────────── */
+[data-theme='dark'] .settings-group,
+[data-theme='auto'] .settings-group {
+  background: var(--bg-tertiary);
+  border-color: var(--border-subtle);
+  box-shadow: none;
+  border-radius: 0;
+  clip-path: polygon(
+    12px 0%,
+    100% 0%,
+    100% calc(100% - 12px),
+    calc(100% - 12px) 100%,
+    0% 100%,
+    0% 12px
+  );
+}
+
+[data-theme='dark'] .group-title,
+[data-theme='auto'] .group-title {
+  font-family: var(--font-heading);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent-dim);
+}
+
+[data-theme='dark'] .nav-item,
+[data-theme='auto'] .nav-item {
+  font-family: var(--font-heading);
+  letter-spacing: 1px;
+  border-radius: 0;
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+}
+
+[data-theme='dark'] .nav-item.active,
+[data-theme='auto'] .nav-item.active {
+  background: var(--accent-glow);
+}
+
+[data-theme='dark'] .setting-row,
+[data-theme='auto'] .setting-row {
+  border-bottom-color: var(--border-subtle);
+}
+
+[data-theme='dark'] .select-trigger,
+[data-theme='auto'] .select-trigger {
+  background: var(--bg-secondary);
+  border-color: var(--border-line);
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+  border-radius: 0;
+}
+
+[data-theme='dark'] .select-dropdown,
+[data-theme='auto'] .select-dropdown {
+  background: var(--bg-elevated);
+  border-color: var(--border-line);
+  border-radius: 0;
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+}
+
+[data-theme='dark'] .toggle-btn,
+[data-theme='auto'] .toggle-btn {
+  background: var(--gray-300);
+}
+
+[data-theme='dark'] .toggle-btn.on,
+[data-theme='auto'] .toggle-btn.on {
+  background: var(--accent);
+}
 </style>

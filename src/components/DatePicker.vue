@@ -150,6 +150,46 @@ function isToday(day: number): boolean {
   background: var(--bg-tertiary);
 }
 
+[data-theme='dark'] .datepicker,
+[data-theme='auto'] .datepicker {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-line);
+  clip-path: polygon(
+    12px 0%,
+    100% 0%,
+    100% calc(100% - 12px),
+    calc(100% - 12px) 100%,
+    0% 100%,
+    0% 12px
+  );
+  border-radius: 0;
+}
+
+[data-theme='dark'] .dp-day,
+[data-theme='auto'] .dp-day {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+[data-theme='dark'] .dp-day.today,
+[data-theme='auto'] .dp-day.today {
+  background: var(--accent);
+  color: #0f1118;
+}
+
+[data-theme='dark'] .dp-clear,
+[data-theme='auto'] .dp-clear {
+  border-color: var(--border-line);
+  color: var(--text-secondary);
+}
+
+[data-theme='dark'] .dp-clear:hover,
+[data-theme='auto'] .dp-clear:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-glow-s);
+}
+
 .dp-weekdays {
   display: grid;
   grid-template-columns: repeat(7, 1fr);

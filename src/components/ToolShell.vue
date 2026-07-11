@@ -111,4 +111,40 @@ const emit = defineEmits<{ back: [] }>();
   flex-shrink: 0;
   background: var(--bg-secondary);
 }
+
+[data-theme='dark'] .tool-shell,
+[data-theme='auto'] .tool-shell {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(245, 197, 24, 0.03) 0%,
+      transparent 35%,
+      transparent 75%,
+      rgba(0, 0, 0, 0.25) 100%
+    ),
+    var(--bg-void, #08090c);
+}
+
+[data-theme='dark'] .tool-header,
+[data-theme='auto'] .tool-header {
+  background: var(--bg-deep);
+  border-bottom-color: var(--border-subtle);
+}
+
+[data-theme='dark'] .tool-title,
+[data-theme='auto'] .tool-title {
+  font-family: var(--font-heading);
+  letter-spacing: 1px;
+}
+
+[data-theme='dark'] .tool-back:hover,
+[data-theme='auto'] .tool-back:hover {
+  background: var(--bg-panel-hover);
+}
+
+[data-theme='dark'] .tool-footer,
+[data-theme='auto'] .tool-footer {
+  background: var(--bg-deep);
+  border-top-color: var(--border-subtle);
+}
 </style>

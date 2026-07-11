@@ -290,4 +290,21 @@ function horizontalRule() {
   font-family: 'Cascadia Code', 'Fira Code', monospace;
   font-size: 10px;
 }
+
+[data-theme='dark'] .md-toolbar-btn,
+[data-theme='auto'] .md-toolbar-btn {
+  color: var(--text-tertiary);
+}
+
+[data-theme='dark'] .md-toolbar-btn:hover,
+[data-theme='auto'] .md-toolbar-btn:hover {
+  background: var(--bg-panel-hover);
+  color: var(--text-primary);
+  border-color: var(--border-line);
+}
+
+[data-theme='dark'] .md-toolbar-divider,
+[data-theme='auto'] .md-toolbar-divider {
+  background: var(--border-subtle);
+}
 </style>

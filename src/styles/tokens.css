@@ -23,6 +23,8 @@
   --text-base: 14px;
   --text-sm: 12px;
   --text-xs: 11px;
+  --text-lg: 18px;
+  --text-md: 16px;
 
   /* ── 背景 ──────────────────────────── */
   --bg-primary: #ffffff;
@@ -30,17 +32,24 @@
   --bg-tertiary: #f1f5f4;
   --bg-hover: #f3f7f6;
   --bg-active: #e2e8e6;
+  --bg-panel: #ffffff;
+  --bg-panel-hover: #f3f7f6;
+  --bg-elevated: #ffffff;
+  --bg-subtle: #f8fafa;
 
   /* ── 文字 ──────────────────────────── */
   --text-primary: #1a2e2b;
   --text-secondary: #4a5e5a;
   --text-muted: #8a9e99;
   --text-disabled: #b0c0bb;
+  --text-tertiary: #8a9e99;
 
   /* ── 边框 ──────────────────────────── */
   --border-light: #e8f0ee;
   --border-default: #d0ddd9;
   --border-subtle: #e2ece9;
+  --border-line: #d0ddd9;
+  --border-active: #0d9488;
 
   /* ── 强调色 (Teal) ─────────────────── */
   --accent: #0d9488;
@@ -120,17 +129,24 @@
   --bg-tertiary: rgba(20, 23, 30, 0.85);
   --bg-hover: rgba(28, 31, 40, 0.9);
   --bg-active: rgba(32, 36, 46, 0.95);
+  --bg-panel: rgba(16, 19, 26, 0.82);
+  --bg-panel-hover: rgba(28, 31, 40, 0.9);
+  --bg-elevated: #1a1e2a;
+  --bg-subtle: rgba(20, 23, 30, 0.5);
 
   /* ── 文字 ──────────────────────────── */
   --text-primary: #e8e6e1;
   --text-secondary: #8a8d94;
   --text-muted: #4a4d55;
   --text-disabled: #3a3d44;
+  --text-tertiary: #6a6f78;
 
   /* ── 边框 ──────────────────────────── */
   --border-light: rgba(245, 197, 24, 0.08);
   --border-default: rgba(245, 197, 24, 0.18);
   --border-subtle: rgba(245, 197, 24, 0.08);
+  --border-line: rgba(245, 197, 24, 0.15);
+  --border-active: #f5c518;
 
   /* ── 强调色（琥珀） ────────────────── */
   --accent: #f5c518;
@@ -191,17 +207,24 @@
     --bg-tertiary: rgba(20, 23, 30, 0.85);
     --bg-hover: rgba(28, 31, 40, 0.9);
     --bg-active: rgba(32, 36, 46, 0.95);
+    --bg-panel: rgba(16, 19, 26, 0.82);
+    --bg-panel-hover: rgba(28, 31, 40, 0.9);
+    --bg-elevated: #1a1e2a;
+    --bg-subtle: rgba(20, 23, 30, 0.5);
 
     /* ── 文字 ──────────────────────────── */
     --text-primary: #e8e6e1;
     --text-secondary: #8a8d94;
     --text-muted: #4a4d55;
     --text-disabled: #3a3d44;
+    --text-tertiary: #6a6f78;
 
     /* ── 边框 ──────────────────────────── */
     --border-light: rgba(245, 197, 24, 0.08);
     --border-default: rgba(245, 197, 24, 0.18);
     --border-subtle: rgba(245, 197, 24, 0.08);
+    --border-line: rgba(245, 197, 24, 0.15);
+    --border-active: #f5c518;
 
     /* ── 强调色（琥珀） ────────────────── */
     --accent: #f5c518;

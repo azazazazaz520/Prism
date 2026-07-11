@@ -31,6 +31,7 @@ const showTagInput = ref(false);
 const newTag = ref('');
 const tagInputRef = ref<HTMLInputElement | null>(null);
 const inputRef = ref<HTMLInputElement | null>(null);
+const dateBtnRef = ref<HTMLElement | null>(null);
 
 // ── 展开/收起 ──────────────────────────────
 const expanded = ref(false);
@@ -281,6 +282,7 @@ function openImport() {
         <div class="action-bar">
           <div class="date-btn-wrapper">
             <button
+              ref="dateBtnRef"
               :class="['date-btn', { active: dueDate }]"
               title="设置截止日期"
               @click="showPicker = !showPicker"
@@ -302,7 +304,7 @@ function openImport() {
               </svg>
               <span class="date-label">{{ dueDate ? formatDueDate(dueDate) : '日期' }}</span>
             </button>
-            <DatePicker :visible="showPicker" @select="onDateSelect" />
+            <DatePicker :visible="showPicker" :anchor-el="dateBtnRef" @select="onDateSelect" />
           </div>
           <button
             v-if="props.aiEnabled"

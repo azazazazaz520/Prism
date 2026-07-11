@@ -38,6 +38,7 @@ const {
   loadAll,
   refreshTasks,
   initSync,
+  pullAndMerge,
   addTask,
   toggleTask,
   toggleDailyTask,
@@ -88,10 +89,18 @@ onMounted(async () => {
     showVendorDialog.value = true;
   };
   window.addEventListener('prism:import-no-ai', handleImportNoAi);
+  // ── 定时轮询：Realtime 兜底 ──────────────────────
+  // 每 30 秒静默拉取远端变更，确保移动端操作能自动同步到桌面端
+  const pollInterval = setInterval(() => {
+    pullAndMerge().catch(() => {
+      /* 离线或网络异常，静默忽略 */
+    });
+  }, 30_000);
   onUnmounted(() => {
     unlistenFocus();
     window.removeEventListener('prism:force-sync', handleForceSync);
     window.removeEventListener('prism:import-no-ai', handleImportNoAi);
+    clearInterval(pollInterval);
   });
 });
 

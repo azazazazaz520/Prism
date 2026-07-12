@@ -357,18 +357,21 @@ function isSelected(day: number): boolean {
   display: none;
 }
 
-.mc-day.selected {
+.mc-day.selected,
+.mc-day.selected:hover {
   background: var(--accent);
   border-color: var(--accent);
   color: #0f1118;
   font-weight: 600;
 }
 
-.mc-day.selected .mc-day-dot {
+.mc-day.selected .mc-day-dot,
+.mc-day.selected:hover .mc-day-dot {
   background: #0f1118;
 }
 
-.mc-day.selected.today .mc-day-num::after {
+.mc-day.selected.today .mc-day-num::after,
+.mc-day.selected.today:hover .mc-day-num::after {
   background: #0f1118;
 }
 

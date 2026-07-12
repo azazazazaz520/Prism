@@ -34,6 +34,7 @@ const themeOptions = [
   { value: 'auto', label: '跟随系统' },
   { value: 'light', label: '浅色' },
   { value: 'dark', label: '深色' },
+  { value: 'hud', label: 'HUD' },
 ] as const;
 
 function selectTheme(value: ThemeMode) {

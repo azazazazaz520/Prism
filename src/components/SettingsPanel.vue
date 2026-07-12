@@ -109,7 +109,6 @@ async function saveReminder() {
 const subModules: { key: SettingsSubModule; label: string }[] = [
   { key: 'preferences', label: '偏好设置' },
   { key: 'vendors', label: '供应商' },
-  { key: 'models', label: '默认模型' },
   { key: 'prompts', label: 'Prompt' },
   { key: 'sync', label: '跨设备同步' },
 ];
@@ -259,10 +258,6 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
         </div>
 
         <!-- TODO: 默认模型选择器——当前仅展示占位文本 -->
-        <div v-else-if="activeSub === 'models'" class="sub-page sub-placeholder">
-          <p>默认模型设置将在后续版本中完善。</p>
-        </div>
-
         <!-- 同步 -->
         <div v-else-if="activeSub === 'sync'" class="sub-page">
           <SyncSetup />

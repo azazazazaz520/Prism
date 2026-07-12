@@ -10,11 +10,10 @@ import SyncStatus from './components/SyncStatus.vue';
 import MiniCalendar from './components/MiniCalendar.vue';
 import TagFilterBar from './components/TagFilterBar.vue';
 import SettingsPanel from './components/SettingsPanel.vue';
-import AiFocusBar from './components/AiFocusBar.vue';
+import AiCommandPanel from './components/AiCommandPanel.vue';
 import AiAssistant from './components/AiAssistant.vue';
 import NoteEditor from './components/NoteEditor.vue';
 import Toolbox from './components/Toolbox.vue';
-import ConfirmDialog from './components/ConfirmDialog.vue';
 import { useModuleRegistry } from './composables/useModuleRegistry';
 import { useTaskStore } from './composables/useTaskStore';
 import { useAiStatus } from './composables/useAiStatus';
@@ -72,14 +71,10 @@ const gridColumns = computed(() =>
 let _unlistenFocus: (() => void) | null = null;
 let _pollInterval: ReturnType<typeof setInterval> | null = null;
 const _handleForceSync = () => refreshTasks();
-const _handleImportNoAi = () => {
-  showVendorDialog.value = true;
-};
 
 onUnmounted(() => {
   _unlistenFocus?.();
   window.removeEventListener('prism:force-sync', _handleForceSync);
-  window.removeEventListener('prism:import-no-ai', _handleImportNoAi);
   if (_pollInterval) clearInterval(_pollInterval);
 });
 
@@ -96,7 +91,6 @@ onMounted(async () => {
     loadAiSettings();
   });
   window.addEventListener('prism:force-sync', _handleForceSync);
-  window.addEventListener('prism:import-no-ai', _handleImportNoAi);
   // 每 30 秒静默拉取远端变更，作为 Realtime WebSocket 的兜底
   _pollInterval = setInterval(() => {
     pullAndMerge().catch(() => {});
@@ -117,39 +111,7 @@ function handleSwitchModule(module: AppModule) {
   activeModule.value = module;
 }
 
-/** 未配置 AI 时点击导入按钮 → 弹窗提示添加供应商 */
-const showVendorDialog = ref(false);
 const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
-
-function showVendorHint() {
-  showVendorDialog.value = true;
-}
-
-function goToVendorSettings() {
-  showVendorDialog.value = false;
-  settingsInitialSub.value = 'vendors';
-  activeModule.value = 'settings';
-}
-
-// ── 右侧 AI 快捷面板 ──────────────────────
-const aiQuickInput = ref('');
-const aiQuickLoading = ref(false);
-const aiQuickReply = ref('');
-const showCalTags = ref(true);
-
-async function sendQuickAi() {
-  const msg = aiQuickInput.value.trim();
-  if (!msg || aiQuickLoading.value) return;
-  aiQuickLoading.value = true;
-  aiQuickReply.value = '';
-  try {
-    aiQuickReply.value = await invoke<string>('ai_chat', { message: msg });
-  } catch (e) {
-    aiQuickReply.value = 'AI 请求失败';
-  } finally {
-    aiQuickLoading.value = false;
-  }
-}
 </script>
 
 <template>
@@ -294,37 +256,65 @@ async function sendQuickAi() {
             <span class="loading-text">加载任务数据…</span>
           </div>
           <template v-else>
-            <div class="main-header">
-              <div>
-                <h1 class="main-title">任务看板</h1>
-                <div class="main-subtitle">
-                  {{ pendingCount }} 待完成 · {{ overdueCount }} 已过期
+            <!-- 顶部固定区：标题 + TaskInput -->
+            <div class="tasks-top">
+              <div class="main-header">
+                <div>
+                  <h1 class="main-title">任务看板</h1>
+                  <div class="main-subtitle">
+                    {{ pendingCount }} 待完成 · {{ overdueCount }} 已过期
+                  </div>
+                </div>
+              </div>
+              <div class="main-input">
+                <TaskInput :ai-enabled="aiEnabled" @add="addTask" />
+              </div>
+            </div>
+
+            <!-- 中部可滚区：AI 面板 -->
+            <div class="tasks-scroll">
+              <div class="task-detail">
+                <div class="detail-section">
+                  <div class="detail-section-header">
+                    <span class="detail-section-label">AI Command</span>
+                    <span class="detail-section-line"></span>
+                  </div>
+                  <AiCommandPanel
+                    v-if="aiEnabled"
+                    @add-task="
+                      (parsed) =>
+                        addTask(
+                          parsed.title,
+                          parsed.due_date,
+                          parsed.tags,
+                          parsed.important,
+                          parsed.pinned,
+                          parsed.is_daily,
+                        )
+                    "
+                  />
+                  <div v-else class="ai-disabled-hint">
+                    AI 未配置 —
+                    <button
+                      class="link-btn"
+                      @click="
+                        activeModule = 'settings';
+                        settingsInitialSub = 'vendors';
+                      "
+                    >
+                      去设置
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-            <div class="main-input">
-              <TaskInput :ai-enabled="aiEnabled" @add="addTask" />
-            </div>
-            <div class="task-detail">
-              <div class="detail-section">
-                <div class="detail-section-header">
-                  <span class="detail-section-label">Briefing</span>
-                  <span class="detail-section-line"></span>
-                </div>
-                <AiFocusBar v-if="aiEnabled" :tasks="tasks" />
-              </div>
-              <div class="detail-section">
-                <div class="detail-section-header">
-                  <span class="detail-section-label">统计</span>
-                  <span class="detail-section-line"></span>
-                </div>
+
+            <!-- 底部固定区：统计 + Sync -->
+            <div class="tasks-bottom">
+              <div class="bottom-stats-row">
                 <TaskStats :tasks="tasks" @clear-completed="clearCompleted" />
               </div>
-              <div class="detail-section">
-                <div class="detail-section-header">
-                  <span class="detail-section-label">Sync</span>
-                  <span class="detail-section-line"></span>
-                </div>
+              <div class="bottom-sync-row">
                 <SyncStatus />
               </div>
             </div>
@@ -364,65 +354,22 @@ async function sendQuickAi() {
     <!-- 右侧面板 (仅任务模块) -->
     <aside v-if="activeModule === 'tasks'" class="right-panel">
       <div class="right-panel-header">
-        <span class="right-panel-label"><span class="rp-dot"></span>AI</span>
+        <span class="right-panel-label"><span class="rp-dot"></span>Cal & Tags</span>
       </div>
       <div class="right-panel-content">
-        <div class="ai-quick-panel">
-          <textarea
-            v-model="aiQuickInput"
-            class="ai-quick-input"
-            placeholder="快速提问..."
-            rows="2"
-            @keydown.ctrl.enter="sendQuickAi"
-          ></textarea>
-          <button
-            class="ai-quick-send"
-            :disabled="aiQuickLoading || !aiQuickInput.trim()"
-            @click="sendQuickAi"
-          >
-            {{ aiQuickLoading ? '...' : '发送' }}
-          </button>
-          <div v-if="aiQuickReply" class="ai-quick-reply">{{ aiQuickReply }}</div>
+        <MiniCalendar :tasks="tasks" @select-date="selectDate" />
+        <div class="detail-section-header" style="margin-top: var(--space-md)">
+          <span class="detail-section-label">Filter Tags</span>
+          <span class="detail-section-line"></span>
         </div>
-        <button class="cal-tags-toggle" @click="showCalTags = !showCalTags">
-          <svg
-            width="10"
-            height="10"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-          >
-            <polyline :points="showCalTags ? '6 15 12 9 18 15' : '6 9 12 15 18 9'" />
-          </svg>
-          日历 & 标签
-        </button>
-        <div v-if="showCalTags" class="cal-tags-body">
-          <MiniCalendar :tasks="tasks" @select-date="selectDate" />
-          <div class="detail-section-header" style="margin-top: var(--space-md)">
-            <span class="detail-section-label">Filter Tags</span>
-            <span class="detail-section-line"></span>
-          </div>
-          <TagFilterBar
-            :tags="allTags"
-            :selected="selectedTags"
-            @toggle-tag="toggleTag"
-            @add-tag="addTag"
-          />
-        </div>
+        <TagFilterBar
+          :tags="allTags"
+          :selected="selectedTags"
+          @toggle-tag="toggleTag"
+          @add-tag="addTag"
+        />
       </div>
     </aside>
-
-    <ConfirmDialog
-      :visible="showVendorDialog"
-      title="未配置 AI 供应商"
-      message="导入功能需要 AI 来解析聊天记录。请先在设置中添加并启用一个 AI 供应商。"
-      confirm-text="去设置"
-      cancel-text="取消"
-      @confirm="goToVendorSettings"
-      @cancel="showVendorDialog = false"
-    />
   </div>
 </template>
 
@@ -643,7 +590,13 @@ async function sendQuickAi() {
     var(--bg-primary);
 }
 
-.module-tasks,
+.module-tasks {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .module-ai,
 .module-notes,
 .module-devtools,
@@ -652,6 +605,46 @@ async function sendQuickAi() {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* ── 三段式任务布局 ────────────────────── */
+.tasks-top {
+  flex-shrink: 0;
+}
+
+.tasks-scroll {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.tasks-bottom {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-subtle);
+  padding: var(--space-sm) var(--space-xl);
+  background: var(--bg-primary);
+}
+
+.bottom-sync-row {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 2px;
+}
+
+.ai-disabled-hint {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  padding: var(--space-md) 0;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: inherit;
+  font-family: inherit;
+  padding: 0;
+  text-decoration: underline;
 }
 
 /* ── HUD 角标 ─────────────────────────── */
@@ -819,81 +812,6 @@ async function sendQuickAi() {
   background: var(--border-line);
 }
 
-/* ── AI 快捷面板 ──────────────────────── */
-.ai-quick-panel {
-  margin-bottom: var(--space-md);
-}
-
-.ai-quick-input {
-  width: 100%;
-  padding: var(--space-sm);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-  font-family: inherit;
-  outline: none;
-  resize: vertical;
-}
-
-.ai-quick-input:focus {
-  border-color: var(--accent);
-}
-
-.ai-quick-send {
-  width: 100%;
-  margin-top: var(--space-xs);
-  padding: var(--space-sm);
-  background: var(--accent);
-  color: #0f1118;
-  border: none;
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-}
-
-.ai-quick-send:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.ai-quick-reply {
-  margin-top: var(--space-sm);
-  padding: var(--space-sm);
-  background: var(--accent-bg);
-  border: 1px solid var(--accent-muted);
-  border-radius: var(--radius-md);
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-  line-height: 1.5;
-  max-height: 160px;
-  overflow-y: auto;
-}
-
-/* ── 日历标签折叠 ──────────────────────── */
-.cal-tags-toggle {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  width: 100%;
-  padding: var(--space-sm) 0;
-  background: none;
-  border: none;
-  border-top: 1px solid var(--border-subtle);
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-  cursor: pointer;
-  font-family: inherit;
-  margin-bottom: var(--space-xs);
-}
-
-.cal-tags-toggle:hover {
-  color: var(--accent);
-}
-
 /* ── Detail sections ──────────────────── */
 .detail-section {
   margin-bottom: var(--space-xl);
@@ -967,56 +885,5 @@ async function sendQuickAi() {
 .module-fade-leave-to {
   opacity: 0;
   transform: translateY(-4px);
-}
-
-/* ── HUD AI 面板 ──────────────────────── */
-[data-theme='hud'] .ai-quick-input {
-  background: var(--bg-secondary);
-  border-color: var(--border-line);
-  clip-path: polygon(
-    6px 0%,
-    100% 0%,
-    100% calc(100% - 6px),
-    calc(100% - 6px) 100%,
-    0% 100%,
-    0% 6px
-  );
-  border-radius: 0;
-}
-
-[data-theme='hud'] .ai-quick-send {
-  clip-path: polygon(
-    8px 0%,
-    100% 0%,
-    100% calc(100% - 8px),
-    calc(100% - 8px) 100%,
-    0% 100%,
-    0% 8px
-  );
-  border-radius: 0;
-  box-shadow: 0 0 8px var(--accent-glow);
-  font-family: var(--font-heading);
-  letter-spacing: 1px;
-}
-
-[data-theme='hud'] .ai-quick-reply {
-  background: var(--bg-elevated);
-  border-color: var(--border-line);
-  clip-path: polygon(
-    6px 0%,
-    100% 0%,
-    100% calc(100% - 6px),
-    calc(100% - 6px) 100%,
-    0% 100%,
-    0% 6px
-  );
-  border-radius: 0;
-}
-
-[data-theme='hud'] .cal-tags-toggle {
-  font-family: var(--font-heading);
-  font-size: 10px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
 }
 </style>

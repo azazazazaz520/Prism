@@ -71,6 +71,15 @@ pub struct OverdueSuggestion {
     pub reason: String,
 }
 
+/// 统一 AI 执行结果，前端根据 mode 决定如何渲染
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AiExecuteResult {
+    pub mode: String,                   // "auto" | "add" | "summary" | "focus" | "chat"
+    pub text: String,                   // markdown 格式的回复文本
+    pub tasks: Vec<ParsedTask>,         // /add 模式解析出的任务
+    pub focus: Option<FocusSuggestion>, // /focus 模式的聚焦建议
+}
+
 // ═══════════════════════════════════════════════════════════════
 //  核心：通用 LLM 调用
 // ═══════════════════════════════════════════════════════════════
@@ -340,6 +349,127 @@ pub async fn chat(
     let system_prompt = prompt::load(prompt::CHAT, &[("context", &context)]);
 
     chat_completion(settings, &system_prompt, message).await
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  统一 AI 入口：根据 mode 路由到不同处理策略
+// ═══════════════════════════════════════════════════════════════
+
+pub async fn execute(
+    settings: &AiSettings,
+    mode: &str,
+    input: &str,
+    all_tasks: &[store::Task],
+    existing_tags: &[String],
+    today_completed: &[store::Task],
+    today_str: &str,
+) -> Result<AiExecuteResult, String> {
+    match mode {
+        "add" => {
+            let parsed = parse_input(settings, input, existing_tags).await?;
+            let text = format!("已解析为 1 条任务：**{}**", parsed.title);
+            Ok(AiExecuteResult {
+                mode: "add".into(),
+                text,
+                tasks: vec![parsed],
+                focus: None,
+            })
+        }
+        "summary" => {
+            let completed_list: Vec<String> = today_completed
+                .iter()
+                .map(|t| format!("- {}", t.title))
+                .collect();
+            let pending: Vec<String> = all_tasks
+                .iter()
+                .filter(|t| !t.completed && !t.is_deleted)
+                .map(|t| format!("- {} {}", t.title, if t.important { "[重要]" } else { "" }))
+                .collect();
+
+            let system_prompt = prompt::load(
+                prompt::DAILY_SUMMARY,
+                &[
+                    ("today", today_str),
+                    ("completed_tasks", &completed_list.join("\n")),
+                    ("pending_tasks", &pending.join("\n")),
+                ],
+            );
+
+            let text = if completed_list.is_empty() {
+                "今天还没有完成任务。".to_string()
+            } else {
+                chat_completion(settings, &system_prompt, "请生成今日工作总结").await?
+            };
+
+            Ok(AiExecuteResult {
+                mode: "summary".into(),
+                text,
+                tasks: vec![],
+                focus: None,
+            })
+        }
+        "focus" => {
+            let focus = daily_focus(settings, all_tasks).await?;
+            let items_text: Vec<String> = focus
+                .items
+                .iter()
+                .map(|i| {
+                    let title = all_tasks
+                        .iter()
+                        .find(|t| t.id == i.task_id)
+                        .map(|t| t.title.as_str())
+                        .unwrap_or("未知任务");
+                    format!("- **{}**: {}", title, i.reason)
+                })
+                .collect();
+            let text = format!("{}\n\n{}", focus.summary, items_text.join("\n"));
+            Ok(AiExecuteResult {
+                mode: "focus".into(),
+                text,
+                tasks: vec![],
+                focus: Some(focus),
+            })
+        }
+        _ => {
+            // auto 或其他：构建上下文 → LLM 自动判断意图
+            let task_summaries: Vec<String> = all_tasks
+                .iter()
+                .filter(|t| !t.is_deleted)
+                .map(task_to_summary)
+                .collect();
+
+            let tags_hint = if existing_tags.is_empty() {
+                "无已有标签".to_string()
+            } else {
+                format!("已有标签: {}", existing_tags.join(", "))
+            };
+
+            let context = format!(
+                "当前日期: {}\n已有标签: {}\n任务数据:\n{}",
+                today_str,
+                tags_hint,
+                task_summaries.join("\n")
+            );
+
+            let system_prompt = prompt::load(
+                prompt::EXECUTE_AUTO,
+                &[("context", &context), ("input", input)],
+            );
+
+            let response = chat_completion(settings, &system_prompt, input).await?;
+            let json_str = extract_json(&response)?;
+
+            match serde_json::from_str::<AiExecuteResult>(&json_str) {
+                Ok(result) => Ok(result),
+                Err(_e) => Ok(AiExecuteResult {
+                    mode: "chat".into(),
+                    text: response,
+                    tasks: vec![],
+                    focus: None,
+                }),
+            }
+        }
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════

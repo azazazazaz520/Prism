@@ -1,17 +1,44 @@
 use crate::{ai, store};
 use crate::{with_ai_context, AppState};
 
-/// 自然语言解析输入
+/// 统一 AI 入口：根据 mode 路由处理
+/// mode: "auto" | "add" | "summary" | "focus"
 #[tauri::command]
-pub async fn ai_parse_input(
+pub async fn ai_execute(
     state: tauri::State<'_, AppState>,
-    text: String,
-) -> Result<ai::ParsedTask, String> {
-    let (settings, existing_tags) = with_ai_context(&state, |settings, data| {
-        let existing_tags: Vec<String> = data.tasks.iter().flat_map(|t| t.tags.clone()).collect();
-        Ok((settings.clone(), existing_tags))
-    })?;
-    ai::parse_input(&settings, &text, &existing_tags).await
+    mode: String,
+    input: String,
+) -> Result<ai::AiExecuteResult, String> {
+    let settings = state.with_config(crate::resolve_ai_settings)?;
+    let (all_tasks, existing_tags, today_completed) = state.read_data(|data| {
+        let all = data.tasks.clone();
+        let tags: Vec<String> = data.tasks.iter().flat_map(|t| t.tags.clone()).collect();
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        let completed: Vec<store::Task> = data
+            .tasks
+            .iter()
+            .filter(|t| {
+                t.completed
+                    && !t.is_deleted
+                    && t.completed_at
+                        .as_deref()
+                        .is_some_and(|d| d.starts_with(&today))
+            })
+            .cloned()
+            .collect();
+        (all, tags, completed)
+    });
+    let today_str = chrono::Local::now().format("%Y-%m-%d").to_string();
+    ai::execute(
+        &settings,
+        &mode,
+        &input,
+        &all_tasks,
+        &existing_tags,
+        &today_completed,
+        &today_str,
+    )
+    .await
 }
 
 /// 聊天记录批量任务提取
@@ -25,24 +52,6 @@ pub async fn ai_parse_wechat(
         Ok((settings.clone(), existing_tags))
     })?;
     ai::parse_wechat(&settings, &text, &existing_tags).await
-}
-
-/// 今日聚焦建议
-#[tauri::command]
-pub async fn ai_daily_focus(
-    state: tauri::State<'_, AppState>,
-) -> Result<ai::FocusSuggestion, String> {
-    let (settings, tasks) = with_ai_context(&state, |settings, data| {
-        // 仅发送活跃任务（排除已完成和已删除）
-        let active: Vec<store::Task> = data
-            .tasks
-            .iter()
-            .filter(|t| !t.completed && !t.is_deleted)
-            .cloned()
-            .collect();
-        Ok((settings.clone(), active))
-    })?;
-    ai::daily_focus(&settings, &tasks).await
 }
 
 /// 任务智能拆解

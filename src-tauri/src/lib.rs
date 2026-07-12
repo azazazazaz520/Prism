@@ -217,8 +217,7 @@ pub fn run() {
             commands::notes::get_notes_directory,
             commands::notes::set_notes_directory,
             // AI 命令 (commands::ai)
-            commands::ai::ai_parse_input,
-            commands::ai::ai_daily_focus,
+            commands::ai::ai_execute,
             commands::ai::ai_decompose,
             commands::ai::ai_overdue_suggest,
             commands::ai::ai_chat,

@@ -14,6 +14,8 @@ pub const CHAT: &str = "chat.md";
 pub const JSON_EXPLAIN: &str = "json-explain.md";
 pub const REGEX_GENERATE: &str = "regex-generate.md";
 pub const WECHAT_PARSE: &str = "wechat-parse.md";
+pub const EXECUTE_AUTO: &str = "execute-auto.md";
+pub const DAILY_SUMMARY: &str = "daily-summary.md";
 
 // ═══════════════════════════════════════════════════════════════
 //  编译时内嵌默认 prompt（文件缺失时回退）
@@ -131,6 +133,53 @@ const DEFAULT_WECHAT_PARSE: &str = "\
 [{\"title\":\"提交项目报告\",\"due_date\":\"2026-06-29\",\"tags\":[\"工作\"],\"important\":true,\"pinned\":false,\"is_daily\":false}]
 如果没有发现任何任务，返回空数组 []。";
 
+const DEFAULT_EXECUTE_AUTO: &str = "\
+# 任务管理助手（自动模式）
+
+你是 Prism 任务管理应用的 AI 助手。根据用户输入，判断意图并给出相应回复。
+
+## 可用能力
+
+1. **添加任务** — 用户想创建新待办事项。解析为结构化任务 JSON。
+2. **日报总结** — 用户想看今日工作总结。基于已完成任务生成摘要。
+3. **今日聚焦** — 用户想知道今天该优先做什么。分析待办任务给出建议。
+4. **闲聊问答** — 用户问一般性问题或和管理任务无关的对话。
+
+## 输出格式
+
+请**只**返回一个 JSON 对象，根据意图选择对应字段：
+
+- 添加任务: `{\"mode\":\"add\",\"text\":\"已解析任务\",\"tasks\":[{\"title\":\"...\",\"due_date\":null,\"tags\":[],\"important\":false,\"pinned\":false,\"is_daily\":false}]}`
+- 日报总结: `{\"mode\":\"summary\",\"text\":\"# 今日工作总结\\n\\n...\",\"tasks\":[],\"focus\":null}`
+- 今日聚焦: `{\"mode\":\"focus\",\"text\":\"基于你的任务列表...\",\"tasks\":[],\"focus\":{\"items\":[{\"task_id\":\"...\",\"reason\":\"...\"}],\"summary\":\"...\"}}`
+- 闲聊: `{\"mode\":\"chat\",\"text\":\"回复内容...\",\"tasks\":[],\"focus\":null}`
+
+{{context}}
+
+用户输入：{{input}}";
+
+const DEFAULT_DAILY_SUMMARY: &str = "\
+# 日报总结
+
+你是 Prism 任务管理应用的日报助手。根据用户今日已完成的任务，生成简洁的工作日报。
+
+## 要点
+- 概括今日完成的主要工作（2-3 句）
+- 列出已完成任务清单
+- 如果有未完成的重要任务，提醒明天继续
+- 语气积极但不浮夸
+
+## 格式
+用 Markdown 格式，包含标题和列表。
+
+今天是 {{today}}。
+
+已完成任务：
+{{completed_tasks}}
+
+所有待办任务：
+{{pending_tasks}}";
+
 // ═══════════════════════════════════════════════════════════════
 //  Prompt 注册表 — 单一真相来源
 // ═══════════════════════════════════════════════════════════════
@@ -186,6 +235,16 @@ fn registry() -> Vec<PromptTemplate> {
             name: WECHAT_PARSE,
             default_content: DEFAULT_WECHAT_PARSE,
             vars: &["tags_hint"],
+        },
+        PromptTemplate {
+            name: EXECUTE_AUTO,
+            default_content: DEFAULT_EXECUTE_AUTO,
+            vars: &["context", "input"],
+        },
+        PromptTemplate {
+            name: DAILY_SUMMARY,
+            default_content: DEFAULT_DAILY_SUMMARY,
+            vars: &["today", "completed_tasks", "pending_tasks"],
         },
     ]
 }
@@ -346,6 +405,8 @@ mod tests {
             JSON_EXPLAIN,
             REGEX_GENERATE,
             WECHAT_PARSE,
+            EXECUTE_AUTO,
+            DAILY_SUMMARY,
         ] {
             assert!(
                 all_names.contains(expected),
@@ -358,7 +419,7 @@ mod tests {
     #[test]
     fn test_registry_entry_count_matches_name_constants() {
         // 注册表条目数应等于名称常量数（防止多余条目）
-        let expected_count = 8;
+        let expected_count = 10;
         assert_eq!(
             registry().len(),
             expected_count,

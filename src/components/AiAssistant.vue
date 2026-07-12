@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, nextTick, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import type { ChatMessage, FocusSuggestion, OverdueSuggestion, AiExecuteResult } from '../types';
+import type { ChatMessage } from '../types';
 
 // ── 状态 ──────────────────────────────
 
@@ -16,8 +16,7 @@ interface QuickAction {
   label: string;
   /** SVG path data */
   iconPath: string;
-  command?: string;
-  prompt?: string;
+  prompt: string;
 }
 
 const quickActions: QuickAction[] = [
@@ -25,12 +24,14 @@ const quickActions: QuickAction[] = [
     label: '今天该做什么',
     iconPath:
       'M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z',
-    command: 'ai_execute',
+    prompt:
+      '根据我当前所有未完成的任务，综合考虑截止日期和重要性，告诉我今天应该优先完成哪些任务，并给出排序理由。',
   },
   {
     label: '处理过期任务',
     iconPath: 'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 6v6l4 2',
-    command: 'ai_overdue_suggest',
+    prompt:
+      '检查我的任务列表，找出所有已过期的任务，对每个过期任务给出处理建议（重新安排日期、放弃、或拆解为更小的步骤）。',
   },
   {
     label: '任务统计',
@@ -83,16 +84,7 @@ async function runQuickAction(action: QuickAction) {
   loading.value = true;
 
   try {
-    if (action.command === 'ai_execute') {
-      const result = await invoke<AiExecuteResult>('ai_execute', { mode: 'focus', input: '' });
-      messages.value.push({
-        role: 'assistant',
-        content: result.text || formatFocus(result.focus!),
-      });
-    } else if (action.command === 'ai_overdue_suggest') {
-      const suggestions = await invoke<OverdueSuggestion[]>('ai_overdue_suggest');
-      messages.value.push({ role: 'assistant', content: formatOverdue(suggestions) });
-    } else if (action.prompt) {
+    if (action.prompt) {
       messages.value.push({ role: 'user', content: action.prompt });
       const reply = await invoke<string>('ai_chat', { message: action.prompt });
       messages.value.push({ role: 'assistant', content: reply });
@@ -107,27 +99,6 @@ async function runQuickAction(action: QuickAction) {
 }
 
 // ── 格式化 ──────────────────────────────
-
-function formatFocus(result: FocusSuggestion): string {
-  if (!result.items || result.items.length === 0) {
-    return '当前没有待办任务，享受清闲时光。';
-  }
-  const lines = result.items.map((item, i) => `${i + 1}. **${item.reason}**`);
-  return `${result.summary}\n\n${lines.join('\n')}`;
-}
-
-function formatOverdue(suggestions: OverdueSuggestion[]): string {
-  if (!suggestions || suggestions.length === 0) {
-    return '没有过期任务，一切尽在掌控！';
-  }
-  const labels: Record<string, string> = {
-    reschedule: '重新安排',
-    abandon: '建议放弃',
-    decompose: '建议拆解',
-  };
-  const lines = suggestions.map((s) => `- ${labels[s.action] || s.action}：${s.reason}`);
-  return `发现 ${suggestions.length} 个过期任务：\n\n${lines.join('\n')}`;
-}
 
 /** 是否有对话内容 */
 const hasMessages = computed(() => messages.value.length > 0);
@@ -210,7 +181,6 @@ const hasMessages = computed(() => messages.value.length > 0);
           v-for="action in quickActions"
           :key="action.label"
           class="quick-btn"
-          :disabled="loading"
           @click="runQuickAction(action)"
         >
           <svg

@@ -315,9 +315,9 @@ function isSelected(day: number): boolean {
 
 .mc-day-dot {
   position: absolute;
-  bottom: 3px;
-  width: 3px;
-  height: 3px;
+  bottom: 1px;
+  width: 4px;
+  height: 4px;
   background: var(--accent);
   clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
 }
@@ -344,11 +344,11 @@ function isSelected(day: number): boolean {
 .mc-day.today .mc-day-num::after {
   content: '';
   position: absolute;
-  bottom: -2px;
+  bottom: -9px;
   left: 50%;
   transform: translateX(-50%);
-  width: 3px;
-  height: 3px;
+  width: 4px;
+  height: 4px;
   background: var(--accent);
   clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
 }

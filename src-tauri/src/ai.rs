@@ -58,12 +58,6 @@ pub struct FocusSuggestion {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct SubTask {
-    pub title: String,
-    pub estimated_minutes: Option<u32>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 pub struct OverdueSuggestion {
     pub task_id: String,
     pub action: String, // "reschedule" | "abandon" | "decompose"
@@ -261,33 +255,6 @@ pub async fn daily_focus(
     let json_str = extract_json(&response)?;
 
     serde_json::from_str::<FocusSuggestion>(&json_str)
-        .map_err(|e| format!("AI 返回格式异常: {}。原文: {}", e, response))
-}
-
-// ═══════════════════════════════════════════════════════════════
-//  功能 3：任务智能拆解
-// ═══════════════════════════════════════════════════════════════
-
-pub async fn decompose(
-    settings: &AiSettings,
-    task_title: &str,
-    existing_subtasks: &[String],
-) -> Result<Vec<SubTask>, String> {
-    let subtask_hint = if existing_subtasks.is_empty() {
-        String::new()
-    } else {
-        format!(
-            "\n已有的子任务（不要重复）：\n{}",
-            existing_subtasks.join("\n")
-        )
-    };
-
-    let system_prompt = prompt::load(prompt::DECOMPOSE, &[("subtask_hint", &subtask_hint)]);
-
-    let response = chat_completion(settings, &system_prompt, task_title).await?;
-    let json_str = extract_json(&response)?;
-
-    serde_json::from_str::<Vec<SubTask>>(&json_str)
         .map_err(|e| format!("AI 返回格式异常: {}。原文: {}", e, response))
 }
 

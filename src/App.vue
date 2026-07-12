@@ -45,7 +45,6 @@ const {
   updateTaskMeta,
   deleteTask,
   clearCompleted,
-  decomposeTask,
   selectDate,
   toggleTag,
   addTag,
@@ -239,7 +238,6 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
           @update="updateTask"
           @delete="deleteTask"
           @update-meta="updateTaskMeta"
-          @decompose="decomposeTask"
         />
       </div>
     </aside>

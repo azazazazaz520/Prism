@@ -54,30 +54,6 @@ pub async fn ai_parse_wechat(
     ai::parse_wechat(&settings, &text, &existing_tags).await
 }
 
-/// 任务智能拆解
-#[tauri::command]
-pub async fn ai_decompose(
-    state: tauri::State<'_, AppState>,
-    task_id: String,
-) -> Result<Vec<ai::SubTask>, String> {
-    let (settings, task_title, existing_subtasks) = with_ai_context(&state, |settings, data| {
-        let task_title = data
-            .tasks
-            .iter()
-            .find(|t| t.id == task_id)
-            .map(|t| t.title.clone())
-            .ok_or("任务不存在".to_string())?;
-        let existing_subtasks: Vec<String> = data
-            .tasks
-            .iter()
-            .filter(|t| t.parent_id.as_deref() == Some(&task_id))
-            .map(|t| t.title.clone())
-            .collect();
-        Ok((settings.clone(), task_title, existing_subtasks))
-    })?;
-    ai::decompose(&settings, &task_title, &existing_subtasks).await
-}
-
 /// 过期任务处理建议
 #[tauri::command]
 pub async fn ai_overdue_suggest(

@@ -1,6 +1,6 @@
 import { ref, computed, watch, type Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import type { Task, DailyCompletion, SubTask } from '../types';
+import type { Task, DailyCompletion } from '../types';
 import { useAuth } from './useAuth';
 import { useSync } from './useSync';
 import { useSyncCode } from './useSyncCode';
@@ -470,25 +470,6 @@ export function useTaskStore() {
     dailyCompletedIds.value = dailyCompletedIds.value.filter((tid) => !clearedIds.includes(tid));
   }, 'clearCompleted');
 
-  const decomposeTask = wrap(async (parentId: string) => {
-    const subtasks = await invoke<SubTask[]>('ai_decompose', { taskId: parentId });
-    for (const sub of subtasks) {
-      const task = await invoke<Task>('add_task', {
-        args: {
-          title: sub.title,
-          dueDate: null,
-          tags: [],
-          important: false,
-          pinned: false,
-          isDaily: false,
-          parentId,
-        },
-      });
-      tasks.value = [...tasks.value, task];
-      onTaskChanged(task);
-    }
-  }, 'decomposeTask');
-
   // ── 筛选操作 ──────────────────────────────
 
   function selectDate(date: string | null) {
@@ -552,7 +533,6 @@ export function useTaskStore() {
     updateTaskMeta,
     deleteTask,
     clearCompleted,
-    decomposeTask,
     // 筛选
     selectDate,
     toggleTag,

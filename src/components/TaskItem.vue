@@ -14,7 +14,6 @@ const emit = defineEmits<{
   update: [id: string, title: string];
   delete: [id: string];
   updateMeta: [id: string, tags: string[], important: boolean, pinned: boolean, isDaily: boolean];
-  decompose: [id: string];
 }>();
 
 const editing = ref(false);
@@ -269,25 +268,6 @@ const dueLabel = computed(() => {
     </div>
 
     <div v-if="!editing" class="task-actions">
-      <svg
-        v-if="props.aiEnabled"
-        class="task-decompose-btn"
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.5"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        title="AI 拆解为子任务"
-        @click.stop="emit('decompose', task.id)"
-      >
-        <rect x="3" y="3" width="7" height="7" rx="1" />
-        <rect x="14" y="3" width="7" height="7" rx="1" />
-        <rect x="3" y="14" width="7" height="7" rx="1" />
-        <rect x="14" y="14" width="7" height="7" rx="1" />
-      </svg>
       <div class="menu-wrapper">
         <button class="task-menu-btn" title="更多操作" @click="openMenu">⋯</button>
         <Teleport to="body">
@@ -711,21 +691,6 @@ const dueLabel = computed(() => {
 .task-menu-btn:hover {
   color: var(--gray-700);
   background: var(--bg-hover);
-}
-
-.task-decompose-btn {
-  color: var(--gray-400);
-  cursor: pointer;
-  flex-shrink: 0;
-  opacity: 0.5;
-  transition:
-    opacity var(--transition-fast),
-    color var(--transition-fast);
-}
-
-.task-decompose-btn:hover {
-  opacity: 1;
-  color: var(--accent);
 }
 
 .task-menu {

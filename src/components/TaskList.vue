@@ -15,7 +15,6 @@ const emit = defineEmits<{
   update: [id: string, title: string];
   delete: [id: string];
   updateMeta: [id: string, tags: string[], important: boolean, pinned: boolean, isDaily: boolean];
-  decompose: [id: string];
 }>();
 
 // 排序规则：置顶优先 → 重要次之 → 未完成在前 → 新建在上
@@ -71,7 +70,6 @@ const normalTasks = computed(() => sortedTasks.value.filter((t) => !t.pinned || 
             (id, tags, important, pinned, isDaily) =>
               emit('updateMeta', id, tags, important, pinned, isDaily)
           "
-          @decompose="(id) => emit('decompose', id)"
         />
       </div>
       <div
@@ -92,7 +90,6 @@ const normalTasks = computed(() => sortedTasks.value.filter((t) => !t.pinned || 
           (id, tags, important, pinned, isDaily) =>
             emit('updateMeta', id, tags, important, pinned, isDaily)
         "
-        @decompose="(id) => emit('decompose', id)"
       />
     </template>
   </div>

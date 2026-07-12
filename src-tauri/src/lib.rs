@@ -218,7 +218,6 @@ pub fn run() {
             commands::notes::set_notes_directory,
             // AI 命令 (commands::ai)
             commands::ai::ai_execute,
-            commands::ai::ai_decompose,
             commands::ai::ai_overdue_suggest,
             commands::ai::ai_chat,
             commands::ai::ai_json_explain,

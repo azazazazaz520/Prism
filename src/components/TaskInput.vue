@@ -214,6 +214,35 @@ function formatDueDate(d: string): string {
             </svg>
             标签
           </button>
+          <div class="quick-actions-right">
+            <div class="date-btn-wrapper">
+              <button
+                ref="dateBtnRef"
+                :class="['qa-btn', 'date-btn', 'date-btn-inline', { active: dueDate }]"
+                title="截止日期"
+                @click="showPicker = !showPicker"
+              >
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                  <line x1="16" y1="2" x2="16" y2="6" />
+                  <line x1="8" y1="2" x2="8" y2="6" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+                <span class="date-label">{{ dueDate ? formatDueDate(dueDate) : '日期' }}</span>
+              </button>
+              <DatePicker :visible="showPicker" :anchor-el="dateBtnRef" @select="onDateSelect" />
+            </div>
+            <button class="task-input-btn" @click="handleSubmit">添加</button>
+          </div>
         </div>
 
         <!-- 标签输入行 -->
@@ -236,37 +265,6 @@ function formatDueDate(d: string): string {
             {{ tag }}
             <button class="tag-chip-x" @click="removeTag(tag)">×</button>
           </span>
-        </div>
-
-        <!-- 底部操作栏：日期 + 添加 -->
-        <div class="action-bar">
-          <div class="date-btn-wrapper">
-            <button
-              ref="dateBtnRef"
-              :class="['date-btn', { active: dueDate }]"
-              title="截止日期"
-              @click="showPicker = !showPicker"
-            >
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                <line x1="16" y1="2" x2="16" y2="6" />
-                <line x1="8" y1="2" x2="8" y2="6" />
-                <line x1="3" y1="10" x2="21" y2="10" />
-              </svg>
-              <span class="date-label">{{ dueDate ? formatDueDate(dueDate) : '日期' }}</span>
-            </button>
-            <DatePicker :visible="showPicker" :anchor-el="dateBtnRef" @select="onDateSelect" />
-          </div>
-          <button class="task-input-btn" @click="handleSubmit">添加</button>
         </div>
       </div>
     </Transition>
@@ -507,13 +505,12 @@ function formatDueDate(d: string): string {
   line-height: 1;
 }
 
-/* ── 底部操作栏 ──────────────────────── */
-.action-bar {
+/* ── 快捷行右侧组 ────────────────────── */
+.quick-actions-right {
   display: flex;
-  justify-content: flex-end;
-  gap: 0;
-  margin-top: var(--space-sm);
   align-items: center;
+  gap: var(--space-xs);
+  margin-left: auto;
 }
 
 .date-btn-wrapper {
@@ -521,72 +518,47 @@ function formatDueDate(d: string): string {
   display: flex;
 }
 
-.date-btn {
+.date-btn-inline {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 10px var(--space-md);
+  gap: 3px;
+  padding: 4px var(--space-sm);
   background: var(--bg-primary);
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-light);
   border-radius: var(--radius-full);
+  font-size: 11px;
   cursor: pointer;
-  line-height: 1;
-  transition: all var(--transition-normal);
+  transition: all var(--transition-fast);
   color: var(--text-secondary);
-  position: relative;
-  overflow: hidden;
 }
 
-[data-theme='hud'] .date-btn,
-[data-theme='hud'] .date-btn {
-  background: var(--bg-secondary);
-  border-color: var(--border-subtle);
-  clip-path: polygon(
-    8px 0%,
-    100% 0%,
-    100% calc(100% - 8px),
-    calc(100% - 8px) 100%,
-    0% 100%,
-    0% 8px
-  );
-  border-radius: 0;
-  color: var(--text-tertiary);
-}
-
-[data-theme='hud'] .date-btn::before,
-[data-theme='hud'] .date-btn::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    135deg,
-    transparent 30%,
-    rgba(245, 197, 24, 0.04) 50%,
-    transparent 70%
-  );
-  opacity: 0;
-  transition: opacity var(--transition-normal);
-}
-
-.date-btn:hover,
-.date-btn.active {
+.date-btn-inline:hover,
+.date-btn-inline.active {
   border-color: var(--accent);
   color: var(--accent);
 }
 
-[data-theme='hud'] .date-btn:hover,
-[data-theme='hud'] .date-btn:hover,
-[data-theme='hud'] .date-btn.active,
-[data-theme='hud'] .date-btn.active {
+[data-theme='hud'] .date-btn-inline {
+  background: transparent;
+  border-color: var(--border-subtle);
+  border-radius: 0;
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+  font-family: var(--font-heading);
+  letter-spacing: 1px;
+}
+
+[data-theme='hud'] .date-btn-inline.active {
   background: var(--accent-glow-s);
   border-color: var(--accent);
   color: var(--accent);
-  box-shadow: 0 0 16px var(--accent-glow);
-}
-
-[data-theme='hud'] .date-btn:hover::before,
-[data-theme='hud'] .date-btn:hover::before {
-  opacity: 1;
+  box-shadow: 0 0 12px var(--accent-glow);
 }
 
 .date-label {
@@ -609,7 +581,6 @@ function formatDueDate(d: string): string {
   transition: all var(--transition-fast);
   white-space: nowrap;
   font-weight: 500;
-  margin-left: auto;
 }
 
 [data-theme='hud'] .task-input-btn,

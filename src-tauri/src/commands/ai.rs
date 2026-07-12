@@ -11,8 +11,18 @@ pub async fn ai_execute(
 ) -> Result<ai::AiExecuteResult, String> {
     let settings = state.with_config(crate::resolve_ai_settings)?;
     let (all_tasks, existing_tags, today_completed) = state.read_data(|data| {
-        let all = data.tasks.clone();
-        let tags: Vec<String> = data.tasks.iter().flat_map(|t| t.tags.clone()).collect();
+        let all: Vec<store::Task> = data
+            .tasks
+            .iter()
+            .filter(|t| !t.is_deleted)
+            .cloned()
+            .collect();
+        let tags: Vec<String> = data
+            .tasks
+            .iter()
+            .filter(|t| !t.is_deleted)
+            .flat_map(|t| t.tags.clone())
+            .collect();
         let today = chrono::Local::now().format("%Y-%m-%d").to_string();
         let completed: Vec<store::Task> = data
             .tasks
@@ -64,7 +74,11 @@ pub async fn ai_overdue_suggest(
         let overdue: Vec<store::Task> = data
             .tasks
             .iter()
-            .filter(|t| !t.completed && t.due_date.as_deref().is_some_and(|d| d < today.as_str()))
+            .filter(|t| {
+                !t.completed
+                    && !t.is_deleted
+                    && t.due_date.as_deref().is_some_and(|d| d < today.as_str())
+            })
             .cloned()
             .collect();
         Ok((settings.clone(), overdue))
@@ -76,7 +90,13 @@ pub async fn ai_overdue_suggest(
 #[tauri::command]
 pub async fn ai_chat(state: tauri::State<'_, AppState>, message: String) -> Result<String, String> {
     let (settings, tasks) = with_ai_context(&state, |settings, data| {
-        Ok((settings.clone(), data.tasks.clone()))
+        let tasks: Vec<store::Task> = data
+            .tasks
+            .iter()
+            .filter(|t| !t.is_deleted)
+            .cloned()
+            .collect();
+        Ok((settings.clone(), tasks))
     })?;
     ai::chat(&settings, &message, &tasks).await
 }

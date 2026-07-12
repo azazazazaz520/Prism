@@ -147,7 +147,8 @@ mod tests {
     #[test]
     fn stale_lock_overwritten() {
         let dir = temp_lock_dir();
-        fs::write(dir.join(".instance.lock"), "1").unwrap();
+        // u32::MAX 在所有平台都不可作为有效 PID，确保 is_pid_alive 返回 false
+        fs::write(dir.join(".instance.lock"), u32::MAX.to_string()).unwrap();
         let lock = try_acquire_lock(&dir);
         assert!(lock.is_some(), "过期锁应被覆盖");
         let content = fs::read_to_string(dir.join(".instance.lock")).unwrap();
@@ -158,7 +159,7 @@ mod tests {
     #[test]
     fn nonexistent_pid_treated_as_stale() {
         let dir = temp_lock_dir();
-        fs::write(dir.join(".instance.lock"), "99999").unwrap();
+        fs::write(dir.join(".instance.lock"), u32::MAX.to_string()).unwrap();
         let lock = try_acquire_lock(&dir);
         assert!(lock.is_some(), "不存在进程的锁应被视为过期");
     }
@@ -189,6 +190,7 @@ mod tests {
     #[test]
     fn is_pid_alive_detects_dead() {
         assert!(!is_pid_alive(0));
-        assert!(!is_pid_alive(1));
+        // u32::MAX 在所有平台都不可作为有效 PID，避免 PID 1 在 Linux CI 中为 init 进程
+        assert!(!is_pid_alive(u32::MAX));
     }
 }

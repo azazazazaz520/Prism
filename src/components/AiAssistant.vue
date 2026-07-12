@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, nextTick, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import type { ChatMessage, FocusSuggestion, OverdueSuggestion } from '../types';
+import type { ChatMessage, FocusSuggestion, OverdueSuggestion, AiExecuteResult } from '../types';
 
 // ── 状态 ──────────────────────────────
 
@@ -25,7 +25,7 @@ const quickActions: QuickAction[] = [
     label: '今天该做什么',
     iconPath:
       'M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z',
-    command: 'ai_daily_focus',
+    command: 'ai_execute',
   },
   {
     label: '处理过期任务',
@@ -83,9 +83,13 @@ async function runQuickAction(action: QuickAction) {
   loading.value = true;
 
   try {
-    if (action.command === 'ai_daily_focus') {
-      const result = await invoke<FocusSuggestion>('ai_daily_focus');
-      messages.value.push({ role: 'assistant', content: formatFocus(result) });
+    if (action.command === 'ai_execute') {
+      const result = await invoke<AiExecuteResult>('ai_execute', { mode: 'focus', input: '' });
+      if (result.focus) {
+        messages.value.push({ role: 'assistant', content: formatFocus(result.focus) });
+      } else {
+        messages.value.push({ role: 'assistant', content: result.text });
+      }
     } else if (action.command === 'ai_overdue_suggest') {
       const suggestions = await invoke<OverdueSuggestion[]>('ai_overdue_suggest');
       messages.value.push({ role: 'assistant', content: formatOverdue(suggestions) });

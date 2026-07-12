@@ -1,7 +1,5 @@
 <script setup lang="ts">
 import { ref, nextTick, onMounted, onUnmounted } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
-import type { ParsedTask } from '../types';
 import DatePicker from './DatePicker.vue';
 
 const props = defineProps<{
@@ -62,33 +60,6 @@ function onClickOutside(e: MouseEvent) {
 onMounted(() => document.addEventListener('mousedown', onClickOutside));
 onUnmounted(() => document.removeEventListener('mousedown', onClickOutside));
 
-// ── AI 解析状态 ──────────────────────────────
-const aiParsing = ref(false);
-const aiPreview = ref<ParsedTask | null>(null);
-
-async function handleAiParse() {
-  const trimmed = title.value.trim();
-  if (!trimmed) return;
-  aiParsing.value = true;
-  try {
-    const parsed = await invoke<ParsedTask>('ai_parse_input', { text: trimmed });
-    aiPreview.value = parsed;
-    if (parsed.due_date) dueDate.value = parsed.due_date;
-    if (parsed.tags.length > 0) tags.value = parsed.tags;
-    important.value = parsed.important;
-    pinned.value = parsed.pinned;
-    isDaily.value = parsed.is_daily;
-    title.value = parsed.title;
-  } catch (e) {
-    showError.value = true;
-    setTimeout(() => {
-      showError.value = false;
-    }, 2000);
-  } finally {
-    aiParsing.value = false;
-  }
-}
-
 function handleSubmit() {
   const trimmed = title.value.trim();
   if (!trimmed) {
@@ -115,7 +86,6 @@ function handleSubmit() {
   isDaily.value = false;
   tags.value = [];
   showError.value = false;
-  aiPreview.value = null;
   showTagInput.value = false;
   // 提交后收起
   expanded.value = false;
@@ -150,16 +120,6 @@ function removeTag(tag: string) {
 function formatDueDate(d: string): string {
   const [y, m, day] = d.split('-');
   return `${m}/${day}`;
-}
-
-/** 打开导入窗口 */
-function openImport() {
-  if (props.aiEnabled) {
-    invoke('show_import_window');
-  } else {
-    // 触发父组件弹窗提示
-    window.dispatchEvent(new CustomEvent('prism:import-no-ai'));
-  }
 }
 </script>
 
@@ -254,67 +214,6 @@ function openImport() {
             </svg>
             标签
           </button>
-          <div class="action-extras">
-            <button
-              v-if="props.aiEnabled"
-              :class="['qa-btn', { parsing: aiParsing }]"
-              :disabled="aiParsing"
-              title="AI 解析"
-              @click="handleAiParse"
-            >
-              <svg
-                v-if="!aiParsing"
-                width="10"
-                height="10"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path
-                  d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
-                />
-              </svg>
-              <svg
-                v-else
-                width="10"
-                height="10"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                class="ai-icon spinning"
-              >
-                <line x1="12" y1="2" x2="12" y2="6" />
-                <line x1="12" y1="18" x2="12" y2="22" />
-                <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
-                <line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
-                <line x1="2" y1="12" x2="6" y2="12" />
-                <line x1="18" y1="12" x2="22" y2="12" />
-              </svg>
-              AI
-            </button>
-            <button class="qa-btn" title="导入" @click="openImport">
-              <svg
-                width="10"
-                height="10"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="17 8 12 3 7 8" />
-                <line x1="12" y1="3" x2="12" y2="15" />
-              </svg>
-              导入
-            </button>
-          </div>
         </div>
 
         <!-- 标签输入行 -->
@@ -461,12 +360,7 @@ function openImport() {
   align-items: center;
 }
 
-.action-extras {
-  display: flex;
-  gap: 4px;
-  margin-left: auto;
-}
-
+/* ── 标签输入 ────────────────────────── */
 .qa-btn {
   display: flex;
   align-items: center;
@@ -512,21 +406,6 @@ function openImport() {
 [data-theme='hud'] .qa-btn.active {
   color: #0f1118;
   box-shadow: 0 0 8px var(--accent-glow);
-}
-
-.qa-btn.parsing {
-  opacity: 0.6;
-  cursor: wait;
-}
-
-.qa-btn .ai-icon.spinning {
-  animation: ai-spin 1.5s linear infinite;
-}
-
-@keyframes ai-spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 /* ── 标签输入 ────────────────────────── */

@@ -47,14 +47,29 @@ fn is_pid_alive(pid: u32) -> bool {
                 !stdout.contains("No tasks") && stdout.contains(&pid.to_string())
             })
     }
-    #[cfg(not(windows))]
+    #[cfg(unix)]
     {
-        std::process::Command::new("kill")
-            .args(["-0", &pid.to_string()])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .is_ok()
+        // 将 u32 PID 转为 libc::pid_t（i32），无效值保守返回 false
+        let pid_i32 = match i32::try_from(pid) {
+            Ok(v) if v > 0 => v,
+            _ => return false,
+        };
+        // 发送信号 0 探测进程是否存在
+        let res = unsafe { libc::kill(pid_i32, 0) };
+        if res == 0 {
+            return true; // 进程存在且有权访问
+        }
+        // errno 区分：ESRCH=进程不存在，EPERM=存在但无权限，其他保守返回 false
+        match std::io::Error::last_os_error().raw_os_error() {
+            Some(libc::ESRCH) => false,
+            Some(libc::EPERM) => true,
+            _ => false,
+        }
+    }
+    #[cfg(all(not(windows), not(unix)))]
+    {
+        // 非 Windows 非 Unix 平台：回退到默认 false
+        false
     }
 }
 
@@ -122,6 +137,19 @@ mod tests {
         dir
     }
 
+    /// 找到一个确定不存在的 PID，用于测试死进程检测。
+    /// 从当前 PID + 10000 开始探测，最多尝试 100000 个 PID。
+    fn find_dead_pid() -> u32 {
+        let start = std::process::id().saturating_add(10_000);
+        for pid in start..start.saturating_add(100_000) {
+            if !is_pid_alive(pid) {
+                return pid;
+            }
+        }
+        // 极度不可能走到这里，但仍是比 u32::MAX 更安全的回退
+        1
+    }
+
     // ── acquire / release 流程测试 ──
 
     #[test]
@@ -147,8 +175,8 @@ mod tests {
     #[test]
     fn stale_lock_overwritten() {
         let dir = temp_lock_dir();
-        // u32::MAX 在所有平台都不可作为有效 PID，确保 is_pid_alive 返回 false
-        fs::write(dir.join(".instance.lock"), u32::MAX.to_string()).unwrap();
+        let dead_pid = find_dead_pid();
+        fs::write(dir.join(".instance.lock"), dead_pid.to_string()).unwrap();
         let lock = try_acquire_lock(&dir);
         assert!(lock.is_some(), "过期锁应被覆盖");
         let content = fs::read_to_string(dir.join(".instance.lock")).unwrap();
@@ -159,7 +187,8 @@ mod tests {
     #[test]
     fn nonexistent_pid_treated_as_stale() {
         let dir = temp_lock_dir();
-        fs::write(dir.join(".instance.lock"), u32::MAX.to_string()).unwrap();
+        let dead_pid = find_dead_pid();
+        fs::write(dir.join(".instance.lock"), dead_pid.to_string()).unwrap();
         let lock = try_acquire_lock(&dir);
         assert!(lock.is_some(), "不存在进程的锁应被视为过期");
     }
@@ -189,8 +218,10 @@ mod tests {
 
     #[test]
     fn is_pid_alive_detects_dead() {
+        // PID 0 在所有平台都是系统保留值
         assert!(!is_pid_alive(0));
-        // u32::MAX 在所有平台都不可作为有效 PID，避免 PID 1 在 Linux CI 中为 init 进程
-        assert!(!is_pid_alive(u32::MAX));
+        // 探测一个确定不存在的 PID，避免 u32::MAX 在 Linux 上的可移植性问题
+        let dead = find_dead_pid();
+        assert!(!is_pid_alive(dead));
     }
 }

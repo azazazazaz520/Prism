@@ -66,16 +66,28 @@ const progressPct = computed(() =>
   color: var(--danger);
 }
 
-/* ── 渐变能量进度条 ──────────────────── */
+/* ── 进度条 ──────────────────────────── */
 .progress-bar {
   margin-top: var(--space-sm);
   height: 3px;
-  background: rgba(128, 128, 128, 0.1);
+  background: var(--gray-200);
+  border-radius: 2px;
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: width 0.4s ease;
+}
+
+[data-theme='hud'] .progress-bar {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 0;
+}
+
+[data-theme='hud'] .progress-fill {
   background: linear-gradient(
     90deg,
     var(--accent-dim) 0%,
@@ -83,17 +95,7 @@ const progressPct = computed(() =>
     var(--accent) 70%,
     #fff3b0 100%
   );
-  box-shadow: 0 0 6px var(--accent-glow);
-  transition: width 0.4s ease;
-}
-
-[data-theme='hud'] .progress-bar,
-[data-theme='hud'] .progress-bar {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-[data-theme='hud'] .progress-fill,
-[data-theme='hud'] .progress-fill {
   box-shadow: 0 0 8px var(--accent-glow);
+  border-radius: 0;
 }
 </style>

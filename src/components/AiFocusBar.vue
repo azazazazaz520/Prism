@@ -143,12 +143,15 @@ const hasItems = computed(() => (suggestion.value?.items?.length ?? 0) > 0);
   gap: var(--space-xs);
 }
 
-[data-theme='hud'] .focus-trigger,
 [data-theme='hud'] .focus-trigger {
   font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 1px;
   text-transform: uppercase;
+}
+
+[data-theme='hud'] .focus-summary {
+  font-family: var(--font-mono);
 }
 
 .trigger-icon {

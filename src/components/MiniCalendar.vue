@@ -353,6 +353,10 @@ function isSelected(day: number): boolean {
   clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
 }
 
+.mc-day.today .mc-day-dot {
+  display: none;
+}
+
 .mc-day.selected {
   background: var(--accent);
   border-color: var(--accent);

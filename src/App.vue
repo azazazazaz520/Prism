@@ -166,7 +166,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
       </div>
       <button
         :class="['rail-btn', { active: activeModule === 'tasks' || activeModule === 'settings' }]"
-        title="Tasks"
+        data-tooltip="Tasks"
         @click="handleSwitchModule('tasks')"
       >
         <svg viewBox="0 0 24 24">
@@ -178,7 +178,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
       </button>
       <button
         :class="['rail-btn', { active: activeModule === 'notes' }]"
-        title="Notes"
+        data-tooltip="Notes"
         @click="handleSwitchModule('notes')"
       >
         <svg viewBox="0 0 24 24">
@@ -190,7 +190,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
       </button>
       <button
         :class="['rail-btn', { active: activeModule === 'ai-assistant' }]"
-        title="AI"
+        data-tooltip="AI"
         @click="handleSwitchModule('ai-assistant')"
       >
         <svg viewBox="0 0 24 24">
@@ -202,7 +202,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
       </button>
       <button
         :class="['rail-btn', { active: activeModule === 'devtools' }]"
-        title="Toolbox"
+        data-tooltip="Toolbox"
         @click="handleSwitchModule('devtools')"
       >
         <svg viewBox="0 0 24 24">
@@ -214,7 +214,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
       <div class="rail-spacer"></div>
       <button
         :class="['rail-btn', { active: activeModule === 'settings' }]"
-        title="Settings"
+        data-tooltip="Settings"
         @click="handleSwitchModule('settings')"
       >
         <svg viewBox="0 0 24 24">
@@ -471,6 +471,27 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   color: var(--text-secondary);
 }
 
+.rail-btn:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 48px;
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  padding: 4px var(--space-sm);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-heading);
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  pointer-events: none;
+  z-index: 50;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
 .rail-btn.active {
   background: var(--accent-glow);
   color: var(--accent);
@@ -485,6 +506,20 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   width: 2px;
   background: var(--accent);
   box-shadow: 0 0 8px var(--accent);
+}
+
+[data-theme='hud'] .rail-btn:hover::after {
+  border-color: var(--border-line);
+  border-radius: 0;
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+  box-shadow: 0 0 12px rgba(245, 197, 24, 0.1);
 }
 
 .rail-spacer {

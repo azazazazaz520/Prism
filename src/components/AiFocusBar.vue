@@ -27,10 +27,10 @@ async function refresh() {
   }
 }
 
-/** 将 task_id 映射为标题 */
+/** 将 task_id 映射为标题，找不到返回占位文字 */
 function taskTitle(taskId: string): string {
   const task = props.tasks.find((t) => t.id === taskId);
-  return task ? task.title : taskId;
+  return task ? task.title : '任务';
 }
 
 const hasItems = computed(() => (suggestion.value?.items?.length ?? 0) > 0);
@@ -94,8 +94,8 @@ const hasItems = computed(() => (suggestion.value?.items?.length ?? 0) > 0);
       </div>
 
       <div v-if="expanded && hasItems" class="focus-items">
-        <div v-for="item in suggestion.items" :key="item.task_id" class="focus-item">
-          <span class="focus-index">{{ suggestion.items.indexOf(item) + 1 }}</span>
+        <div v-for="(item, idx) in suggestion!.items" :key="idx" class="focus-item">
+          <span class="focus-index">{{ idx + 1 }}</span>
           <span class="focus-title">{{ taskTitle(item.task_id) }}</span>
           <span class="focus-reason">{{ item.reason }}</span>
         </div>
@@ -143,6 +143,17 @@ const hasItems = computed(() => (suggestion.value?.items?.length ?? 0) > 0);
   gap: var(--space-xs);
 }
 
+[data-theme='hud'] .focus-trigger {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+[data-theme='hud'] .focus-summary {
+  font-family: var(--font-mono);
+}
+
 .trigger-icon {
   flex-shrink: 0;
 }
@@ -170,9 +181,36 @@ const hasItems = computed(() => (suggestion.value?.items?.length ?? 0) > 0);
   border: 1px solid var(--accent-muted);
 }
 
+[data-theme='hud'] .focus-content,
+[data-theme='hud'] .focus-content {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0;
+  clip-path: polygon(
+    12px 0%,
+    100% 0%,
+    100% calc(100% - 12px),
+    calc(100% - 12px) 100%,
+    0% 100%,
+    0% 12px
+  );
+  position: relative;
+}
+
+[data-theme='hud'] .focus-content::before,
+[data-theme='hud'] .focus-content::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2px;
+  height: 100%;
+  background: linear-gradient(180deg, var(--accent), transparent);
+}
+
 .focus-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-sm);
   padding: var(--space-md) var(--space-lg);
   cursor: pointer;
@@ -187,15 +225,21 @@ const hasItems = computed(() => (suggestion.value?.items?.length ?? 0) > 0);
 .focus-icon {
   flex-shrink: 0;
   color: var(--text-muted);
+  margin-top: 2px;
 }
 
 .focus-summary {
   flex: 1;
   font-size: var(--text-sm);
   color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.5;
+}
+
+[data-theme='hud'] .focus-summary,
+[data-theme='hud'] .focus-summary {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
 }
 
 .focus-refresh {
@@ -208,6 +252,7 @@ const hasItems = computed(() => (suggestion.value?.items?.length ?? 0) > 0);
   line-height: 1;
   transition: color var(--transition-fast);
   flex-shrink: 0;
+  margin-top: 1px;
 }
 .focus-refresh:hover {
   color: var(--accent);

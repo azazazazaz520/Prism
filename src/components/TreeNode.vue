@@ -294,4 +294,25 @@ defineOptions({ name: 'TreeNode' });
 .node-btn-danger:hover {
   color: #e74c3c;
 }
+
+[data-theme='hud'] .tree-row:hover,
+[data-theme='hud'] .tree-row:hover {
+  background: var(--bg-panel-hover);
+}
+
+[data-theme='hud'] .tree-row.active,
+[data-theme='hud'] .tree-row.active {
+  background: var(--accent-glow);
+  color: var(--accent);
+}
+
+[data-theme='hud'] .tree-children,
+[data-theme='hud'] .tree-children {
+  border-left-color: var(--border-subtle);
+}
+
+[data-theme='hud'] .node-btn:hover,
+[data-theme='hud'] .node-btn:hover {
+  background: var(--bg-panel-hover);
+}
 </style>

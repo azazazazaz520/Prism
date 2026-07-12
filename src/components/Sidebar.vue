@@ -117,12 +117,30 @@ function handleClick(item: ModuleDescriptor) {
   transition: all var(--transition-normal);
 }
 
+[data-theme='hud'] .sidebar,
+[data-theme='hud'] .sidebar {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(245, 197, 24, 0.04) 0%,
+      transparent 40%,
+      transparent 70%,
+      rgba(0, 0, 0, 0.3) 100%
+    ),
+    var(--bg-tertiary);
+}
+
 .sidebar-brand {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-md);
   margin-bottom: var(--space-lg);
+}
+
+[data-theme='hud'] .sidebar-brand,
+[data-theme='hud'] .sidebar-brand {
+  margin-bottom: var(--space-xl);
 }
 
 .brand-icon {
@@ -132,11 +150,23 @@ function handleClick(item: ModuleDescriptor) {
   stroke-width: 1.5;
 }
 
+[data-theme='hud'] .brand-icon,
+[data-theme='hud'] .brand-icon {
+  filter: drop-shadow(0 0 6px rgba(245, 197, 24, 0.4));
+}
+
 .brand-name {
   font-size: var(--text-h2);
   font-weight: var(--font-weight-bold);
   color: var(--text-primary);
   letter-spacing: -0.3px;
+}
+
+[data-theme='hud'] .brand-name,
+[data-theme='hud'] .brand-name {
+  font-family: var(--font-heading);
+  letter-spacing: 3px;
+  text-transform: uppercase;
 }
 
 .sidebar-divider {
@@ -169,6 +199,23 @@ function handleClick(item: ModuleDescriptor) {
   transition: all var(--transition-fast);
 }
 
+[data-theme='hud'] .nav-item,
+[data-theme='hud'] .nav-item {
+  border-radius: 0;
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+  font-family: var(--font-heading);
+  font-size: var(--text-sm);
+  letter-spacing: 1px;
+  font-weight: 500;
+}
+
 .nav-item:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
@@ -180,6 +227,11 @@ function handleClick(item: ModuleDescriptor) {
   font-weight: var(--font-weight-semibold);
 }
 
+[data-theme='hud'] .nav-item.active,
+[data-theme='hud'] .nav-item.active {
+  background: var(--accent-glow);
+}
+
 .nav-accent-bar {
   position: absolute;
   left: 0;
@@ -188,6 +240,13 @@ function handleClick(item: ModuleDescriptor) {
   width: 3px;
   border-radius: 2px;
   background: var(--accent);
+}
+
+[data-theme='hud'] .nav-accent-bar,
+[data-theme='hud'] .nav-accent-bar {
+  border-radius: 0;
+  width: 2px;
+  box-shadow: 0 0 8px var(--accent);
 }
 
 .nav-icon {

@@ -1,4 +1,4 @@
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { AppModule, ModuleDescriptor } from '../types';
 
@@ -91,8 +91,6 @@ export function useModuleRegistry() {
       console.error('保存模块开关失败:', e);
     }
   }
-
-  onMounted(load);
 
   return {
     allModules,

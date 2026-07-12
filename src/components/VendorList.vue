@@ -54,8 +54,10 @@ async function toggleEnabled(vendor: Vendor) {
 }
 
 async function setActive(id: string | null) {
-  await invoke('set_active_vendor', { id });
-  activeVendorId.value = id;
+  // 点击已激活的供应商 → 取消选中
+  const newId = activeVendorId.value === id ? null : id;
+  await invoke('set_active_vendor', { id: newId });
+  activeVendorId.value = newId;
 }
 </script>
 
@@ -76,7 +78,10 @@ async function setActive(id: string | null) {
       >
         <div class="vendor-header">
           <span class="vendor-name">{{ v.name }}</span>
-          <span :class="['vendor-badge', v.provider]">{{ v.provider }}</span>
+          <div class="vendor-header-right">
+            <span v-if="activeVendorId === v.id" class="vendor-active-tag">已选择</span>
+            <span :class="['vendor-badge', v.provider]">{{ v.provider }}</span>
+          </div>
         </div>
         <div class="vendor-model">{{ v.model }}</div>
         <div class="vendor-actions">
@@ -127,12 +132,17 @@ async function setActive(id: string | null) {
 
 .add-btn {
   padding: var(--space-sm) var(--space-2xl);
-  background: var(--gray-900);
+  background: var(--accent);
   color: white;
   border: none;
   border-radius: var(--radius-full);
   font-size: var(--text-base);
   cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+
+.add-btn:hover {
+  opacity: 0.85;
 }
 
 .vendor-card {
@@ -148,13 +158,30 @@ async function setActive(id: string | null) {
 }
 .vendor-card.active {
   border-color: var(--accent);
-  background: var(--accent-light);
+  background: var(--accent-glow-s);
+  box-shadow: 0 0 8px var(--accent-glow);
 }
 
 .vendor-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.vendor-header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.vendor-active-tag {
+  font-size: 10px;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  letter-spacing: 1px;
 }
 
 .vendor-name {

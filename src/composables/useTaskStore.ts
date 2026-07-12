@@ -1,6 +1,6 @@
 import { ref, computed, watch, type Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import type { Task, DailyCompletion, SubTask } from '../types';
+import type { Task, DailyCompletion } from '../types';
 import { useAuth } from './useAuth';
 import { useSync } from './useSync';
 import { useSyncCode } from './useSyncCode';
@@ -182,8 +182,8 @@ export function useTaskStore() {
     }
   }
 
-  async function refreshTasks() {
-    isLoading.value = true;
+  async function refreshTasks(silent = false) {
+    if (!silent) isLoading.value = true;
     try {
       const localTasks = await invoke<Task[]>('get_tasks');
       await refreshDailyCompletions();
@@ -213,7 +213,7 @@ export function useTaskStore() {
       tasks.value = merged;
       syncAllTags(merged);
     } finally {
-      isLoading.value = false;
+      if (!silent) isLoading.value = false;
     }
   }
 
@@ -225,10 +225,10 @@ export function useTaskStore() {
     syncAllTags(merged);
   }
 
-  async function initSync() {
-    if (!isLoggedIn.value) return;
+  async function initSync(): Promise<boolean> {
+    if (!isLoggedIn.value) return false;
     const hasProfile = await syncCode.hasProfile();
-    if (!hasProfile) return;
+    if (!hasProfile) return false;
 
     subscribeToChanges(
       (remoteTask) => {
@@ -242,7 +242,9 @@ export function useTaskStore() {
               dailyCompletedIds.value = dailyCompletedIds.value.filter(
                 (tid) => tid !== remoteTask.id,
               );
-              invoke('delete_daily_completion', { taskId: remoteTask.id, date: getTodayStr() });
+              if (remoteTask.id) {
+                invoke('delete_daily_completion', { taskId: remoteTask.id, date: getTodayStr() });
+              }
             }
             if (remoteTask.is_daily && remoteTask.completed) {
               if (!dailyCompletedIds.value.includes(remoteTask.id)) {
@@ -257,7 +259,9 @@ export function useTaskStore() {
       },
       (dc, eventType) => {
         if (eventType === 'DELETE') {
-          invoke('delete_daily_completion', { taskId: dc.task_id, date: dc.date });
+          if (dc.task_id && dc.date) {
+            invoke('delete_daily_completion', { taskId: dc.task_id, date: dc.date });
+          }
           if (dc.date === getTodayStr()) {
             dailyCompletedIds.value = dailyCompletedIds.value.filter((tid) => tid !== dc.task_id);
           }
@@ -274,6 +278,7 @@ export function useTaskStore() {
         }
       },
     );
+    return true;
   }
 
   async function refreshDailyCompletions() {
@@ -366,6 +371,9 @@ export function useTaskStore() {
 
     if (wasCompleted) {
       onDailyDeleted(id, date);
+    } else {
+      // 推送 daily_completion 到 Supabase，防止 cleanStaleDailyCompletions 误删
+      onDailyChanged({ task_id: id, date });
     }
   }, 'toggleDailyTask');
 
@@ -391,7 +399,7 @@ export function useTaskStore() {
   }, 'updateTask');
 
   const updateTaskMeta = wrap(
-    async (id: string, tags: string[], important: boolean, pinned: boolean) => {
+    async (id: string, tags: string[], important: boolean, pinned: boolean, isDaily: boolean) => {
       if (!tasks.value.find((t) => t.id === id)) return;
       const task = tasks.value.find((t) => t.id === id)!;
       await invoke('update_task', {
@@ -402,11 +410,20 @@ export function useTaskStore() {
           tags,
           important,
           pinned,
-          isDaily: task.is_daily,
+          isDaily,
         },
       });
       tasks.value = tasks.value.map((t) =>
-        t.id === id ? { ...t, tags, important, pinned, updated_at: new Date().toISOString() } : t,
+        t.id === id
+          ? {
+              ...t,
+              tags,
+              important,
+              pinned,
+              is_daily: isDaily,
+              updated_at: new Date().toISOString(),
+            }
+          : t,
       );
       syncAllTags();
       const updated = tasks.value.find((t) => t.id === id);
@@ -453,25 +470,6 @@ export function useTaskStore() {
     // 清理已清除任务的 daily completion 记录
     dailyCompletedIds.value = dailyCompletedIds.value.filter((tid) => !clearedIds.includes(tid));
   }, 'clearCompleted');
-
-  const decomposeTask = wrap(async (parentId: string) => {
-    const subtasks = await invoke<SubTask[]>('ai_decompose', { taskId: parentId });
-    for (const sub of subtasks) {
-      const task = await invoke<Task>('add_task', {
-        args: {
-          title: sub.title,
-          dueDate: null,
-          tags: [],
-          important: false,
-          pinned: false,
-          isDaily: false,
-          parentId,
-        },
-      });
-      tasks.value = [...tasks.value, task];
-      onTaskChanged(task);
-    }
-  }, 'decomposeTask');
 
   // ── 筛选操作 ──────────────────────────────
 
@@ -527,6 +525,7 @@ export function useTaskStore() {
     loadAll,
     refreshTasks,
     initSync,
+    pullAndMerge,
     // CRUD
     addTask,
     toggleTask,
@@ -535,7 +534,6 @@ export function useTaskStore() {
     updateTaskMeta,
     deleteTask,
     clearCompleted,
-    decomposeTask,
     // 筛选
     selectDate,
     toggleTag,

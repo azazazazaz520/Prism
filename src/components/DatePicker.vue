@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 
 const emit = defineEmits<{
   select: [date: string | null];
@@ -7,7 +7,27 @@ const emit = defineEmits<{
 
 const props = defineProps<{
   visible: boolean;
+  anchorEl?: HTMLElement | null;
 }>();
+
+const pickerStyle = ref<Record<string, string>>({});
+
+function updatePosition() {
+  if (props.anchorEl && props.visible) {
+    const rect = props.anchorEl.getBoundingClientRect();
+    pickerStyle.value = {
+      top: `${rect.bottom + 4}px`,
+      right: `${window.innerWidth - rect.right}px`,
+    };
+  }
+}
+
+watch(
+  () => props.visible,
+  (v) => {
+    if (v) updatePosition();
+  },
+);
 
 function onClickOutside(e: MouseEvent) {
   if (props.visible) {
@@ -85,41 +105,40 @@ function isToday(day: number): boolean {
 </script>
 
 <template>
-  <div v-if="visible" class="datepicker">
-    <div class="dp-header">
-      <button class="dp-nav" @click="prevMonth">&lt;</button>
-      <span class="dp-month">{{ currentYear }}年 {{ currentMonth + 1 }}月</span>
-      <button class="dp-nav" @click="nextMonth">&gt;</button>
+  <Teleport to="body">
+    <div v-if="visible" class="datepicker" :style="pickerStyle">
+      <div class="dp-header">
+        <button class="dp-nav" @click="prevMonth">&lt;</button>
+        <span class="dp-month">{{ currentYear }}年 {{ currentMonth + 1 }}月</span>
+        <button class="dp-nav" @click="nextMonth">&gt;</button>
+      </div>
+      <div class="dp-weekdays">
+        <span v-for="wd in weekDays" :key="wd" class="dp-wd">{{ wd }}</span>
+      </div>
+      <div class="dp-grid">
+        <button
+          v-for="(cell, i) in days"
+          :key="i"
+          :class="['dp-day', { empty: cell === null, today: cell !== null && isToday(cell) }]"
+          :disabled="cell === null"
+          @click="cell !== null && selectDay(cell)"
+        >
+          {{ cell }}
+        </button>
+      </div>
+      <button class="dp-clear" @click="clearDate">清除日期</button>
     </div>
-    <div class="dp-weekdays">
-      <span v-for="wd in weekDays" :key="wd" class="dp-wd">{{ wd }}</span>
-    </div>
-    <div class="dp-grid">
-      <button
-        v-for="(cell, i) in days"
-        :key="i"
-        :class="['dp-day', { empty: cell === null, today: cell !== null && isToday(cell) }]"
-        :disabled="cell === null"
-        @click="cell !== null && selectDay(cell)"
-      >
-        {{ cell }}
-      </button>
-    </div>
-    <button class="dp-clear" @click="clearDate">清除日期</button>
-  </div>
+  </Teleport>
 </template>
 
 <style scoped>
 .datepicker {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: var(--space-xs);
+  position: fixed;
   background: var(--bg-primary);
   border-radius: var(--radius-lg);
   box-shadow: 0 var(--space-xs) var(--space-lg) rgba(0, 0, 0, 0.12);
   padding: var(--space-md);
-  z-index: 10;
+  z-index: 1000;
   width: 260px;
 }
 
@@ -148,6 +167,46 @@ function isToday(day: number): boolean {
 
 .dp-nav:hover {
   background: var(--bg-tertiary);
+}
+
+[data-theme='hud'] .datepicker,
+[data-theme='hud'] .datepicker {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-line);
+  clip-path: polygon(
+    12px 0%,
+    100% 0%,
+    100% calc(100% - 12px),
+    calc(100% - 12px) 100%,
+    0% 100%,
+    0% 12px
+  );
+  border-radius: 0;
+}
+
+[data-theme='hud'] .dp-day,
+[data-theme='hud'] .dp-day {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+[data-theme='hud'] .dp-day.today,
+[data-theme='hud'] .dp-day.today {
+  background: var(--accent);
+  color: #0f1118;
+}
+
+[data-theme='hud'] .dp-clear,
+[data-theme='hud'] .dp-clear {
+  border-color: var(--border-line);
+  color: var(--text-secondary);
+}
+
+[data-theme='hud'] .dp-clear:hover,
+[data-theme='hud'] .dp-clear:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-glow-s);
 }
 
 .dp-weekdays {

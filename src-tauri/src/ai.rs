@@ -58,17 +58,20 @@ pub struct FocusSuggestion {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct SubTask {
-    pub title: String,
-    pub estimated_minutes: Option<u32>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 pub struct OverdueSuggestion {
     pub task_id: String,
     pub action: String, // "reschedule" | "abandon" | "decompose"
     pub new_date: Option<String>,
     pub reason: String,
+}
+
+/// 统一 AI 执行结果，前端根据 mode 决定如何渲染
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AiExecuteResult {
+    pub mode: String,                   // "auto" | "add" | "summary" | "focus" | "chat"
+    pub text: String,                   // markdown 格式的回复文本
+    pub tasks: Vec<ParsedTask>,         // /add 模式解析出的任务
+    pub focus: Option<FocusSuggestion>, // /focus 模式的聚焦建议
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -158,6 +161,7 @@ fn task_to_summary(t: &store::Task) -> String {
         "tags": t.tags,
         "important": t.important,
         "is_daily": t.is_daily,
+        "completed": t.completed,
     })
     .to_string()
 }
@@ -241,7 +245,7 @@ pub async fn daily_focus(
     if task_summaries.is_empty() {
         return Ok(FocusSuggestion {
             items: vec![],
-            summary: "当前没有待办任务，享受清闲时光 ☀️".into(),
+            summary: "当前没有待办任务，享受清闲时光".into(),
         });
     }
 
@@ -252,33 +256,6 @@ pub async fn daily_focus(
     let json_str = extract_json(&response)?;
 
     serde_json::from_str::<FocusSuggestion>(&json_str)
-        .map_err(|e| format!("AI 返回格式异常: {}。原文: {}", e, response))
-}
-
-// ═══════════════════════════════════════════════════════════════
-//  功能 3：任务智能拆解
-// ═══════════════════════════════════════════════════════════════
-
-pub async fn decompose(
-    settings: &AiSettings,
-    task_title: &str,
-    existing_subtasks: &[String],
-) -> Result<Vec<SubTask>, String> {
-    let subtask_hint = if existing_subtasks.is_empty() {
-        String::new()
-    } else {
-        format!(
-            "\n已有的子任务（不要重复）：\n{}",
-            existing_subtasks.join("\n")
-        )
-    };
-
-    let system_prompt = prompt::load(prompt::DECOMPOSE, &[("subtask_hint", &subtask_hint)]);
-
-    let response = chat_completion(settings, &system_prompt, task_title).await?;
-    let json_str = extract_json(&response)?;
-
-    serde_json::from_str::<Vec<SubTask>>(&json_str)
         .map_err(|e| format!("AI 返回格式异常: {}。原文: {}", e, response))
 }
 
@@ -317,29 +294,158 @@ pub async fn chat(
     message: &str,
     tasks: &[store::Task],
 ) -> Result<String, String> {
-    // 构建任务上下文（仅摘要，保护隐私）
-    let pending: Vec<String> = tasks
+    // 构建任务上下文（全部任务，含完成状态）
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let all: Vec<String> = tasks
         .iter()
-        .filter(|t| !t.completed)
         .map(|t| {
             serde_json::json!({
                 "title": t.title,
                 "due": t.due_date,
                 "important": t.important,
+                "completed": t.completed,
+                "is_daily": t.is_daily,
+                "tags": t.tags,
             })
             .to_string()
         })
         .collect();
 
-    let context = if pending.is_empty() {
-        "当前没有待办任务。".to_string()
-    } else {
-        format!("当前待办任务：\n{}", pending.join("\n"))
-    };
+    let total = tasks.len();
+    let completed = tasks.iter().filter(|t| t.completed).count();
+    let context = format!(
+        "当前日期：{}\n全部 {} 条任务（{} 已完成，{} 待办）：\n{}",
+        today,
+        total,
+        completed,
+        total - completed,
+        all.join("\n")
+    );
 
     let system_prompt = prompt::load(prompt::CHAT, &[("context", &context)]);
 
     chat_completion(settings, &system_prompt, message).await
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  统一 AI 入口：根据 mode 路由到不同处理策略
+// ═══════════════════════════════════════════════════════════════
+
+pub async fn execute(
+    settings: &AiSettings,
+    mode: &str,
+    input: &str,
+    all_tasks: &[store::Task],
+    existing_tags: &[String],
+    today_completed: &[store::Task],
+    today_str: &str,
+) -> Result<AiExecuteResult, String> {
+    match mode {
+        "add" => {
+            let parsed = parse_input(settings, input, existing_tags).await?;
+            let text = format!("已解析为 1 条任务：**{}**", parsed.title);
+            Ok(AiExecuteResult {
+                mode: "add".into(),
+                text,
+                tasks: vec![parsed],
+                focus: None,
+            })
+        }
+        "summary" => {
+            let completed_list: Vec<String> = today_completed
+                .iter()
+                .map(|t| format!("- {}", t.title))
+                .collect();
+            let pending: Vec<String> = all_tasks
+                .iter()
+                .filter(|t| !t.completed && !t.is_deleted)
+                .map(|t| format!("- {} {}", t.title, if t.important { "[重要]" } else { "" }))
+                .collect();
+
+            let system_prompt = prompt::load(
+                prompt::DAILY_SUMMARY,
+                &[
+                    ("today", today_str),
+                    ("completed_tasks", &completed_list.join("\n")),
+                    ("pending_tasks", &pending.join("\n")),
+                ],
+            );
+
+            let text = if completed_list.is_empty() {
+                "今天还没有完成任务。".to_string()
+            } else {
+                chat_completion(settings, &system_prompt, "请生成今日工作总结").await?
+            };
+
+            Ok(AiExecuteResult {
+                mode: "summary".into(),
+                text,
+                tasks: vec![],
+                focus: None,
+            })
+        }
+        "focus" => {
+            let focus = daily_focus(settings, all_tasks).await?;
+            let items_text: Vec<String> = focus
+                .items
+                .iter()
+                .map(|i| {
+                    let title = all_tasks
+                        .iter()
+                        .find(|t| t.id == i.task_id)
+                        .map(|t| t.title.as_str())
+                        .unwrap_or("未知任务");
+                    format!("- **{}**: {}", title, i.reason)
+                })
+                .collect();
+            let text = format!("{}\n\n{}", focus.summary, items_text.join("\n"));
+            Ok(AiExecuteResult {
+                mode: "focus".into(),
+                text,
+                tasks: vec![],
+                focus: Some(focus),
+            })
+        }
+        _ => {
+            // auto 或其他：构建上下文 → LLM 自动判断意图
+            let task_summaries: Vec<String> = all_tasks
+                .iter()
+                .filter(|t| !t.is_deleted)
+                .map(task_to_summary)
+                .collect();
+
+            let tags_hint = if existing_tags.is_empty() {
+                "无已有标签".to_string()
+            } else {
+                format!("已有标签: {}", existing_tags.join(", "))
+            };
+
+            let context = format!(
+                "当前日期: {}\n已有标签: {}\n任务数据:\n{}",
+                today_str,
+                tags_hint,
+                task_summaries.join("\n")
+            );
+
+            let system_prompt = prompt::load(
+                prompt::EXECUTE_AUTO,
+                &[("context", &context), ("input", input)],
+            );
+
+            let response = chat_completion(settings, &system_prompt, input).await?;
+            let json_str = extract_json(&response)?;
+
+            match serde_json::from_str::<AiExecuteResult>(&json_str) {
+                Ok(result) => Ok(result),
+                Err(_e) => Ok(AiExecuteResult {
+                    mode: "chat".into(),
+                    text: response,
+                    tasks: vec![],
+                    focus: None,
+                }),
+            }
+        }
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════

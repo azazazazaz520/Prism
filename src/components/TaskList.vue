@@ -14,8 +14,7 @@ const emit = defineEmits<{
   toggleDaily: [id: string, date: string];
   update: [id: string, title: string];
   delete: [id: string];
-  updateMeta: [id: string, tags: string[], important: boolean, pinned: boolean];
-  decompose: [id: string];
+  updateMeta: [id: string, tags: string[], important: boolean, pinned: boolean, isDaily: boolean];
 }>();
 
 // 排序规则：置顶优先 → 重要次之 → 未完成在前 → 新建在上
@@ -68,9 +67,9 @@ const normalTasks = computed(() => sortedTasks.value.filter((t) => !t.pinned || 
           @update="(id, title) => emit('update', id, title)"
           @delete="(id) => emit('delete', id)"
           @update-meta="
-            (id, tags, important, pinned) => emit('updateMeta', id, tags, important, pinned)
+            (id, tags, important, pinned, isDaily) =>
+              emit('updateMeta', id, tags, important, pinned, isDaily)
           "
-          @decompose="(id) => emit('decompose', id)"
         />
       </div>
       <div
@@ -88,9 +87,9 @@ const normalTasks = computed(() => sortedTasks.value.filter((t) => !t.pinned || 
         @update="(id, title) => emit('update', id, title)"
         @delete="(id) => emit('delete', id)"
         @update-meta="
-          (id, tags, important, pinned) => emit('updateMeta', id, tags, important, pinned)
+          (id, tags, important, pinned, isDaily) =>
+            emit('updateMeta', id, tags, important, pinned, isDaily)
         "
-        @decompose="(id) => emit('decompose', id)"
       />
     </template>
   </div>
@@ -127,5 +126,47 @@ const normalTasks = computed(() => sortedTasks.value.filter((t) => !t.pinned || 
 .section-divider {
   height: 1px;
   background: var(--border-light);
+}
+
+[data-theme='hud'] .task-list,
+[data-theme='hud'] .task-list {
+  background: transparent;
+}
+
+[data-theme='hud'] .task-empty,
+[data-theme='hud'] .task-empty {
+  color: var(--text-tertiary);
+  font-family: var(--font-heading);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+[data-theme='hud'] .pinned-section,
+[data-theme='hud'] .pinned-section {
+  background: transparent;
+}
+
+[data-theme='hud'] .pinned-header,
+[data-theme='hud'] .pinned-header {
+  font-family: var(--font-heading);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  border-bottom-color: var(--border-subtle);
+}
+
+[data-theme='hud'] .pinned-header::after,
+[data-theme='hud'] .pinned-header::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+[data-theme='hud'] .section-divider,
+[data-theme='hud'] .section-divider {
+  background: var(--border-subtle);
 }
 </style>

@@ -92,16 +92,49 @@ function handleAddTag() {
   transition: all var(--transition-fast);
 }
 
+[data-theme='hud'] .tag-chip,
+[data-theme='hud'] .tag-chip {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  color: #c8cacf;
+  border-radius: 0;
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+  border-color: rgba(245, 197, 24, 0.25);
+}
+
 .tag-chip:hover {
   border-color: var(--accent-muted);
   color: var(--text-primary);
   background: var(--bg-hover);
 }
 
+[data-theme='hud'] .tag-chip:hover,
+[data-theme='hud'] .tag-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(245, 197, 24, 0.1);
+}
+
 .tag-chip.active {
   background: var(--accent);
   color: white;
   border-color: var(--accent);
+}
+
+[data-theme='hud'] .tag-chip.active,
+[data-theme='hud'] .tag-chip.active {
+  color: #0f1118;
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
 }
 
 .tag-chip.add {

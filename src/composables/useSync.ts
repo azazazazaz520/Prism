@@ -335,13 +335,14 @@ export function useSync() {
 
     const supabase = getSupabaseClient();
 
+    // 用随机后缀避免 HMR 重载时频道名冲突
+    const channelName = `tasks-changes-${Math.random().toString(36).slice(2, 8)}`;
     const channel = supabase
-      .channel('tasks-changes')
+      .channel(channelName)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'tasks', filter: `profile_id=eq.${profileId}` },
         (payload) => {
-          // DELETE 事件 payload.new 为 null，从 payload.old 读取被删任务
           const task = (payload.new || payload.old) as Task;
           if (task) onTaskChange(task);
         },
@@ -355,7 +356,6 @@ export function useSync() {
           filter: `profile_id=eq.${profileId}`,
         },
         (payload) => {
-          // DELETE 事件 payload.new 为 null，payload.old 存有被删记录
           const dc = (payload.new || payload.old) as DailyCompletion;
           const eventType = payload.eventType as 'INSERT' | 'UPDATE' | 'DELETE';
           if (dc) onDailyCompletionChange(dc, eventType);
@@ -366,6 +366,7 @@ export function useSync() {
           syncStatus.value = 'idle';
         } else if (status === 'CHANNEL_ERROR') {
           syncStatus.value = 'error';
+          // 5 秒后重建频道
           setTimeout(() => subscribeToChanges(onTaskChange, onDailyCompletionChange), 5000);
         }
       });

@@ -13,8 +13,7 @@ const emit = defineEmits<{
   toggleDaily: [id: string, date: string];
   update: [id: string, title: string];
   delete: [id: string];
-  updateMeta: [id: string, tags: string[], important: boolean, pinned: boolean];
-  decompose: [id: string];
+  updateMeta: [id: string, tags: string[], important: boolean, pinned: boolean, isDaily: boolean];
 }>();
 
 const editing = ref(false);
@@ -22,10 +21,18 @@ const editTitle = ref('');
 const showMenu = ref(false);
 const menuTags = ref<string[]>([]);
 const menuNewTag = ref('');
+const menuStyle = ref<Record<string, string>>({});
 
-function openMenu() {
+function openMenu(e: MouseEvent) {
+  e.stopPropagation();
   menuTags.value = [...props.task.tags];
   menuNewTag.value = '';
+  const btn = e.currentTarget as HTMLElement;
+  const rect = btn.getBoundingClientRect();
+  menuStyle.value = {
+    top: rect.bottom + 4 + 'px',
+    right: window.innerWidth - rect.right + 'px',
+  };
   showMenu.value = true;
 }
 
@@ -34,12 +41,38 @@ function closeMenu() {
 }
 
 function toggleMenuImportant() {
-  emit('updateMeta', props.task.id, [...menuTags.value], !props.task.important, props.task.pinned);
+  emit(
+    'updateMeta',
+    props.task.id,
+    [...menuTags.value],
+    !props.task.important,
+    props.task.pinned,
+    props.task.is_daily,
+  );
   showMenu.value = false;
 }
 
 function toggleMenuPinned() {
-  emit('updateMeta', props.task.id, [...menuTags.value], props.task.important, !props.task.pinned);
+  emit(
+    'updateMeta',
+    props.task.id,
+    [...menuTags.value],
+    props.task.important,
+    !props.task.pinned,
+    props.task.is_daily,
+  );
+  showMenu.value = false;
+}
+
+function toggleMenuDaily() {
+  emit(
+    'updateMeta',
+    props.task.id,
+    [...menuTags.value],
+    props.task.important,
+    props.task.pinned,
+    !props.task.is_daily,
+  );
   showMenu.value = false;
 }
 
@@ -47,20 +80,34 @@ function addMenuTag() {
   const t = menuNewTag.value.trim();
   if (t && !menuTags.value.includes(t)) {
     menuTags.value.push(t);
-    emit('updateMeta', props.task.id, [...menuTags.value], props.task.important, props.task.pinned);
+    emit(
+      'updateMeta',
+      props.task.id,
+      [...menuTags.value],
+      props.task.important,
+      props.task.pinned,
+      props.task.is_daily,
+    );
   }
   menuNewTag.value = '';
 }
 
 function removeMenuTag(tag: string) {
   menuTags.value = menuTags.value.filter((tg) => tg !== tag);
-  emit('updateMeta', props.task.id, [...menuTags.value], props.task.important, props.task.pinned);
+  emit(
+    'updateMeta',
+    props.task.id,
+    [...menuTags.value],
+    props.task.important,
+    props.task.pinned,
+    props.task.is_daily,
+  );
 }
 
 function onClickOutside(e: MouseEvent) {
   if (showMenu.value) {
     const el = e.target as HTMLElement;
-    if (!el.closest('.menu-wrapper')) {
+    if (!el.closest('.task-menu') && !el.closest('.task-menu-btn')) {
       showMenu.value = false;
     }
   }
@@ -158,6 +205,7 @@ const dueLabel = computed(() => {
       type="checkbox"
       class="task-checkbox"
       :checked="displayCompleted"
+      autocomplete="off"
       @change="handleToggle"
     />
 
@@ -220,93 +268,97 @@ const dueLabel = computed(() => {
     </div>
 
     <div v-if="!editing" class="task-actions">
-      <svg
-        v-if="props.aiEnabled"
-        class="task-decompose-btn"
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.5"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        title="AI 拆解为子任务"
-        @click.stop="emit('decompose', task.id)"
-      >
-        <rect x="3" y="3" width="7" height="7" rx="1" />
-        <rect x="14" y="3" width="7" height="7" rx="1" />
-        <rect x="3" y="14" width="7" height="7" rx="1" />
-        <rect x="14" y="14" width="7" height="7" rx="1" />
-      </svg>
       <div class="menu-wrapper">
-        <button class="task-menu-btn" title="更多操作" @click.stop="openMenu">⋯</button>
-        <div v-if="showMenu" class="task-menu" @click.stop>
-          <div class="menu-item" @click="toggleMenuImportant">
-            <span>
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <polygon
-                  points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
-                />
-              </svg>
-              重要
-            </span>
-            <span :class="['menu-toggle', { on: task.important }]">{{
-              task.important ? '开' : '关'
-            }}</span>
-          </div>
-          <div class="menu-item" @click="toggleMenuPinned">
-            <span>
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M12 17v-7" />
-                <path d="M8 10l4-4 4 4" />
-                <path d="M5 21h14" />
-              </svg>
-              置顶
-            </span>
-            <span :class="['menu-toggle', { on: task.pinned }]">{{
-              task.pinned ? '开' : '关'
-            }}</span>
-          </div>
-          <div class="menu-divider"></div>
-          <div class="menu-tags">
-            <div class="menu-tags-header">标签</div>
-            <div class="menu-tags-list">
-              <span v-for="tag in menuTags" :key="tag" class="menu-tag-chip">
-                {{ tag }}
-                <button class="menu-tag-x" @click="removeMenuTag(tag)">×</button>
+        <button class="task-menu-btn" title="更多操作" @click="openMenu">⋯</button>
+        <Teleport to="body">
+          <div v-if="showMenu" class="task-menu" :style="menuStyle" @click.stop>
+            <div class="menu-item" @click="toggleMenuImportant">
+              <span>
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polygon
+                    points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+                  />
+                </svg>
+                重要
               </span>
+              <span :class="['menu-toggle', { on: task.important }]">{{
+                task.important ? '开' : '关'
+              }}</span>
             </div>
-            <div class="menu-tag-input-row">
-              <input
-                v-model="menuNewTag"
-                type="text"
-                class="menu-tag-input"
-                placeholder="新标签"
-                @keydown.enter.prevent="addMenuTag"
-              />
-              <button class="menu-tag-add" @click="addMenuTag">+</button>
+            <div class="menu-item" @click="toggleMenuPinned">
+              <span>
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 17v-7" />
+                  <path d="M8 10l4-4 4 4" />
+                  <path d="M5 21h14" />
+                </svg>
+                置顶
+              </span>
+              <span :class="['menu-toggle', { on: task.pinned }]">{{
+                task.pinned ? '开' : '关'
+              }}</span>
+            </div>
+            <div class="menu-item" @click="toggleMenuDaily">
+              <span>
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="23 4 23 10 17 10" />
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                </svg>
+                每日
+              </span>
+              <span :class="['menu-toggle', { on: task.is_daily }]">{{
+                task.is_daily ? '开' : '关'
+              }}</span>
+            </div>
+            <div class="menu-divider"></div>
+            <div class="menu-tags">
+              <div class="menu-tags-header">标签</div>
+              <div class="menu-tags-list">
+                <span v-for="tag in menuTags" :key="tag" class="menu-tag-chip">
+                  {{ tag }}
+                  <button class="menu-tag-x" @click="removeMenuTag(tag)">×</button>
+                </span>
+              </div>
+              <div class="menu-tag-input-row">
+                <input
+                  v-model="menuNewTag"
+                  type="text"
+                  class="menu-tag-input"
+                  placeholder="新标签"
+                  @keydown.enter.prevent="addMenuTag"
+                />
+                <button class="menu-tag-add" @click="addMenuTag">+</button>
+              </div>
             </div>
           </div>
-        </div>
+        </Teleport>
       </div>
       <button class="task-delete-btn" title="删除" @click="emit('delete', task.id)">×</button>
     </div>
@@ -325,9 +377,60 @@ const dueLabel = computed(() => {
   margin-bottom: var(--space-xs);
 }
 
+[data-theme='hud'] .task-item,
+[data-theme='hud'] .task-item {
+  background: transparent;
+  border-radius: 0;
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+  border: 1px solid transparent;
+  animation: fadeSlideIn 0.3s ease both;
+}
+
+[data-theme='hud'] .task-item:nth-child(2),
+[data-theme='hud'] .task-item:nth-child(2) {
+  animation-delay: 0.05s;
+}
+[data-theme='hud'] .task-item:nth-child(3),
+[data-theme='hud'] .task-item:nth-child(3) {
+  animation-delay: 0.1s;
+}
+[data-theme='hud'] .task-item:nth-child(4),
+[data-theme='hud'] .task-item:nth-child(4) {
+  animation-delay: 0.15s;
+}
+[data-theme='hud'] .task-item:nth-child(5),
+[data-theme='hud'] .task-item:nth-child(5) {
+  animation-delay: 0.2s;
+}
+
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .task-item:hover {
   background: var(--bg-secondary);
   box-shadow: var(--shadow-sm);
+}
+
+[data-theme='hud'] .task-item:hover,
+[data-theme='hud'] .task-item:hover {
+  background: var(--bg-panel-hover);
+  border-color: var(--border-subtle);
+  box-shadow: none;
 }
 
 .task-item.completed {
@@ -347,6 +450,20 @@ const dueLabel = computed(() => {
   background: transparent;
   transition: all var(--transition-fast);
   position: relative;
+}
+
+[data-theme='hud'] .task-checkbox,
+[data-theme='hud'] .task-checkbox {
+  border-color: var(--text-tertiary);
+  clip-path: polygon(
+    3px 0%,
+    100% 0%,
+    100% calc(100% - 3px),
+    calc(100% - 3px) 100%,
+    0% 100%,
+    0% 3px
+  );
+  border-radius: 0;
 }
 
 .task-checkbox:hover {
@@ -370,6 +487,11 @@ const dueLabel = computed(() => {
   transform: rotate(45deg);
 }
 
+[data-theme='hud'] .task-checkbox:checked::after,
+[data-theme='hud'] .task-checkbox:checked::after {
+  border-color: #0f1118;
+}
+
 .task-body {
   flex: 1;
   display: flex;
@@ -380,16 +502,23 @@ const dueLabel = computed(() => {
 
 .task-title-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-xs);
 }
 
 .task-title {
+  flex: 1;
+  min-width: 0;
   font-size: var(--text-base);
   color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-word;
+}
+
+[data-theme='hud'] .task-title,
+[data-theme='hud'] .task-title {
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .task-title.done {
@@ -400,10 +529,17 @@ const dueLabel = computed(() => {
 .icon-star {
   flex-shrink: 0;
   color: var(--warning);
+  margin-top: 3px;
+}
+
+[data-theme='hud'] .icon-star,
+[data-theme='hud'] .icon-star {
+  color: var(--status-danger);
 }
 .icon-daily {
   flex-shrink: 0;
   color: var(--warning);
+  margin-top: 3px;
 }
 .icon-daily.done {
   opacity: 0.4;
@@ -422,11 +558,25 @@ const dueLabel = computed(() => {
   color: var(--text-disabled);
 }
 
+[data-theme='hud'] .task-time,
+[data-theme='hud'] .task-time {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+
 .due-badge {
   font-size: var(--text-xs);
   padding: 0 5px;
   border-radius: var(--radius-sm);
   font-weight: 500;
+}
+
+[data-theme='hud'] .due-badge,
+[data-theme='hud'] .due-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  border-radius: 0;
 }
 
 .due-badge.overdue {
@@ -451,9 +601,35 @@ const dueLabel = computed(() => {
   transition: all var(--transition-fast);
 }
 
+[data-theme='hud'] .tag-badge,
+[data-theme='hud'] .tag-badge {
+  background: rgba(245, 197, 24, 0.12);
+  border: 1px solid rgba(245, 197, 24, 0.3);
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 0;
+  color: #e8e6e1;
+}
+
 .tag-badge:hover {
   background: var(--accent-light);
   color: var(--accent);
+}
+
+[data-theme='hud'] .tag-badge:hover,
+[data-theme='hud'] .tag-badge:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-glow);
 }
 
 .task-edit-input {
@@ -469,9 +645,9 @@ const dueLabel = computed(() => {
   background: none;
   border: none;
   color: var(--gray-400);
-  font-size: 18px;
+  font-size: 14px;
   cursor: pointer;
-  padding: 4px 6px;
+  padding: 2px 5px;
   line-height: 1;
   flex-shrink: 0;
   border-radius: var(--radius-sm);
@@ -486,7 +662,7 @@ const dueLabel = computed(() => {
 .task-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   flex-shrink: 0;
   opacity: 0;
   transition: opacity var(--transition-fast);
@@ -504,9 +680,9 @@ const dueLabel = computed(() => {
   background: none;
   border: none;
   color: var(--gray-400);
-  font-size: 14px;
+  font-size: 13px;
   cursor: pointer;
-  padding: 4px 6px;
+  padding: 2px 4px;
   line-height: 1;
   border-radius: var(--radius-sm);
   transition: all var(--transition-fast);
@@ -517,33 +693,21 @@ const dueLabel = computed(() => {
   background: var(--bg-hover);
 }
 
-.task-decompose-btn {
-  color: var(--gray-400);
-  cursor: pointer;
-  flex-shrink: 0;
-  opacity: 0.5;
-  transition:
-    opacity var(--transition-fast),
-    color var(--transition-fast);
-}
-
-.task-decompose-btn:hover {
-  opacity: 1;
-  color: var(--accent);
-}
-
 .task-menu {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: var(--space-xs);
+  position: fixed;
+  z-index: 1000;
   background: var(--bg-primary);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-subtle);
-  box-shadow: 0 4px var(--space-lg) rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   padding: var(--space-sm);
-  z-index: 10;
   width: 200px;
+}
+
+[data-theme='hud'] .task-menu,
+[data-theme='hud'] .task-menu {
+  background: var(--bg-elevated);
+  border-color: var(--border-line);
 }
 
 .menu-item {
@@ -569,7 +733,7 @@ const dueLabel = computed(() => {
 }
 
 .menu-toggle.on {
-  background: var(--gray-900);
+  background: var(--accent);
   color: white;
 }
 
@@ -630,14 +794,16 @@ const dueLabel = computed(() => {
   border-radius: var(--radius-sm);
   font-size: var(--text-xs);
   outline: none;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 .menu-tag-input:focus {
-  border-color: var(--gray-600);
+  border-color: var(--accent);
 }
 
 .menu-tag-add {
-  background: var(--gray-900);
+  background: var(--accent);
   color: white;
   border: none;
   border-radius: var(--radius-sm);

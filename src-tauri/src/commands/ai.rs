@@ -1,17 +1,54 @@
-use super::{with_ai_context, AppState};
 use crate::{ai, store};
+use crate::{with_ai_context, AppState};
 
-/// 自然语言解析输入
+/// 统一 AI 入口：根据 mode 路由处理
+/// mode: "auto" | "add" | "summary" | "focus"
 #[tauri::command]
-pub async fn ai_parse_input(
+pub async fn ai_execute(
     state: tauri::State<'_, AppState>,
-    text: String,
-) -> Result<ai::ParsedTask, String> {
-    let (settings, existing_tags) = with_ai_context(&state, |settings, data| {
-        let existing_tags: Vec<String> = data.tasks.iter().flat_map(|t| t.tags.clone()).collect();
-        Ok((settings.clone(), existing_tags))
-    })?;
-    ai::parse_input(&settings, &text, &existing_tags).await
+    mode: String,
+    input: String,
+) -> Result<ai::AiExecuteResult, String> {
+    let settings = state.with_config(crate::resolve_ai_settings)?;
+    let (all_tasks, existing_tags, today_completed) = state.read_data(|data| {
+        let all: Vec<store::Task> = data
+            .tasks
+            .iter()
+            .filter(|t| !t.is_deleted)
+            .cloned()
+            .collect();
+        let tags: Vec<String> = data
+            .tasks
+            .iter()
+            .filter(|t| !t.is_deleted)
+            .flat_map(|t| t.tags.clone())
+            .collect();
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        let completed: Vec<store::Task> = data
+            .tasks
+            .iter()
+            .filter(|t| {
+                t.completed
+                    && !t.is_deleted
+                    && t.completed_at
+                        .as_deref()
+                        .is_some_and(|d| d.starts_with(&today))
+            })
+            .cloned()
+            .collect();
+        (all, tags, completed)
+    });
+    let today_str = chrono::Local::now().format("%Y-%m-%d").to_string();
+    ai::execute(
+        &settings,
+        &mode,
+        &input,
+        &all_tasks,
+        &existing_tags,
+        &today_completed,
+        &today_str,
+    )
+    .await
 }
 
 /// 聊天记录批量任务提取
@@ -27,41 +64,6 @@ pub async fn ai_parse_wechat(
     ai::parse_wechat(&settings, &text, &existing_tags).await
 }
 
-/// 今日聚焦建议
-#[tauri::command]
-pub async fn ai_daily_focus(
-    state: tauri::State<'_, AppState>,
-) -> Result<ai::FocusSuggestion, String> {
-    let (settings, tasks) = with_ai_context(&state, |settings, data| {
-        Ok((settings.clone(), data.tasks.clone()))
-    })?;
-    ai::daily_focus(&settings, &tasks).await
-}
-
-/// 任务智能拆解
-#[tauri::command]
-pub async fn ai_decompose(
-    state: tauri::State<'_, AppState>,
-    task_id: String,
-) -> Result<Vec<ai::SubTask>, String> {
-    let (settings, task_title, existing_subtasks) = with_ai_context(&state, |settings, data| {
-        let task_title = data
-            .tasks
-            .iter()
-            .find(|t| t.id == task_id)
-            .map(|t| t.title.clone())
-            .ok_or("任务不存在".to_string())?;
-        let existing_subtasks: Vec<String> = data
-            .tasks
-            .iter()
-            .filter(|t| t.parent_id.as_deref() == Some(&task_id))
-            .map(|t| t.title.clone())
-            .collect();
-        Ok((settings.clone(), task_title, existing_subtasks))
-    })?;
-    ai::decompose(&settings, &task_title, &existing_subtasks).await
-}
-
 /// 过期任务处理建议
 #[tauri::command]
 pub async fn ai_overdue_suggest(
@@ -72,7 +74,11 @@ pub async fn ai_overdue_suggest(
         let overdue: Vec<store::Task> = data
             .tasks
             .iter()
-            .filter(|t| !t.completed && t.due_date.as_deref().is_some_and(|d| d < today.as_str()))
+            .filter(|t| {
+                !t.completed
+                    && !t.is_deleted
+                    && t.due_date.as_deref().is_some_and(|d| d < today.as_str())
+            })
             .cloned()
             .collect();
         Ok((settings.clone(), overdue))
@@ -84,7 +90,13 @@ pub async fn ai_overdue_suggest(
 #[tauri::command]
 pub async fn ai_chat(state: tauri::State<'_, AppState>, message: String) -> Result<String, String> {
     let (settings, tasks) = with_ai_context(&state, |settings, data| {
-        Ok((settings.clone(), data.tasks.clone()))
+        let tasks: Vec<store::Task> = data
+            .tasks
+            .iter()
+            .filter(|t| !t.is_deleted)
+            .cloned()
+            .collect();
+        Ok((settings.clone(), tasks))
     })?;
     ai::chat(&settings, &message, &tasks).await
 }

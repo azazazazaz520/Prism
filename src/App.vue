@@ -447,7 +447,7 @@ async function sendQuickAi() {
   display: none;
 }
 
-:global([data-theme='hud']) .bg-contour {
+:global([data-theme='hud'] .bg-contour) {
   display: block;
   position: fixed;
   inset: 0;

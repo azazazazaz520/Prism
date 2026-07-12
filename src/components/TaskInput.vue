@@ -401,8 +401,8 @@ function openImport() {
   color: var(--text-muted);
 }
 
-[data-theme='dark'] .task-input-field,
-[data-theme='auto'] .task-input-field {
+[data-theme='hud'] .task-input-field,
+[data-theme='hud'] .task-input-field {
   background: var(--bg-secondary);
   border: 1px solid var(--border-subtle);
   clip-path: polygon(
@@ -420,8 +420,8 @@ function openImport() {
   box-shadow: 0 0 0 1px var(--accent-muted);
 }
 
-[data-theme='dark'] .task-input-field:focus,
-[data-theme='auto'] .task-input-field:focus {
+[data-theme='hud'] .task-input-field:focus,
+[data-theme='hud'] .task-input-field:focus {
   border-color: var(--accent);
   box-shadow: 0 0 12px var(--accent-glow);
 }
@@ -481,8 +481,8 @@ function openImport() {
   color: var(--text-secondary);
 }
 
-[data-theme='dark'] .qa-btn,
-[data-theme='auto'] .qa-btn {
+[data-theme='hud'] .qa-btn,
+[data-theme='hud'] .qa-btn {
   background: transparent;
   border-color: var(--border-subtle);
   clip-path: polygon(
@@ -508,8 +508,8 @@ function openImport() {
   color: white;
 }
 
-[data-theme='dark'] .qa-btn.active,
-[data-theme='auto'] .qa-btn.active {
+[data-theme='hud'] .qa-btn.active,
+[data-theme='hud'] .qa-btn.active {
   color: #0f1118;
   box-shadow: 0 0 8px var(--accent-glow);
 }
@@ -551,8 +551,8 @@ function openImport() {
   border-color: var(--gray-600);
 }
 
-[data-theme='dark'] .tag-input,
-[data-theme='auto'] .tag-input {
+[data-theme='hud'] .tag-input,
+[data-theme='hud'] .tag-input {
   background: var(--bg-secondary);
   border-color: var(--border-subtle);
 }
@@ -567,8 +567,8 @@ function openImport() {
   cursor: pointer;
 }
 
-[data-theme='dark'] .tag-add-btn,
-[data-theme='auto'] .tag-add-btn {
+[data-theme='hud'] .tag-add-btn,
+[data-theme='hud'] .tag-add-btn {
   background: var(--accent);
   color: #0f1118;
   clip-path: polygon(
@@ -600,8 +600,8 @@ function openImport() {
   gap: 2px;
 }
 
-[data-theme='dark'] .tag-chip,
-[data-theme='auto'] .tag-chip {
+[data-theme='hud'] .tag-chip,
+[data-theme='hud'] .tag-chip {
   background: rgba(245, 197, 24, 0.12);
   border: 1px solid rgba(245, 197, 24, 0.3);
   clip-path: polygon(
@@ -658,8 +658,8 @@ function openImport() {
   overflow: hidden;
 }
 
-[data-theme='dark'] .date-btn,
-[data-theme='auto'] .date-btn {
+[data-theme='hud'] .date-btn,
+[data-theme='hud'] .date-btn {
   background: var(--bg-secondary);
   border-color: var(--border-subtle);
   clip-path: polygon(
@@ -674,8 +674,8 @@ function openImport() {
   color: var(--text-tertiary);
 }
 
-[data-theme='dark'] .date-btn::before,
-[data-theme='auto'] .date-btn::before {
+[data-theme='hud'] .date-btn::before,
+[data-theme='hud'] .date-btn::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -695,18 +695,18 @@ function openImport() {
   color: var(--accent);
 }
 
-[data-theme='dark'] .date-btn:hover,
-[data-theme='auto'] .date-btn:hover,
-[data-theme='dark'] .date-btn.active,
-[data-theme='auto'] .date-btn.active {
+[data-theme='hud'] .date-btn:hover,
+[data-theme='hud'] .date-btn:hover,
+[data-theme='hud'] .date-btn.active,
+[data-theme='hud'] .date-btn.active {
   background: var(--accent-glow-s);
   border-color: var(--accent);
   color: var(--accent);
   box-shadow: 0 0 16px var(--accent-glow);
 }
 
-[data-theme='dark'] .date-btn:hover::before,
-[data-theme='auto'] .date-btn:hover::before {
+[data-theme='hud'] .date-btn:hover::before,
+[data-theme='hud'] .date-btn:hover::before {
   opacity: 1;
 }
 
@@ -733,8 +733,8 @@ function openImport() {
   margin-left: auto;
 }
 
-[data-theme='dark'] .task-input-btn,
-[data-theme='auto'] .task-input-btn {
+[data-theme='hud'] .task-input-btn,
+[data-theme='hud'] .task-input-btn {
   color: #0f1118;
   clip-path: polygon(
     var(--cut-lg) 0%,
@@ -759,8 +759,8 @@ function openImport() {
   box-shadow: var(--shadow-sm);
 }
 
-[data-theme='dark'] .task-input-btn:hover,
-[data-theme='auto'] .task-input-btn:hover {
+[data-theme='hud'] .task-input-btn:hover,
+[data-theme='hud'] .task-input-btn:hover {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.2),
     0 0 24px rgba(245, 197, 24, 0.35);

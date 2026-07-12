@@ -560,8 +560,8 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
 }
 
 /* ── 暗色适配 ──────────────────────────── */
-[data-theme='dark'] .settings-group,
-[data-theme='auto'] .settings-group {
+[data-theme='hud'] .settings-group,
+[data-theme='hud'] .settings-group {
   background: var(--bg-tertiary);
   border-color: var(--border-subtle);
   box-shadow: none;
@@ -576,16 +576,16 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
   );
 }
 
-[data-theme='dark'] .group-title,
-[data-theme='auto'] .group-title {
+[data-theme='hud'] .group-title,
+[data-theme='hud'] .group-title {
   font-family: var(--font-heading);
   letter-spacing: 2px;
   text-transform: uppercase;
   color: var(--accent-dim);
 }
 
-[data-theme='dark'] .nav-item,
-[data-theme='auto'] .nav-item {
+[data-theme='hud'] .nav-item,
+[data-theme='hud'] .nav-item {
   font-family: var(--font-heading);
   letter-spacing: 1px;
   border-radius: 0;
@@ -599,18 +599,18 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
   );
 }
 
-[data-theme='dark'] .nav-item.active,
-[data-theme='auto'] .nav-item.active {
+[data-theme='hud'] .nav-item.active,
+[data-theme='hud'] .nav-item.active {
   background: var(--accent-glow);
 }
 
-[data-theme='dark'] .setting-row,
-[data-theme='auto'] .setting-row {
+[data-theme='hud'] .setting-row,
+[data-theme='hud'] .setting-row {
   border-bottom-color: var(--border-subtle);
 }
 
-[data-theme='dark'] .select-trigger,
-[data-theme='auto'] .select-trigger {
+[data-theme='hud'] .select-trigger,
+[data-theme='hud'] .select-trigger {
   background: var(--bg-secondary);
   border-color: var(--border-line);
   clip-path: polygon(
@@ -624,8 +624,8 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
   border-radius: 0;
 }
 
-[data-theme='dark'] .select-dropdown,
-[data-theme='auto'] .select-dropdown {
+[data-theme='hud'] .select-dropdown,
+[data-theme='hud'] .select-dropdown {
   background: var(--bg-elevated);
   border-color: var(--border-line);
   border-radius: 0;
@@ -639,13 +639,13 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
   );
 }
 
-[data-theme='dark'] .toggle-btn,
-[data-theme='auto'] .toggle-btn {
+[data-theme='hud'] .toggle-btn,
+[data-theme='hud'] .toggle-btn {
   background: var(--gray-300);
 }
 
-[data-theme='dark'] .toggle-btn.on,
-[data-theme='auto'] .toggle-btn.on {
+[data-theme='hud'] .toggle-btn.on,
+[data-theme='hud'] .toggle-btn.on {
   background: var(--accent);
 }
 </style>

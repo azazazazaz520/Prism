@@ -117,8 +117,8 @@ function handleClick(item: ModuleDescriptor) {
   transition: all var(--transition-normal);
 }
 
-[data-theme='dark'] .sidebar,
-[data-theme='auto'] .sidebar {
+[data-theme='hud'] .sidebar,
+[data-theme='hud'] .sidebar {
   background:
     linear-gradient(
       135deg,
@@ -138,8 +138,8 @@ function handleClick(item: ModuleDescriptor) {
   margin-bottom: var(--space-lg);
 }
 
-[data-theme='dark'] .sidebar-brand,
-[data-theme='auto'] .sidebar-brand {
+[data-theme='hud'] .sidebar-brand,
+[data-theme='hud'] .sidebar-brand {
   margin-bottom: var(--space-xl);
 }
 
@@ -150,8 +150,8 @@ function handleClick(item: ModuleDescriptor) {
   stroke-width: 1.5;
 }
 
-[data-theme='dark'] .brand-icon,
-[data-theme='auto'] .brand-icon {
+[data-theme='hud'] .brand-icon,
+[data-theme='hud'] .brand-icon {
   filter: drop-shadow(0 0 6px rgba(245, 197, 24, 0.4));
 }
 
@@ -162,8 +162,8 @@ function handleClick(item: ModuleDescriptor) {
   letter-spacing: -0.3px;
 }
 
-[data-theme='dark'] .brand-name,
-[data-theme='auto'] .brand-name {
+[data-theme='hud'] .brand-name,
+[data-theme='hud'] .brand-name {
   font-family: var(--font-heading);
   letter-spacing: 3px;
   text-transform: uppercase;
@@ -199,8 +199,8 @@ function handleClick(item: ModuleDescriptor) {
   transition: all var(--transition-fast);
 }
 
-[data-theme='dark'] .nav-item,
-[data-theme='auto'] .nav-item {
+[data-theme='hud'] .nav-item,
+[data-theme='hud'] .nav-item {
   border-radius: 0;
   clip-path: polygon(
     6px 0%,
@@ -227,8 +227,8 @@ function handleClick(item: ModuleDescriptor) {
   font-weight: var(--font-weight-semibold);
 }
 
-[data-theme='dark'] .nav-item.active,
-[data-theme='auto'] .nav-item.active {
+[data-theme='hud'] .nav-item.active,
+[data-theme='hud'] .nav-item.active {
   background: var(--accent-glow);
 }
 
@@ -242,8 +242,8 @@ function handleClick(item: ModuleDescriptor) {
   background: var(--accent);
 }
 
-[data-theme='dark'] .nav-accent-bar,
-[data-theme='auto'] .nav-accent-bar {
+[data-theme='hud'] .nav-accent-bar,
+[data-theme='hud'] .nav-accent-bar {
   border-radius: 0;
   width: 2px;
   box-shadow: 0 0 8px var(--accent);

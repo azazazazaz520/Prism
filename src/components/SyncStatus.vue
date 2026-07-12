@@ -39,8 +39,8 @@ function forceSync() {
   transition: background 0.15s;
 }
 
-[data-theme='dark'] .sync-status,
-[data-theme='auto'] .sync-status {
+[data-theme='hud'] .sync-status,
+[data-theme='hud'] .sync-status {
   font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.5px;
@@ -62,8 +62,8 @@ function forceSync() {
   background: var(--accent);
 }
 
-[data-theme='dark'] .sync-indicator.idle,
-[data-theme='auto'] .sync-indicator.idle {
+[data-theme='hud'] .sync-indicator.idle,
+[data-theme='hud'] .sync-indicator.idle {
   box-shadow: 0 0 6px var(--accent);
   animation: breathe 3s ease-in-out infinite;
 }
@@ -73,8 +73,8 @@ function forceSync() {
   animation: spin 1s linear infinite;
 }
 
-[data-theme='dark'] .sync-indicator.syncing,
-[data-theme='auto'] .sync-indicator.syncing {
+[data-theme='hud'] .sync-indicator.syncing,
+[data-theme='hud'] .sync-indicator.syncing {
   animation: heartbeat 1.5s ease-in-out infinite;
 }
 

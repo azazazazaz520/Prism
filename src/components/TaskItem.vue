@@ -397,8 +397,8 @@ const dueLabel = computed(() => {
   margin-bottom: var(--space-xs);
 }
 
-[data-theme='dark'] .task-item,
-[data-theme='auto'] .task-item {
+[data-theme='hud'] .task-item,
+[data-theme='hud'] .task-item {
   background: transparent;
   border-radius: 0;
   clip-path: polygon(
@@ -413,20 +413,20 @@ const dueLabel = computed(() => {
   animation: fadeSlideIn 0.3s ease both;
 }
 
-[data-theme='dark'] .task-item:nth-child(2),
-[data-theme='auto'] .task-item:nth-child(2) {
+[data-theme='hud'] .task-item:nth-child(2),
+[data-theme='hud'] .task-item:nth-child(2) {
   animation-delay: 0.05s;
 }
-[data-theme='dark'] .task-item:nth-child(3),
-[data-theme='auto'] .task-item:nth-child(3) {
+[data-theme='hud'] .task-item:nth-child(3),
+[data-theme='hud'] .task-item:nth-child(3) {
   animation-delay: 0.1s;
 }
-[data-theme='dark'] .task-item:nth-child(4),
-[data-theme='auto'] .task-item:nth-child(4) {
+[data-theme='hud'] .task-item:nth-child(4),
+[data-theme='hud'] .task-item:nth-child(4) {
   animation-delay: 0.15s;
 }
-[data-theme='dark'] .task-item:nth-child(5),
-[data-theme='auto'] .task-item:nth-child(5) {
+[data-theme='hud'] .task-item:nth-child(5),
+[data-theme='hud'] .task-item:nth-child(5) {
   animation-delay: 0.2s;
 }
 
@@ -446,8 +446,8 @@ const dueLabel = computed(() => {
   box-shadow: var(--shadow-sm);
 }
 
-[data-theme='dark'] .task-item:hover,
-[data-theme='auto'] .task-item:hover {
+[data-theme='hud'] .task-item:hover,
+[data-theme='hud'] .task-item:hover {
   background: var(--bg-panel-hover);
   border-color: var(--border-subtle);
   box-shadow: none;
@@ -472,8 +472,8 @@ const dueLabel = computed(() => {
   position: relative;
 }
 
-[data-theme='dark'] .task-checkbox,
-[data-theme='auto'] .task-checkbox {
+[data-theme='hud'] .task-checkbox,
+[data-theme='hud'] .task-checkbox {
   border-color: var(--text-tertiary);
   clip-path: polygon(
     3px 0%,
@@ -507,8 +507,8 @@ const dueLabel = computed(() => {
   transform: rotate(45deg);
 }
 
-[data-theme='dark'] .task-checkbox:checked::after,
-[data-theme='auto'] .task-checkbox:checked::after {
+[data-theme='hud'] .task-checkbox:checked::after,
+[data-theme='hud'] .task-checkbox:checked::after {
   border-color: #0f1118;
 }
 
@@ -534,8 +534,8 @@ const dueLabel = computed(() => {
   word-break: break-word;
 }
 
-[data-theme='dark'] .task-title,
-[data-theme='auto'] .task-title {
+[data-theme='hud'] .task-title,
+[data-theme='hud'] .task-title {
   font-family: var(--font-heading);
   font-size: 13px;
   font-weight: 500;
@@ -552,8 +552,8 @@ const dueLabel = computed(() => {
   margin-top: 3px;
 }
 
-[data-theme='dark'] .icon-star,
-[data-theme='auto'] .icon-star {
+[data-theme='hud'] .icon-star,
+[data-theme='hud'] .icon-star {
   color: var(--status-danger);
 }
 .icon-daily {
@@ -578,8 +578,8 @@ const dueLabel = computed(() => {
   color: var(--text-disabled);
 }
 
-[data-theme='dark'] .task-time,
-[data-theme='auto'] .task-time {
+[data-theme='hud'] .task-time,
+[data-theme='hud'] .task-time {
   font-family: var(--font-mono);
   font-size: 10px;
   color: var(--text-tertiary);
@@ -592,8 +592,8 @@ const dueLabel = computed(() => {
   font-weight: 500;
 }
 
-[data-theme='dark'] .due-badge,
-[data-theme='auto'] .due-badge {
+[data-theme='hud'] .due-badge,
+[data-theme='hud'] .due-badge {
   font-family: var(--font-mono);
   font-size: 9px;
   border-radius: 0;
@@ -621,8 +621,8 @@ const dueLabel = computed(() => {
   transition: all var(--transition-fast);
 }
 
-[data-theme='dark'] .tag-badge,
-[data-theme='auto'] .tag-badge {
+[data-theme='hud'] .tag-badge,
+[data-theme='hud'] .tag-badge {
   background: rgba(245, 197, 24, 0.12);
   border: 1px solid rgba(245, 197, 24, 0.3);
   clip-path: polygon(
@@ -645,8 +645,8 @@ const dueLabel = computed(() => {
   color: var(--accent);
 }
 
-[data-theme='dark'] .tag-badge:hover,
-[data-theme='auto'] .tag-badge:hover {
+[data-theme='hud'] .tag-badge:hover,
+[data-theme='hud'] .tag-badge:hover {
   border-color: var(--accent);
   color: var(--accent);
   background: var(--accent-glow);
@@ -739,8 +739,8 @@ const dueLabel = computed(() => {
   width: 200px;
 }
 
-[data-theme='dark'] .task-menu,
-[data-theme='auto'] .task-menu {
+[data-theme='hud'] .task-menu,
+[data-theme='hud'] .task-menu {
   background: var(--bg-elevated);
   border-color: var(--border-line);
 }

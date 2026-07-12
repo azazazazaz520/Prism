@@ -169,8 +169,8 @@ function isToday(day: number): boolean {
   background: var(--bg-tertiary);
 }
 
-[data-theme='dark'] .datepicker,
-[data-theme='auto'] .datepicker {
+[data-theme='hud'] .datepicker,
+[data-theme='hud'] .datepicker {
   background: var(--bg-elevated);
   border: 1px solid var(--border-line);
   clip-path: polygon(
@@ -184,26 +184,26 @@ function isToday(day: number): boolean {
   border-radius: 0;
 }
 
-[data-theme='dark'] .dp-day,
-[data-theme='auto'] .dp-day {
+[data-theme='hud'] .dp-day,
+[data-theme='hud'] .dp-day {
   font-family: var(--font-mono);
   font-size: 11px;
 }
 
-[data-theme='dark'] .dp-day.today,
-[data-theme='auto'] .dp-day.today {
+[data-theme='hud'] .dp-day.today,
+[data-theme='hud'] .dp-day.today {
   background: var(--accent);
   color: #0f1118;
 }
 
-[data-theme='dark'] .dp-clear,
-[data-theme='auto'] .dp-clear {
+[data-theme='hud'] .dp-clear,
+[data-theme='hud'] .dp-clear {
   border-color: var(--border-line);
   color: var(--text-secondary);
 }
 
-[data-theme='dark'] .dp-clear:hover,
-[data-theme='auto'] .dp-clear:hover {
+[data-theme='hud'] .dp-clear:hover,
+[data-theme='hud'] .dp-clear:hover {
   border-color: var(--accent);
   color: var(--accent);
   background: var(--accent-glow-s);

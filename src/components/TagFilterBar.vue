@@ -92,8 +92,8 @@ function handleAddTag() {
   transition: all var(--transition-fast);
 }
 
-[data-theme='dark'] .tag-chip,
-[data-theme='auto'] .tag-chip {
+[data-theme='hud'] .tag-chip,
+[data-theme='hud'] .tag-chip {
   font-family: var(--font-sans);
   font-size: 12px;
   font-weight: 500;
@@ -116,8 +116,8 @@ function handleAddTag() {
   background: var(--bg-hover);
 }
 
-[data-theme='dark'] .tag-chip:hover,
-[data-theme='auto'] .tag-chip:hover {
+[data-theme='hud'] .tag-chip:hover,
+[data-theme='hud'] .tag-chip:hover {
   border-color: var(--accent);
   color: var(--accent);
   background: rgba(245, 197, 24, 0.1);
@@ -129,8 +129,8 @@ function handleAddTag() {
   border-color: var(--accent);
 }
 
-[data-theme='dark'] .tag-chip.active,
-[data-theme='auto'] .tag-chip.active {
+[data-theme='hud'] .tag-chip.active,
+[data-theme='hud'] .tag-chip.active {
   color: #0f1118;
   background: var(--accent);
   border-color: var(--accent);

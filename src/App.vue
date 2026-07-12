@@ -411,8 +411,8 @@ function goToVendorSettings() {
   border-right: 1px solid var(--border-subtle);
 }
 
-[data-theme='dark'] .icon-rail,
-[data-theme='auto'] .icon-rail {
+[data-theme='hud'] .icon-rail,
+[data-theme='hud'] .icon-rail {
   background:
     linear-gradient(90deg, rgba(245, 197, 24, 0.05) 0%, transparent 30%), var(--bg-deep, #0f1118);
 }
@@ -422,8 +422,8 @@ function goToVendorSettings() {
   color: var(--accent);
 }
 
-[data-theme='dark'] .rail-brand,
-[data-theme='auto'] .rail-brand {
+[data-theme='hud'] .rail-brand,
+[data-theme='hud'] .rail-brand {
   filter: drop-shadow(0 0 6px rgba(245, 197, 24, 0.4));
 }
 
@@ -441,8 +441,8 @@ function goToVendorSettings() {
   transition: all 0.2s;
 }
 
-[data-theme='dark'] .rail-btn,
-[data-theme='auto'] .rail-btn {
+[data-theme='hud'] .rail-btn,
+[data-theme='hud'] .rail-btn {
   clip-path: polygon(
     6px 0%,
     100% 0%,
@@ -496,8 +496,8 @@ function goToVendorSettings() {
   border-right: 1px solid var(--border-subtle);
 }
 
-[data-theme='dark'] .task-sidebar,
-[data-theme='auto'] .task-sidebar {
+[data-theme='hud'] .task-sidebar,
+[data-theme='hud'] .task-sidebar {
   background:
     linear-gradient(
       135deg,
@@ -573,8 +573,8 @@ function goToVendorSettings() {
   background: var(--bg-primary);
 }
 
-[data-theme='dark'] .main-area,
-[data-theme='auto'] .main-area {
+[data-theme='hud'] .main-area,
+[data-theme='hud'] .main-area {
   background:
     linear-gradient(
       135deg,
@@ -686,8 +686,8 @@ function goToVendorSettings() {
   border-left: 1px solid var(--border-subtle);
 }
 
-[data-theme='dark'] .right-panel,
-[data-theme='auto'] .right-panel {
+[data-theme='hud'] .right-panel,
+[data-theme='hud'] .right-panel {
   background:
     linear-gradient(
       135deg,

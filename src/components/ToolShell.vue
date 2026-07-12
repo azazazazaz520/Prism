@@ -112,8 +112,8 @@ const emit = defineEmits<{ back: [] }>();
   background: var(--bg-secondary);
 }
 
-[data-theme='dark'] .tool-shell,
-[data-theme='auto'] .tool-shell {
+[data-theme='hud'] .tool-shell,
+[data-theme='hud'] .tool-shell {
   background:
     linear-gradient(
       135deg,
@@ -125,25 +125,25 @@ const emit = defineEmits<{ back: [] }>();
     var(--bg-primary);
 }
 
-[data-theme='dark'] .tool-header,
-[data-theme='auto'] .tool-header {
+[data-theme='hud'] .tool-header,
+[data-theme='hud'] .tool-header {
   background: var(--bg-deep);
   border-bottom-color: var(--border-subtle);
 }
 
-[data-theme='dark'] .tool-title,
-[data-theme='auto'] .tool-title {
+[data-theme='hud'] .tool-title,
+[data-theme='hud'] .tool-title {
   font-family: var(--font-heading);
   letter-spacing: 1px;
 }
 
-[data-theme='dark'] .tool-back:hover,
-[data-theme='auto'] .tool-back:hover {
+[data-theme='hud'] .tool-back:hover,
+[data-theme='hud'] .tool-back:hover {
   background: var(--bg-panel-hover);
 }
 
-[data-theme='dark'] .tool-footer,
-[data-theme='auto'] .tool-footer {
+[data-theme='hud'] .tool-footer,
+[data-theme='hud'] .tool-footer {
   background: var(--bg-deep);
   border-top-color: var(--border-subtle);
 }

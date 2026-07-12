@@ -295,24 +295,24 @@ defineOptions({ name: 'TreeNode' });
   color: #e74c3c;
 }
 
-[data-theme='dark'] .tree-row:hover,
-[data-theme='auto'] .tree-row:hover {
+[data-theme='hud'] .tree-row:hover,
+[data-theme='hud'] .tree-row:hover {
   background: var(--bg-panel-hover);
 }
 
-[data-theme='dark'] .tree-row.active,
-[data-theme='auto'] .tree-row.active {
+[data-theme='hud'] .tree-row.active,
+[data-theme='hud'] .tree-row.active {
   background: var(--accent-glow);
   color: var(--accent);
 }
 
-[data-theme='dark'] .tree-children,
-[data-theme='auto'] .tree-children {
+[data-theme='hud'] .tree-children,
+[data-theme='hud'] .tree-children {
   border-left-color: var(--border-subtle);
 }
 
-[data-theme='dark'] .node-btn:hover,
-[data-theme='auto'] .node-btn:hover {
+[data-theme='hud'] .node-btn:hover,
+[data-theme='hud'] .node-btn:hover {
   background: var(--bg-panel-hover);
 }
 </style>

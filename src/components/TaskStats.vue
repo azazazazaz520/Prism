@@ -87,13 +87,13 @@ const progressPct = computed(() =>
   transition: width 0.4s ease;
 }
 
-[data-theme='dark'] .progress-bar,
-[data-theme='auto'] .progress-bar {
+[data-theme='hud'] .progress-bar,
+[data-theme='hud'] .progress-bar {
   background: rgba(255, 255, 255, 0.05);
 }
 
-[data-theme='dark'] .progress-fill,
-[data-theme='auto'] .progress-fill {
+[data-theme='hud'] .progress-fill,
+[data-theme='hud'] .progress-fill {
   box-shadow: 0 0 8px var(--accent-glow);
 }
 </style>

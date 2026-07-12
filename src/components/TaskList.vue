@@ -131,26 +131,26 @@ const normalTasks = computed(() => sortedTasks.value.filter((t) => !t.pinned || 
   background: var(--border-light);
 }
 
-[data-theme='dark'] .task-list,
-[data-theme='auto'] .task-list {
+[data-theme='hud'] .task-list,
+[data-theme='hud'] .task-list {
   background: transparent;
 }
 
-[data-theme='dark'] .task-empty,
-[data-theme='auto'] .task-empty {
+[data-theme='hud'] .task-empty,
+[data-theme='hud'] .task-empty {
   color: var(--text-tertiary);
   font-family: var(--font-heading);
   letter-spacing: 2px;
   text-transform: uppercase;
 }
 
-[data-theme='dark'] .pinned-section,
-[data-theme='auto'] .pinned-section {
+[data-theme='hud'] .pinned-section,
+[data-theme='hud'] .pinned-section {
   background: transparent;
 }
 
-[data-theme='dark'] .pinned-header,
-[data-theme='auto'] .pinned-header {
+[data-theme='hud'] .pinned-header,
+[data-theme='hud'] .pinned-header {
   font-family: var(--font-heading);
   font-size: 10px;
   font-weight: 600;
@@ -160,16 +160,16 @@ const normalTasks = computed(() => sortedTasks.value.filter((t) => !t.pinned || 
   border-bottom-color: var(--border-subtle);
 }
 
-[data-theme='dark'] .pinned-header::after,
-[data-theme='auto'] .pinned-header::after {
+[data-theme='hud'] .pinned-header::after,
+[data-theme='hud'] .pinned-header::after {
   content: '';
   flex: 1;
   height: 1px;
   background: var(--border-subtle);
 }
 
-[data-theme='dark'] .section-divider,
-[data-theme='auto'] .section-divider {
+[data-theme='hud'] .section-divider,
+[data-theme='hud'] .section-divider {
   background: var(--border-subtle);
 }
 </style>

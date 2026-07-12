@@ -157,8 +157,8 @@ function isSelected(day: number): boolean {
   padding: var(--space-md);
 }
 
-[data-theme='dark'] .mini-calendar,
-[data-theme='auto'] .mini-calendar {
+[data-theme='hud'] .mini-calendar,
+[data-theme='hud'] .mini-calendar {
   background: var(--bg-panel, rgba(16, 19, 26, 0.82));
   border: 1px solid var(--border-subtle);
   border-radius: 0;

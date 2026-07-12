@@ -143,8 +143,8 @@ const hasItems = computed(() => (suggestion.value?.items?.length ?? 0) > 0);
   gap: var(--space-xs);
 }
 
-[data-theme='dark'] .focus-trigger,
-[data-theme='auto'] .focus-trigger {
+[data-theme='hud'] .focus-trigger,
+[data-theme='hud'] .focus-trigger {
   font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 1px;
@@ -178,8 +178,8 @@ const hasItems = computed(() => (suggestion.value?.items?.length ?? 0) > 0);
   border: 1px solid var(--accent-muted);
 }
 
-[data-theme='dark'] .focus-content,
-[data-theme='auto'] .focus-content {
+[data-theme='hud'] .focus-content,
+[data-theme='hud'] .focus-content {
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: 0;
@@ -194,8 +194,8 @@ const hasItems = computed(() => (suggestion.value?.items?.length ?? 0) > 0);
   position: relative;
 }
 
-[data-theme='dark'] .focus-content::before,
-[data-theme='auto'] .focus-content::before {
+[data-theme='hud'] .focus-content::before,
+[data-theme='hud'] .focus-content::before {
   content: '';
   position: absolute;
   top: 0;
@@ -232,8 +232,8 @@ const hasItems = computed(() => (suggestion.value?.items?.length ?? 0) > 0);
   line-height: 1.5;
 }
 
-[data-theme='dark'] .focus-summary,
-[data-theme='auto'] .focus-summary {
+[data-theme='hud'] .focus-summary,
+[data-theme='hud'] .focus-summary {
   font-size: 13px;
   line-height: 1.6;
   color: var(--text-secondary);

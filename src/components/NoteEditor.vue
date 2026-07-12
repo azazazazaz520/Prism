@@ -729,8 +729,8 @@ async function deleteEntry(path: string) {
 }
 
 /* ── 暗色适配 ──────────────────────────── */
-[data-theme='dark'] .note-editor,
-[data-theme='auto'] .note-editor {
+[data-theme='hud'] .note-editor,
+[data-theme='hud'] .note-editor {
   background:
     linear-gradient(
       135deg,
@@ -742,32 +742,32 @@ async function deleteEntry(path: string) {
     var(--bg-primary);
 }
 
-[data-theme='dark'] .file-tree,
-[data-theme='auto'] .file-tree {
+[data-theme='hud'] .file-tree,
+[data-theme='hud'] .file-tree {
   background: var(--bg-tertiary);
   border-color: var(--border-subtle);
 }
 
-[data-theme='dark'] .tree-title,
-[data-theme='auto'] .tree-title {
+[data-theme='hud'] .tree-title,
+[data-theme='hud'] .tree-title {
   font-family: var(--font-heading);
   letter-spacing: 2px;
   text-transform: uppercase;
 }
 
-[data-theme='dark'] .tree-row:hover,
-[data-theme='auto'] .tree-row:hover {
+[data-theme='hud'] .tree-row:hover,
+[data-theme='hud'] .tree-row:hover {
   background: var(--bg-panel-hover);
 }
 
-[data-theme='dark'] .tree-row.active,
-[data-theme='auto'] .tree-row.active {
+[data-theme='hud'] .tree-row.active,
+[data-theme='hud'] .tree-row.active {
   background: var(--accent-glow);
   color: var(--accent);
 }
 
-[data-theme='dark'] .node-btn:hover,
-[data-theme='auto'] .node-btn:hover {
+[data-theme='hud'] .node-btn:hover,
+[data-theme='hud'] .node-btn:hover {
   background: var(--bg-panel-hover);
 }
 

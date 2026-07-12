@@ -203,8 +203,8 @@ function handleKeydown(e: KeyboardEvent) {
   background: var(--bg-hover);
 }
 
-[data-theme='dark'] .dialog-container,
-[data-theme='auto'] .dialog-container {
+[data-theme='hud'] .dialog-container,
+[data-theme='hud'] .dialog-container {
   background: var(--bg-elevated);
   border: 1px solid var(--border-line);
   clip-path: polygon(
@@ -218,8 +218,8 @@ function handleKeydown(e: KeyboardEvent) {
   border-radius: 0;
 }
 
-[data-theme='dark'] .dialog-input,
-[data-theme='auto'] .dialog-input {
+[data-theme='hud'] .dialog-input,
+[data-theme='hud'] .dialog-input {
   background: var(--bg-deep, #0f1118);
   border: 1px solid var(--border-line);
   color: var(--text-primary);
@@ -234,14 +234,14 @@ function handleKeydown(e: KeyboardEvent) {
   border-radius: 0;
 }
 
-[data-theme='dark'] .dialog-input:focus,
-[data-theme='auto'] .dialog-input:focus {
+[data-theme='hud'] .dialog-input:focus,
+[data-theme='hud'] .dialog-input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 12px var(--accent-glow);
 }
 
-[data-theme='dark'] .dialog-btn,
-[data-theme='auto'] .dialog-btn {
+[data-theme='hud'] .dialog-btn,
+[data-theme='hud'] .dialog-btn {
   clip-path: polygon(
     6px 0%,
     100% 0%,
@@ -255,15 +255,15 @@ function handleKeydown(e: KeyboardEvent) {
   border-color: var(--border-line);
 }
 
-[data-theme='dark'] .dialog-btn-confirm,
-[data-theme='auto'] .dialog-btn-confirm {
+[data-theme='hud'] .dialog-btn-confirm,
+[data-theme='hud'] .dialog-btn-confirm {
   background: var(--accent);
   color: #0f1118;
   border-color: var(--accent);
 }
 
-[data-theme='dark'] .dialog-btn-confirm:hover:not(:disabled),
-[data-theme='auto'] .dialog-btn-confirm:hover:not(:disabled) {
+[data-theme='hud'] .dialog-btn-confirm:hover:not(:disabled),
+[data-theme='hud'] .dialog-btn-confirm:hover:not(:disabled) {
   background: var(--accent-hover);
   box-shadow: 0 0 12px var(--accent-glow);
 }

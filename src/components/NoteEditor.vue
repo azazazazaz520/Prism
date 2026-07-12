@@ -728,6 +728,49 @@ async function deleteEntry(path: string) {
   color: #e74c3c;
 }
 
+/* ── 暗色适配 ──────────────────────────── */
+[data-theme='hud'] .note-editor,
+[data-theme='hud'] .note-editor {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(245, 197, 24, 0.03) 0%,
+      transparent 35%,
+      transparent 75%,
+      rgba(0, 0, 0, 0.25) 100%
+    ),
+    var(--bg-primary);
+}
+
+[data-theme='hud'] .file-tree,
+[data-theme='hud'] .file-tree {
+  background: var(--bg-tertiary);
+  border-color: var(--border-subtle);
+}
+
+[data-theme='hud'] .tree-title,
+[data-theme='hud'] .tree-title {
+  font-family: var(--font-heading);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+[data-theme='hud'] .tree-row:hover,
+[data-theme='hud'] .tree-row:hover {
+  background: var(--bg-panel-hover);
+}
+
+[data-theme='hud'] .tree-row.active,
+[data-theme='hud'] .tree-row.active {
+  background: var(--accent-glow);
+  color: var(--accent);
+}
+
+[data-theme='hud'] .node-btn:hover,
+[data-theme='hud'] .node-btn:hover {
+  background: var(--bg-panel-hover);
+}
+
 /* ── 文件树底部目录设置 ──────────── */
 
 .tree-footer {

@@ -1,5 +1,5 @@
-use super::AppState;
 use crate::store;
+use crate::AppState;
 use tauri::{LogicalSize, Manager};
 
 // ── 窗口管理 ──────────────────────────────
@@ -80,14 +80,14 @@ pub fn hide_selector_window(app: tauri::AppHandle) -> Result<(), String> {
 /// 设置任务到期提醒的提前分钟数（0 表示关闭提醒）
 #[tauri::command]
 pub fn set_reminder_minutes(state: tauri::State<AppState>, minutes: u32) -> Result<(), String> {
-    let mut config = state.config.lock().unwrap();
-    config.reminder_minutes = minutes;
-    store::save_config(&config)
+    state.with_config_mut(|config| {
+        config.reminder_minutes = minutes;
+    })
 }
 
 #[tauri::command]
 pub fn get_reminder_minutes(state: tauri::State<AppState>) -> u32 {
-    state.config.lock().unwrap().reminder_minutes
+    state.with_config(|config| config.reminder_minutes)
 }
 
 // ── AI 设置查询 ──────────────────────────────
@@ -95,10 +95,11 @@ pub fn get_reminder_minutes(state: tauri::State<AppState>) -> u32 {
 /// 获取 AI 配置状态：激活供应商 ID + 是否有启用的供应商
 #[tauri::command]
 pub fn get_ai_settings_all(state: tauri::State<AppState>) -> serde_json::Value {
-    let config = state.config.lock().unwrap();
-    serde_json::json!({
-        "active_vendor_id": config.active_vendor_id,
-        "has_enabled_vendor": config.vendors.iter().any(|v| v.enabled),
+    state.with_config(|config| {
+        serde_json::json!({
+            "active_vendor_id": config.active_vendor_id,
+            "has_enabled_vendor": config.vendors.iter().any(|v| v.enabled),
+        })
     })
 }
 
@@ -106,7 +107,7 @@ pub fn get_ai_settings_all(state: tauri::State<AppState>) -> serde_json::Value {
 
 #[tauri::command]
 pub fn get_vendors(state: tauri::State<AppState>) -> Vec<store::Vendor> {
-    state.config.lock().unwrap().vendors.clone()
+    state.with_config(|config| config.vendors.clone())
 }
 
 #[tauri::command]
@@ -114,52 +115,51 @@ pub fn add_vendor(
     state: tauri::State<AppState>,
     vendor: store::Vendor,
 ) -> Result<store::Vendor, String> {
-    let mut config = state.config.lock().unwrap();
-    config.vendors.push(vendor.clone());
-    store::save_config(&config)?;
-    Ok(vendor)
+    state.with_config_mut(|config| {
+        config.vendors.push(vendor.clone());
+        vendor
+    })
 }
 
 #[tauri::command]
 pub fn update_vendor(state: tauri::State<AppState>, vendor: store::Vendor) -> Result<(), String> {
-    let mut config = state.config.lock().unwrap();
-    if let Some(v) = config.vendors.iter_mut().find(|v| v.id == vendor.id) {
-        *v = vendor;
-    }
-    store::save_config(&config)
+    state.with_config_mut(|config| {
+        if let Some(v) = config.vendors.iter_mut().find(|v| v.id == vendor.id) {
+            *v = vendor;
+        }
+    })
 }
 
 /// 删除供应商，若为当前激活项则清除激活状态
 #[tauri::command]
 pub fn delete_vendor(state: tauri::State<AppState>, id: String) -> Result<(), String> {
-    let mut config = state.config.lock().unwrap();
-    config.vendors.retain(|v| v.id != id);
-    // 如果删除的是当前激活的供应商，清除激活状态
-    if config.active_vendor_id.as_deref() == Some(&id) {
-        config.active_vendor_id = None;
-    }
-    store::save_config(&config)
+    state.with_config_mut(|config| {
+        config.vendors.retain(|v| v.id != id);
+        if config.active_vendor_id.as_deref() == Some(&id) {
+            config.active_vendor_id = None;
+        }
+    })
 }
 
 #[tauri::command]
 pub fn set_active_vendor(state: tauri::State<AppState>, id: Option<String>) -> Result<(), String> {
-    let mut config = state.config.lock().unwrap();
-    config.active_vendor_id = id;
-    store::save_config(&config)
+    state.with_config_mut(|config| {
+        config.active_vendor_id = id;
+    })
 }
 
 // ── 主题 ──────────────────────────────
 
 #[tauri::command]
 pub fn get_theme(state: tauri::State<AppState>) -> String {
-    state.config.lock().unwrap().theme.clone()
+    state.with_config(|config| config.theme.clone())
 }
 
 #[tauri::command]
 pub fn set_theme(state: tauri::State<AppState>, theme: String) -> Result<(), String> {
-    let mut config = state.config.lock().unwrap();
-    config.theme = theme;
-    store::save_config(&config)
+    state.with_config_mut(|config| {
+        config.theme = theme;
+    })
 }
 
 // ── 模块配置 ──────────────────────────────
@@ -168,7 +168,7 @@ pub fn set_theme(state: tauri::State<AppState>, theme: String) -> Result<(), Str
 pub fn get_module_enabled(
     state: tauri::State<AppState>,
 ) -> std::collections::HashMap<String, bool> {
-    state.config.lock().unwrap().module_enabled.clone()
+    state.with_config(|config| config.module_enabled.clone())
 }
 
 #[tauri::command]
@@ -177,7 +177,7 @@ pub fn set_module_enabled(
     module_id: String,
     enabled: bool,
 ) -> Result<(), String> {
-    let mut config = state.config.lock().unwrap();
-    config.module_enabled.insert(module_id, enabled);
-    store::save_config(&config)
+    state.with_config_mut(|config| {
+        config.module_enabled.insert(module_id, enabled);
+    })
 }

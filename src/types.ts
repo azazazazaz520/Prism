@@ -94,6 +94,17 @@ export interface ParsedTask {
   is_daily: boolean;
 }
 
+/** AI 命令面板的执行模式 */
+export type AiMode = 'auto' | 'add' | 'summary' | 'focus';
+
+/** 统一 AI 执行结果 */
+export interface AiExecuteResult {
+  mode: string;
+  text: string;
+  tasks: ParsedTask[];
+  focus: FocusSuggestion | null;
+}
+
 /** 今日聚焦建议（AI 按优先级排序的结果） */
 export interface FocusSuggestion {
   items: { task_id: string; reason: string }[];

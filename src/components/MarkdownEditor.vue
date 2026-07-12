@@ -40,7 +40,7 @@ let suppressExternal = false;
 
 function isDark(): boolean {
   const attr = document.documentElement.dataset.theme || 'auto';
-  if (attr === 'dark') return true;
+  if (attr === 'dark' || attr === 'hud') return true;
   if (attr === 'light') return false;
   return window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
@@ -63,7 +63,6 @@ const customTheme = EditorView.theme({
   },
   '&.cm-focused': {
     outline: 'none',
-    boxShadow: 'inset 0 0 0 2px var(--accent-bg)',
   },
   '.cm-scroller': {
     fontFamily: 'inherit',

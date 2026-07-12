@@ -241,7 +241,7 @@ function autoResize() {
 
     <!-- 回复区 -->
     <div v-if="result" class="acp-result">
-      <div v-if="result.text" class="acp-text" v-html="result.text.replace(/\n/g, '<br>')"></div>
+      <div v-if="result.text" class="acp-text">{{ result.text }}</div>
 
       <!-- /add 模式：任务预览 + 创建按钮 -->
       <div v-if="result.tasks.length > 0" class="acp-tasks">
@@ -427,6 +427,7 @@ function autoResize() {
   background: var(--accent-bg);
   border: 1px solid var(--accent-muted);
   border-radius: var(--radius-md);
+  white-space: pre-line;
 }
 
 .acp-tasks {

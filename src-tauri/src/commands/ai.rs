@@ -1,5 +1,5 @@
-use super::{with_ai_context, AppState};
 use crate::{ai, store};
+use crate::{with_ai_context, AppState};
 
 /// 自然语言解析输入
 #[tauri::command]

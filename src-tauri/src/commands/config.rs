@@ -1,5 +1,5 @@
-use super::AppState;
 use crate::store;
+use crate::AppState;
 use tauri::{LogicalSize, Manager};
 
 // ── 窗口管理 ──────────────────────────────

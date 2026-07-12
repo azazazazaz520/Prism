@@ -1,9 +1,9 @@
 use std::fs;
 use tauri::State;
 
-use super::AppState;
 use crate::note_service;
 use crate::store;
+use crate::AppState;
 
 /// 列出 notes/ 目录的完整文件树
 #[tauri::command]

@@ -733,7 +733,7 @@ const dueLabel = computed(() => {
 }
 
 .menu-toggle.on {
-  background: var(--gray-900);
+  background: var(--accent);
   color: white;
 }
 
@@ -794,14 +794,16 @@ const dueLabel = computed(() => {
   border-radius: var(--radius-sm);
   font-size: var(--text-xs);
   outline: none;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 .menu-tag-input:focus {
-  border-color: var(--gray-600);
+  border-color: var(--accent);
 }
 
 .menu-tag-add {
-  background: var(--gray-900);
+  background: var(--accent);
   color: white;
   border: none;
   border-radius: var(--radius-sm);

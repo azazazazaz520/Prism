@@ -400,6 +400,10 @@ function formatDueDate(d: string): string {
   color: white;
 }
 
+.qa-btn.active:hover {
+  color: white;
+}
+
 [data-theme='hud'] .qa-btn.active,
 [data-theme='hud'] .qa-btn.active {
   color: #0f1118;
@@ -532,8 +536,7 @@ function formatDueDate(d: string): string {
   color: var(--text-secondary);
 }
 
-.date-btn-inline:hover,
-.date-btn-inline.active {
+.date-btn-inline:hover {
   border-color: var(--accent);
   color: var(--accent);
 }

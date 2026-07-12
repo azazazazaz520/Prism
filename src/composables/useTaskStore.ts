@@ -225,10 +225,10 @@ export function useTaskStore() {
     syncAllTags(merged);
   }
 
-  async function initSync() {
-    if (!isLoggedIn.value) return;
+  async function initSync(): Promise<boolean> {
+    if (!isLoggedIn.value) return false;
     const hasProfile = await syncCode.hasProfile();
-    if (!hasProfile) return;
+    if (!hasProfile) return false;
 
     subscribeToChanges(
       (remoteTask) => {
@@ -278,6 +278,7 @@ export function useTaskStore() {
         }
       },
     );
+    return true;
   }
 
   async function refreshDailyCompletions() {

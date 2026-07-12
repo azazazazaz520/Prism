@@ -79,7 +79,7 @@ onUnmounted(() => {
 
 onMounted(async () => {
   await Promise.all([loadAll(), loadAiSettings(), loadModules()]);
-  initSync();
+  const syncReady = await initSync();
   const appWindow = getCurrentWindow();
   let lastRefresh = 0;
   _unlistenFocus = await appWindow.listen('tauri://focus', () => {
@@ -90,10 +90,12 @@ onMounted(async () => {
     loadAiSettings();
   });
   window.addEventListener('prism:force-sync', _handleForceSync);
-  // 每 30 秒静默拉取远端变更，作为 Realtime WebSocket 的兜底
-  _pollInterval = setInterval(() => {
-    pullAndMerge().catch(() => {});
-  }, 30_000);
+  // 仅在同步已配置时启动 30 秒轮询，作为 Realtime WebSocket 的兜底
+  if (syncReady) {
+    _pollInterval = setInterval(() => {
+      pullAndMerge().catch(() => {});
+    }, 30_000);
+  }
 });
 
 // ── 模块切换 ──────────────────────────────
@@ -370,11 +372,6 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
 
 <style scoped>
 /* 四栏布局 — icon-rail + sidebar + main + right-panel */
-.app-layout {
-  display: grid;
-  grid-template-columns: 56px 280px 1fr 300px;
-}
-
 .app-layout {
   display: grid;
   grid-template-columns: v-bind(gridColumns);

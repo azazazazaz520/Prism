@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, nextTick } from 'vue';
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { AiMode, AiExecuteResult, ParsedTask } from '../types';
 
@@ -10,6 +10,32 @@ const emit = defineEmits<{
 // ── 模式 ────────────────────────────────
 
 const mode = ref<AiMode>('auto');
+const modeDropdownOpen = ref(false);
+const modeTriggerRef = ref<HTMLElement | null>(null);
+const modeDropdownStyle = ref<Record<string, string>>({});
+
+function toggleModeDropdown() {
+  modeDropdownOpen.value = !modeDropdownOpen.value;
+  if (modeDropdownOpen.value && modeTriggerRef.value) {
+    const rect = modeTriggerRef.value.getBoundingClientRect();
+    modeDropdownStyle.value = {
+      top: rect.bottom + 4 + 'px',
+      left: rect.left + 'px',
+    };
+  }
+}
+
+function onModeClickOutside(e: MouseEvent) {
+  if (modeDropdownOpen.value) {
+    const target = e.target as HTMLElement;
+    if (!target.closest('.acp-mode-dropdown') && !target.closest('.acp-mode-trigger')) {
+      modeDropdownOpen.value = false;
+    }
+  }
+}
+
+onMounted(() => document.addEventListener('click', onModeClickOutside));
+onUnmounted(() => document.removeEventListener('click', onModeClickOutside));
 const modeOptions: { value: AiMode; label: string; prefix: string }[] = [
   { value: 'auto', label: '自动识别', prefix: '' },
   { value: 'add', label: '添加任务', prefix: '/add' },
@@ -17,8 +43,13 @@ const modeOptions: { value: AiMode; label: string; prefix: string }[] = [
   { value: 'focus', label: '今日建议', prefix: '/focus' },
 ];
 
+const currentModeLabel = computed(
+  () => modeOptions.find((o) => o.value === mode.value)?.label ?? '自动识别',
+);
+
 function setMode(m: AiMode) {
   mode.value = m;
+  modeDropdownOpen.value = false;
 }
 
 // ── 输入 ────────────────────────────────
@@ -86,8 +117,27 @@ function onKeydown(e: KeyboardEvent) {
 
 // ── 任务创建 ────────────────────────────
 
-function createTask(task: ParsedTask) {
+const addedTaskIndices = ref(new Set<number>());
+
+const allTasksAdded = computed(() => {
+  if (!result.value || result.value.tasks.length === 0) return false;
+  return addedTaskIndices.value.size >= result.value.tasks.length;
+});
+
+function createTask(task: ParsedTask, idx: number) {
   emit('addTask', task);
+  addedTaskIndices.value.add(idx);
+  // 全部添加后清空结果
+  if (addedTaskIndices.value.size >= (result.value?.tasks.length ?? 0)) {
+    result.value = null;
+    input.value = '';
+    addedTaskIndices.value.clear();
+    nextTick(() => {
+      if (textareaRef.value) {
+        textareaRef.value.style.height = 'auto';
+      }
+    });
+  }
 }
 
 // ── 自动调整高度 ────────────────────────
@@ -108,15 +158,39 @@ function autoResize() {
     <!-- 模式选择器 + 输入区 -->
     <div class="acp-input-area">
       <div class="acp-mode-selector">
-        <select
-          class="acp-mode-select"
-          :value="mode"
-          @change="setMode(($event.target as HTMLSelectElement).value as AiMode)"
+        <button
+          ref="modeTriggerRef"
+          type="button"
+          class="acp-mode-trigger"
+          @click="toggleModeDropdown"
         >
-          <option v-for="opt in modeOptions" :key="opt.value" :value="opt.value">
-            {{ opt.label }}
-          </option>
-        </select>
+          {{ currentModeLabel }}
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+        <Teleport to="body">
+          <div v-if="modeDropdownOpen" class="acp-mode-dropdown" :style="modeDropdownStyle">
+            <button
+              v-for="opt in modeOptions"
+              :key="opt.value"
+              type="button"
+              :class="['acp-mode-option', { active: mode === opt.value }]"
+              @click="setMode(opt.value)"
+            >
+              {{ opt.label }}
+              <span v-if="opt.prefix" class="acp-mode-prefix">{{ opt.prefix }}</span>
+            </button>
+          </div>
+        </Teleport>
       </div>
       <textarea
         ref="textareaRef"
@@ -177,7 +251,13 @@ function autoResize() {
             <span v-if="task.due_date" class="acp-task-meta">{{ task.due_date }}</span>
             <span v-if="task.tags.length" class="acp-task-meta">{{ task.tags.join(', ') }}</span>
           </div>
-          <button class="acp-task-create" @click="createTask(task)">添加</button>
+          <button
+            :class="['acp-task-create', { added: addedTaskIndices.has(idx) }]"
+            :disabled="addedTaskIndices.has(idx)"
+            @click="createTask(task, idx)"
+          >
+            {{ addedTaskIndices.has(idx) ? '已添加' : '添加' }}
+          </button>
         </div>
       </div>
     </div>
@@ -208,9 +288,13 @@ function autoResize() {
   flex-shrink: 0;
   padding: var(--space-sm);
   border-right: 1px solid var(--border-subtle);
+  position: relative;
 }
 
-.acp-mode-select {
+.acp-mode-trigger {
+  display: flex;
+  align-items: center;
+  gap: 3px;
   background: transparent;
   border: none;
   color: var(--text-secondary);
@@ -219,11 +303,68 @@ function autoResize() {
   outline: none;
   cursor: pointer;
   padding: 2px 4px;
+  white-space: nowrap;
 }
 
-.acp-mode-select option {
+.acp-mode-trigger:hover {
+  color: var(--accent);
+}
+
+.acp-mode-dropdown {
+  position: fixed;
+  z-index: 200;
   background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  min-width: 140px;
+}
+
+[data-theme='hud'] .acp-mode-dropdown {
+  background: var(--bg-elevated);
+  border-color: var(--border-line);
+  clip-path: polygon(
+    8px 0%,
+    100% 0%,
+    100% calc(100% - 8px),
+    calc(100% - 8px) 100%,
+    0% 100%,
+    0% 8px
+  );
+  border-radius: 0;
+}
+
+.acp-mode-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: all var(--transition-fast);
+}
+
+.acp-mode-option:hover {
+  background: var(--bg-hover);
   color: var(--text-primary);
+}
+
+.acp-mode-option.active {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.acp-mode-prefix {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
 }
 
 .acp-input {
@@ -337,8 +478,16 @@ function autoResize() {
   font-family: inherit;
 }
 
-.acp-task-create:hover {
+.acp-task-create:hover:not(:disabled) {
   opacity: 0.85;
+}
+
+.acp-task-create:disabled,
+.acp-task-create.added {
+  background: var(--gray-300);
+  color: var(--text-muted);
+  cursor: default;
+  opacity: 0.6;
 }
 
 /* ── HUD 主题 ─────────────────────── */
@@ -356,7 +505,7 @@ function autoResize() {
   );
 }
 
-[data-theme='hud'] .acp-mode-select {
+[data-theme='hud'] .acp-mode-trigger {
   font-family: var(--font-heading);
   letter-spacing: 1px;
   text-transform: uppercase;

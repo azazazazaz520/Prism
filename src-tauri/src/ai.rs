@@ -161,6 +161,7 @@ fn task_to_summary(t: &store::Task) -> String {
         "tags": t.tags,
         "important": t.important,
         "is_daily": t.is_daily,
+        "completed": t.completed,
     })
     .to_string()
 }
@@ -293,25 +294,33 @@ pub async fn chat(
     message: &str,
     tasks: &[store::Task],
 ) -> Result<String, String> {
-    // 构建任务上下文（仅摘要，保护隐私）
-    let pending: Vec<String> = tasks
+    // 构建任务上下文（全部任务，含完成状态）
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let all: Vec<String> = tasks
         .iter()
-        .filter(|t| !t.completed)
         .map(|t| {
             serde_json::json!({
                 "title": t.title,
                 "due": t.due_date,
                 "important": t.important,
+                "completed": t.completed,
+                "is_daily": t.is_daily,
+                "tags": t.tags,
             })
             .to_string()
         })
         .collect();
 
-    let context = if pending.is_empty() {
-        "当前没有待办任务。".to_string()
-    } else {
-        format!("当前待办任务：\n{}", pending.join("\n"))
-    };
+    let total = tasks.len();
+    let completed = tasks.iter().filter(|t| t.completed).count();
+    let context = format!(
+        "当前日期：{}\n全部 {} 条任务（{} 已完成，{} 待办）：\n{}",
+        today,
+        total,
+        completed,
+        total - completed,
+        all.join("\n")
+    );
 
     let system_prompt = prompt::load(prompt::CHAT, &[("context", &context)]);
 

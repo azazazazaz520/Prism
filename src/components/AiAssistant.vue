@@ -85,11 +85,10 @@ async function runQuickAction(action: QuickAction) {
   try {
     if (action.command === 'ai_execute') {
       const result = await invoke<AiExecuteResult>('ai_execute', { mode: 'focus', input: '' });
-      if (result.focus) {
-        messages.value.push({ role: 'assistant', content: formatFocus(result.focus) });
-      } else {
-        messages.value.push({ role: 'assistant', content: result.text });
-      }
+      messages.value.push({
+        role: 'assistant',
+        content: result.text || formatFocus(result.focus!),
+      });
     } else if (action.command === 'ai_overdue_suggest') {
       const suggestions = await invoke<OverdueSuggestion[]>('ai_overdue_suggest');
       messages.value.push({ role: 'assistant', content: formatOverdue(suggestions) });

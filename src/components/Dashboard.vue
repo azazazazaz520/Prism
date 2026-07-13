@@ -76,6 +76,16 @@ const widgetComponentMap: Record<string, any> = {
   'quick-actions': QuickActions,
   'ai-command': AiCommandPanel,
 };
+
+// ── AiCommandPanel 的 addTask 事件转发 ──────────
+
+// AiCommandPanel emit addTask，但 Dashboard 用动态组件渲染，
+// 事件不会自动冒泡到父组件。这里通过 provide/inject 桥接。
+// ponytail: 后续改用全局事件总线或 store action
+function onAddTask(parsed: any) {
+  // 通过 window 事件转发给 App.vue 的 useTaskStore
+  window.dispatchEvent(new CustomEvent('prism:add-task', { detail: parsed }));
+}
 </script>
 
 <template>
@@ -107,7 +117,7 @@ const widgetComponentMap: Record<string, any> = {
           <button class="w-close" @click="removeWidget(widget.id)">&times;</button>
         </div>
         <div class="widget-body">
-          <component :is="widgetComponentMap[widget.id]" />
+          <component :is="widgetComponentMap[widget.id]" @add-task="onAddTask" />
         </div>
       </div>
     </div>

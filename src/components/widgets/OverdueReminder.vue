@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { invoke } from '@tauri-apps/api/core';
 import { useTaskStore } from '../../composables/useTaskStore';
 
-const { tasks, updateTask } = useTaskStore();
+const { tasks } = useTaskStore();
 
 function todayStr() {
   const d = new Date();
@@ -13,10 +14,27 @@ const overdueTasks = computed(() =>
   tasks.value.filter((t) => t.due_date && t.due_date < todayStr() && !t.completed && !t.is_deleted),
 );
 
-function postpone(taskId: string) {
-  const task = tasks.value.find((t) => t.id === taskId);
-  updateTask(taskId, task?.title ?? '');
-  // ponytail: 延期逻辑后续可扩展为打开 DatePicker 选日期，目前直接清空 due_date
+async function postpone(taskId: string) {
+  // 直接调用 invoke 更新 due_date 为 null（延期到未指定）
+  try {
+    await invoke('update_task', {
+      args: {
+        id: taskId,
+        title: tasks.value.find((t) => t.id === taskId)?.title ?? '',
+        dueDate: null,
+        tags: tasks.value.find((t) => t.id === taskId)?.tags ?? [],
+        important: tasks.value.find((t) => t.id === taskId)?.important ?? false,
+        pinned: tasks.value.find((t) => t.id === taskId)?.pinned ?? false,
+        isDaily: tasks.value.find((t) => t.id === taskId)?.is_daily ?? false,
+      },
+    });
+    // 同步前端状态
+    tasks.value = tasks.value.map((t) =>
+      t.id === taskId ? { ...t, due_date: null, updated_at: new Date().toISOString() } : t,
+    );
+  } catch (e) {
+    console.warn('延期失败:', e);
+  }
 }
 </script>
 

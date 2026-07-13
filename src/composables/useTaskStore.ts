@@ -137,6 +137,17 @@ export function useTaskStore() {
         }
       }
 
+      // 跨天重置每日任务的 completed 状态（今日无记录则清零）
+      // 返回被修改的任务，需同步到 Supabase 确保多设备一致
+      const changedTasks = await invoke<Task[]>('reset_daily_tasks', {
+        today: getTodayStr(),
+      });
+      if (isLoggedIn.value && changedTasks.length > 0) {
+        for (const t of changedTasks) {
+          pushTask(t).catch((e) => console.warn('[sync] push reset_daily:', e));
+        }
+      }
+
       const localTasks = await invoke<Task[]>('get_tasks');
       await refreshDailyCompletions();
 
@@ -185,6 +196,16 @@ export function useTaskStore() {
   async function refreshTasks(silent = false) {
     if (!silent) isLoading.value = true;
     try {
+      // 跨天重置每日任务的 completed 状态
+      const changedTasks = await invoke<Task[]>('reset_daily_tasks', {
+        today: getTodayStr(),
+      });
+      if (isLoggedIn.value && changedTasks.length > 0) {
+        for (const t of changedTasks) {
+          pushTask(t).catch((e) => console.warn('[sync] push reset_daily:', e));
+        }
+      }
+
       const localTasks = await invoke<Task[]>('get_tasks');
       await refreshDailyCompletions();
 

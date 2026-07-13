@@ -1,10 +1,13 @@
 // ═══════════════════════════════════════════════════════════════
 //  单实例锁 — 防止多开导致热键/数据冲突
 //
-//  机制：启动时将当前 PID 写入 ~/.prism/.instance.lock，
-//  再次启动时检查锁文件中 PID 是否仍在运行。
-//  活跃 → 拒绝启动；已死/损坏 → 覆盖旧锁；无锁 → 新建。
+//  机制：启动时将 PID + 进程名写入 ~/.prism/.instance.lock，
+//  再次启动时同时校验 PID 存活 且 进程名匹配。
+//  任一条件不满足 → 判定为过期锁 → 覆盖。
 //  主窗口关闭时自动清理锁文件。
+//
+//  锁文件格式：`<PID> <进程名>`  例: `29548 prism.exe`
+//  旧格式兼容：仅 PID 时，用当前 exe 名去匹配运行中进程。
 // ═══════════════════════════════════════════════════════════════
 
 use std::path::{Path, PathBuf};
@@ -26,11 +29,23 @@ pub fn release(lock_path: &Path) {
 //  内部实现
 // ═══════════════════════════════════════════════════════════════
 
-/// 检查指定 PID 的进程是否仍在运行。
+/// 获取当前可执行文件名（用于锁文件校验）。
+/// 失败时回退到 "prism"，不阻塞启动。
+fn current_exe_name() -> String {
+    std::env::current_exe()
+        .ok()
+        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+        .unwrap_or_else(|| "prism".to_string())
+}
+
+/// 检查指定 PID 的进程是否仍在运行（仅检查存活，不校验名称）。
+///
+/// 用于测试中的死进程探测。锁逻辑请用 `is_same_process`。
 ///
 /// Windows: 调用 `tasklist /FI "PID eq N"`，解析输出判断进程是否存在。
 /// Unix: 发送信号 0（不中断进程），根据返回值判断。
 /// PID 0 在所有平台上都是系统保留值，直接返回 false。
+#[allow(dead_code)]
 fn is_pid_alive(pid: u32) -> bool {
     if pid == 0 {
         return false;
@@ -49,17 +64,14 @@ fn is_pid_alive(pid: u32) -> bool {
     }
     #[cfg(unix)]
     {
-        // 将 u32 PID 转为 libc::pid_t（i32），无效值保守返回 false
         let pid_i32 = match i32::try_from(pid) {
             Ok(v) if v > 0 => v,
             _ => return false,
         };
-        // 发送信号 0 探测进程是否存在
         let res = unsafe { libc::kill(pid_i32, 0) };
         if res == 0 {
-            return true; // 进程存在且有权访问
+            return true;
         }
-        // errno 区分：ESRCH=进程不存在，EPERM=存在但无权限，其他保守返回 false
         match std::io::Error::last_os_error().raw_os_error() {
             Some(libc::ESRCH) => false,
             Some(libc::EPERM) => true,
@@ -68,7 +80,42 @@ fn is_pid_alive(pid: u32) -> bool {
     }
     #[cfg(all(not(windows), not(unix)))]
     {
-        // 非 Windows 非 Unix 平台：回退到默认 false
+        false
+    }
+}
+
+/// 检查指定 PID 的进程是否存活 **且** 进程名匹配。
+///
+/// Windows: `tasklist /FI "PID eq N" /FO CSV /NH` 解析 CSV 第一列。
+/// Unix: 读取 `/proc/PID/comm` 比对。
+fn is_same_process(pid: u32, expected_name: &str) -> bool {
+    if pid == 0 {
+        return false;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        std::process::Command::new("tasklist")
+            .args(["/FI", &format!("PID eq {}", pid), "/FO", "CSV", "/NH"])
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
+            .output()
+            .is_ok_and(|o| {
+                let stdout = String::from_utf8_lossy(&o.stdout);
+                // CSV 格式: "name.exe","PID","Session","Session#","Mem Usage"
+                let name = stdout.split(',').next().unwrap_or("").trim_matches('"');
+                name.eq_ignore_ascii_case(expected_name)
+            })
+    }
+    #[cfg(unix)]
+    {
+        // /proc/PID/comm 仅包含进程名（不含路径），最多 15 字符
+        if let Ok(name) = std::fs::read_to_string(format!("/proc/{}/comm", pid)) {
+            return name.trim().eq_ignore_ascii_case(expected_name);
+        }
+        false
+    }
+    #[cfg(all(not(windows), not(unix)))]
+    {
         false
     }
 }
@@ -77,18 +124,31 @@ fn is_pid_alive(pid: u32) -> bool {
 fn try_acquire_lock(lock_dir: &Path) -> Option<PathBuf> {
     let lock_path = lock_dir.join(".instance.lock");
     let current_pid = std::process::id();
+    let exe_name = current_exe_name();
 
     if lock_path.exists() {
         if let Ok(content) = std::fs::read_to_string(&lock_path) {
-            let pid: u32 = content.trim().parse().unwrap_or(0);
-            if pid != 0 && is_pid_alive(pid) {
+            // 新格式 "PID 进程名"，旧格式仅 "PID"
+            let parts: Vec<&str> = content.trim().splitn(2, ' ').collect();
+            let pid: u32 = parts.first().unwrap_or(&"0").parse().unwrap_or(0);
+            let stored_name = parts.get(1).unwrap_or(&"");
+
+            // 旧格式锁文件没有进程名 → 用当前 exe 名去匹配运行中进程
+            let check_name = if stored_name.is_empty() {
+                exe_name.as_str()
+            } else {
+                stored_name
+            };
+
+            if pid != 0 && is_same_process(pid, check_name) {
                 show_instance_already_running();
                 return None;
             }
         }
     }
 
-    match std::fs::write(&lock_path, current_pid.to_string()) {
+    let lock_content = format!("{} {}", current_pid, exe_name);
+    match std::fs::write(&lock_path, &lock_content) {
         Ok(_) => Some(lock_path),
         Err(e) => {
             eprintln!("[warn] 无法写入实例锁文件 {}: {e}", lock_path.display());
@@ -138,7 +198,6 @@ mod tests {
     }
 
     /// 找到一个确定不存在的 PID，用于测试死进程检测。
-    /// 从当前 PID + 10000 开始探测，最多尝试 100000 个 PID。
     fn find_dead_pid() -> u32 {
         let start = std::process::id().saturating_add(10_000);
         for pid in start..start.saturating_add(100_000) {
@@ -146,7 +205,6 @@ mod tests {
                 return pid;
             }
         }
-        // 极度不可能走到这里，但仍是比 u32::MAX 更安全的回退
         1
     }
 
@@ -160,6 +218,12 @@ mod tests {
         let path = lock.unwrap();
         assert!(path.exists(), "锁文件应被创建");
         assert_eq!(path, dir.join(".instance.lock"));
+        // 新格式：包含 PID 和进程名
+        let content = fs::read_to_string(&path).unwrap();
+        let parts: Vec<&str> = content.splitn(2, ' ').collect();
+        assert_eq!(parts.len(), 2, "新格式应包含 PID 和进程名");
+        assert_eq!(parts[0], std::process::id().to_string());
+        assert!(!parts[1].is_empty(), "进程名不应为空");
         release(&path);
     }
 
@@ -167,7 +231,13 @@ mod tests {
     fn active_lock_rejected() {
         let dir = temp_lock_dir();
         let my_pid = std::process::id();
-        fs::write(dir.join(".instance.lock"), my_pid.to_string()).unwrap();
+        let exe_name = current_exe_name();
+        // 写入新格式：PID + 进程名
+        fs::write(
+            dir.join(".instance.lock"),
+            format!("{} {}", my_pid, exe_name),
+        )
+        .unwrap();
         let lock = try_acquire_lock(&dir);
         assert!(lock.is_none(), "检测到活跃实例时应返回 None");
     }
@@ -176,21 +246,41 @@ mod tests {
     fn stale_lock_overwritten() {
         let dir = temp_lock_dir();
         let dead_pid = find_dead_pid();
-        fs::write(dir.join(".instance.lock"), dead_pid.to_string()).unwrap();
+        // 用不存在的 PID + 当前进程名写入，PID 不存在所以应被视为过期
+        fs::write(
+            dir.join(".instance.lock"),
+            format!("{} {}", dead_pid, current_exe_name()),
+        )
+        .unwrap();
         let lock = try_acquire_lock(&dir);
         assert!(lock.is_some(), "过期锁应被覆盖");
         let content = fs::read_to_string(dir.join(".instance.lock")).unwrap();
-        assert_eq!(content.trim(), std::process::id().to_string());
+        assert!(content.starts_with(&std::process::id().to_string()));
         release(&dir.join(".instance.lock"));
     }
 
     #[test]
-    fn nonexistent_pid_treated_as_stale() {
+    fn pid_reused_by_different_process_treated_as_stale() {
         let dir = temp_lock_dir();
-        let dead_pid = find_dead_pid();
-        fs::write(dir.join(".instance.lock"), dead_pid.to_string()).unwrap();
+        // 模拟 PID 被其他进程复用：锁文件中是 svchost.exe 的 PID
+        // 但进程名不匹配当前 exe，应视为过期
+        // 注意：此测试依赖系统中有 PID 4 (System) 不是当前进程
+        // PID 4 在 Windows 上几乎总是 System 进程
+        fs::write(dir.join(".instance.lock"), "4 svchost.exe").unwrap();
         let lock = try_acquire_lock(&dir);
-        assert!(lock.is_some(), "不存在进程的锁应被视为过期");
+        assert!(lock.is_some(), "PID 存在但进程名不匹配应视为过期锁");
+        release(&dir.join(".instance.lock"));
+    }
+
+    #[test]
+    fn old_format_lock_with_wrong_process_treated_as_stale() {
+        let dir = temp_lock_dir();
+        // 模拟旧格式锁文件（仅 PID），且该 PID 不属于当前进程
+        // PID 4 在 Windows 上几乎总是 System 进程，不是当前 exe
+        fs::write(dir.join(".instance.lock"), "4").unwrap();
+        let lock = try_acquire_lock(&dir);
+        assert!(lock.is_some(), "旧格式锁 + PID 不属于当前进程 → 应视为过期");
+        release(&dir.join(".instance.lock"));
     }
 
     #[test]
@@ -205,7 +295,7 @@ mod tests {
     fn release_lock_removes_file() {
         let dir = temp_lock_dir();
         let lock_path = dir.join(".instance.lock");
-        fs::write(&lock_path, "12345").unwrap();
+        fs::write(&lock_path, format!("{} {}", 12345, "test.exe")).unwrap();
         assert!(lock_path.exists());
         release(&lock_path);
         assert!(!lock_path.exists());
@@ -218,10 +308,37 @@ mod tests {
 
     #[test]
     fn is_pid_alive_detects_dead() {
-        // PID 0 在所有平台都是系统保留值
         assert!(!is_pid_alive(0));
-        // 探测一个确定不存在的 PID，避免 u32::MAX 在 Linux 上的可移植性问题
         let dead = find_dead_pid();
         assert!(!is_pid_alive(dead));
+    }
+
+    #[test]
+    fn is_same_process_detects_self() {
+        let my_pid = std::process::id();
+        let exe_name = current_exe_name();
+        assert!(
+            is_same_process(my_pid, &exe_name),
+            "当前进程应匹配自身 exe 名"
+        );
+    }
+
+    #[test]
+    fn is_same_process_rejects_wrong_name() {
+        // PID 4 在 Windows 上几乎总是 System、svchost 或类似系统进程
+        // 不可能是当前测试进程名
+        assert!(
+            !is_same_process(4, current_exe_name().as_str()),
+            "系统 PID 4 不应匹配当前测试 exe 名"
+        );
+    }
+
+    #[test]
+    fn is_same_process_rejects_dead_pid() {
+        let dead = find_dead_pid();
+        assert!(
+            !is_same_process(dead, "any-name.exe"),
+            "不存在的 PID 应返回 false"
+        );
     }
 }

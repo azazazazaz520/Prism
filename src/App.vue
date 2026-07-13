@@ -19,6 +19,7 @@ import { useModuleRegistry } from './composables/useModuleRegistry';
 import { useTaskStore } from './composables/useTaskStore';
 import { useAiStatus } from './composables/useAiStatus';
 import { useDashboard } from './composables/useDashboard';
+import { usePluginSystem } from './composables/usePluginSystem';
 
 // ── 模块注册表 ──────────────────────────────
 
@@ -83,6 +84,50 @@ onMounted(async () => {
   await Promise.all([loadAll(), loadAiSettings(), loadModules()]);
   const { loadLayout } = useDashboard();
   loadLayout();
+
+  // 将核心模块注册为内建插件
+  const { registerBuiltin } = usePluginSystem();
+  registerBuiltin(
+    {
+      id: 'prism.tasks',
+      name: '任务管理',
+      version: '0.1.0',
+      author: 'Prism',
+      permissions: ['tasks:read', 'tasks:write'],
+    },
+    ['tasks'],
+  );
+  registerBuiltin(
+    {
+      id: 'prism.ai',
+      name: 'AI 助手',
+      version: '0.1.0',
+      author: 'Prism',
+      permissions: ['ai:invoke'],
+    },
+    ['ai-assistant'],
+  );
+  registerBuiltin(
+    {
+      id: 'prism.notes',
+      name: 'Markdown 笔记',
+      version: '0.1.0',
+      author: 'Prism',
+      permissions: ['tasks:read'],
+    },
+    ['notes'],
+  );
+  registerBuiltin(
+    {
+      id: 'prism.devtools',
+      name: '开发者工具箱',
+      version: '0.1.0',
+      author: 'Prism',
+      permissions: [],
+    },
+    ['devtools'],
+  );
+
   const syncReady = await initSync();
   const appWindow = getCurrentWindow();
   let lastRefresh = 0;

@@ -23,7 +23,7 @@ pub async fn ai_execute(
             .filter(|t| !t.is_deleted)
             .flat_map(|t| t.tags.clone())
             .collect();
-        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        let today = chrono::Local::now().date_naive();
         let completed: Vec<store::Task> = data
             .tasks
             .iter()
@@ -32,7 +32,11 @@ pub async fn ai_execute(
                     && !t.is_deleted
                     && t.completed_at
                         .as_deref()
-                        .is_some_and(|d| d.starts_with(&today))
+                        .is_some_and(|d| {
+                            chrono::DateTime::parse_from_rfc3339(d)
+                                .map(|dt| dt.with_timezone(&chrono::Local).date_naive() == today)
+                                .unwrap_or(false)
+                        })
             })
             .cloned()
             .collect();

@@ -3,16 +3,21 @@ import { ref, inject } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { AiExecuteResult } from '../../types';
 import { useAiStatus } from '../../composables/useAiStatus';
+import { useAiResultCache } from '../../composables/useAiResultCache';
+
+const {
+  focusSummary: summary,
+  focusHasLoaded: hasLoaded,
+  focusTooShort: resultTooShort,
+  saveFocusResult,
+  clearFocusResult,
+} = useAiResultCache();
+
+const MIN_ANALYSIS_LENGTH = 30;
+const loading = ref(false);
 
 const { aiEnabled, load: refreshAiStatus } = useAiStatus();
 const showAiConfigGuide = inject<() => void>('showAiConfigGuide', () => {});
-const summary = ref('');
-const loading = ref(false);
-const hasLoaded = ref(false);
-const resultTooShort = ref(false);
-
-/** 低于此字数视为无效分析 */
-const MIN_ANALYSIS_LENGTH = 30;
 
 async function refresh() {
   await refreshAiStatus();
@@ -26,22 +31,22 @@ async function refresh() {
     const result = await invoke<AiExecuteResult>('ai_execute', { mode: 'focus', input: '' });
     const text = (result && result.text ? result.text : '').trim();
     if (!text) {
-      summary.value = 'AI 返回为空，请重试';
-      resultTooShort.value = true;
+      saveFocusResult('AI 返回为空，请重试', true);
     } else if (text.length < MIN_ANALYSIS_LENGTH) {
-      resultTooShort.value = true;
-      summary.value = text;
+      saveFocusResult(text, true);
     } else {
-      summary.value = text;
+      saveFocusResult(text, false);
     }
-    hasLoaded.value = true;
   } catch (e: any) {
     console.error('[AiSummary]', e);
-    summary.value = typeof e === 'string' ? e : 'AI 分析失败，请重试';
-    hasLoaded.value = true;
+    saveFocusResult(typeof e === 'string' ? e : 'AI 分析失败，请重试', true);
   } finally {
     loading.value = false;
   }
+}
+
+function clear() {
+  clearFocusResult();
 }
 </script>
 
@@ -61,6 +66,7 @@ async function refresh() {
     </div>
     <div class="ai-actions">
       <button class="ai-btn" @click="refresh">重新分析</button>
+      <button class="ai-btn ai-btn-clear" @click="clear">清除</button>
     </div>
   </template>
 </template>
@@ -85,10 +91,6 @@ async function refresh() {
   font-size: 12px;
   color: var(--text-secondary);
   line-height: 1.6;
-}
-.ai-high {
-  color: var(--accent);
-  font-weight: 600;
 }
 .ai-actions {
   display: flex;
@@ -121,6 +123,10 @@ async function refresh() {
 .ai-btn:hover {
   border-color: var(--accent);
   color: var(--accent);
+}
+.ai-btn-clear:hover {
+  border-color: var(--danger);
+  color: var(--danger);
 }
 .ai-too-short {
   font-size: 11px;

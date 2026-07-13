@@ -52,12 +52,20 @@ function setMode(m: AiMode) {
   modeDropdownOpen.value = false;
 }
 
+import { useAiResultCache } from '../composables/useAiResultCache';
+
+const {
+  commandResult: result,
+  commandError: error,
+  saveCommandResult,
+  saveCommandError,
+  clearCommandResult,
+} = useAiResultCache();
+
 // ── 输入 ────────────────────────────────
 
 const input = ref('');
 const loading = ref(false);
-const result = ref<AiExecuteResult | null>(null);
-const error = ref('');
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 
 // 检测命令前缀自动切换模式
@@ -92,20 +100,24 @@ async function submit() {
   }
 
   loading.value = true;
-  error.value = '';
-  result.value = null;
+  clearCommandResult();
 
   try {
     const res = await invoke<AiExecuteResult>('ai_execute', {
       mode: currentMode,
       input: sendText,
     });
-    result.value = res;
+    saveCommandResult(res);
   } catch (e: any) {
-    error.value = typeof e === 'string' ? e : 'AI 请求失败';
+    saveCommandError(typeof e === 'string' ? e : 'AI 请求失败');
   } finally {
     loading.value = false;
   }
+}
+
+function clearResult() {
+  clearCommandResult();
+  addedTaskIndices.value.clear();
 }
 
 function onKeydown(e: KeyboardEvent) {
@@ -129,7 +141,7 @@ function createTask(task: ParsedTask, idx: number) {
   addedTaskIndices.value.add(idx);
   // 全部添加后清空结果
   if (addedTaskIndices.value.size >= (result.value?.tasks.length ?? 0)) {
-    result.value = null;
+    clearCommandResult();
     input.value = '';
     addedTaskIndices.value.clear();
     nextTick(() => {
@@ -259,6 +271,9 @@ function autoResize() {
 
     <!-- 回复区 -->
     <div v-if="result" class="acp-result">
+      <div class="acp-result-actions">
+        <button class="acp-clear-btn" @click="clearResult">清除结果</button>
+      </div>
       <div v-if="result.text" class="acp-text">{{ result.text }}</div>
 
       <!-- /add 模式：任务预览 + 创建按钮 -->
@@ -441,6 +456,27 @@ function autoResize() {
   }
 }
 
+.acp-result-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-xs);
+}
+.acp-clear-btn {
+  font-family: var(--font-heading);
+  font-size: 8px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border: 1px solid var(--border-default);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.acp-clear-btn:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
 .acp-error {
   margin-top: var(--space-xs);
   font-size: var(--text-xs);

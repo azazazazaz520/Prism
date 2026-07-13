@@ -95,7 +95,10 @@ function onAddTask(parsed: any) {
         v-for="widget in enabledWidgets()"
         :key="widget.id"
         class="widget"
-        :class="{ 'span-2': widget.size.w >= 2 }"
+        :style="{
+          gridColumn: widget.position.x + 1 + ' / span ' + widget.size.w,
+          gridRow: widget.position.y + 1 + ' / span ' + widget.size.h,
+        }"
       >
         <div
           class="widget-header"

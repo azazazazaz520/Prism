@@ -125,7 +125,6 @@ mod tests {
             module_enabled: std::collections::HashMap::new(),
             notes_dir: None,
             dashboard_layout: None,
-            plugins: None,
         };
         let json = serde_json::to_string(&config).unwrap();
         let parsed: ConfigStore = serde_json::from_str(&json).unwrap();

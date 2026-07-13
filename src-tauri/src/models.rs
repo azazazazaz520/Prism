@@ -116,9 +116,6 @@ pub struct ConfigStore {
     /// 仪表盘布局配置（JSON 字符串，前端序列化）
     #[serde(default)]
     pub dashboard_layout: Option<String>,
-    /// 已安装插件列表（JSON 字符串）
-    #[serde(default)]
-    pub plugins: Option<String>,
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -150,7 +147,6 @@ pub fn default_config_store() -> ConfigStore {
         module_enabled: std::collections::HashMap::new(),
         notes_dir: None,
         dashboard_layout: None,
-        plugins: None,
     }
 }
 

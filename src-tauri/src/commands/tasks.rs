@@ -32,6 +32,15 @@ pub fn get_daily_completions(state: tauri::State<AppState>, date: String) -> Vec
     state.read_data(|d| task_service::daily_completions(d, &date))
 }
 
+/// 跨天重置每日任务的 completed 状态，返回被修改的任务快照供前端同步到 Supabase
+#[tauri::command]
+pub fn reset_daily_tasks(
+    state: tauri::State<AppState>,
+    today: String,
+) -> Result<Vec<store::Task>, String> {
+    state.write_data(|d| task_service::reset_daily_tasks(d, &today))
+}
+
 // ═══════════════════════════════════════════════════════════════
 //  写命令 — 通过 AppState::write_data 一行委托
 // ═══════════════════════════════════════════════════════════════

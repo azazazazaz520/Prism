@@ -1,47 +1,85 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, inject } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { AiExecuteResult } from '../../types';
 import { useAiStatus } from '../../composables/useAiStatus';
 
-const { aiEnabled } = useAiStatus();
+const { aiEnabled, load: refreshAiStatus } = useAiStatus();
+const showAiConfigGuide = inject<() => void>('showAiConfigGuide', () => {});
 const summary = ref('');
 const loading = ref(false);
+const hasLoaded = ref(false);
+const resultTooShort = ref(false);
+
+/** 低于此字数视为无效分析 */
+const MIN_ANALYSIS_LENGTH = 30;
 
 async function refresh() {
+  await refreshAiStatus();
   if (!aiEnabled.value) {
-    summary.value = 'AI 未配置';
+    showAiConfigGuide();
     return;
   }
   loading.value = true;
+  resultTooShort.value = false;
   try {
-    const result = await invoke<AiExecuteResult>('ai_execute', {
-      mode: 'focus',
-      input: '',
-    });
-    summary.value = result.text || '暂无建议';
-  } catch {
-    summary.value = 'AI 分析失败';
+    const result = await invoke<AiExecuteResult>('ai_execute', { mode: 'focus', input: '' });
+    const text = (result && result.text ? result.text : '').trim();
+    if (!text) {
+      summary.value = 'AI 返回为空，请重试';
+      resultTooShort.value = true;
+    } else if (text.length < MIN_ANALYSIS_LENGTH) {
+      resultTooShort.value = true;
+      summary.value = text;
+    } else {
+      summary.value = text;
+    }
+    hasLoaded.value = true;
+  } catch (e: any) {
+    console.error('[AiSummary]', e);
+    summary.value = typeof e === 'string' ? e : 'AI 分析失败，请重试';
+    hasLoaded.value = true;
   } finally {
     loading.value = false;
   }
 }
-
-onMounted(refresh);
 </script>
 
 <template>
   <div v-if="loading" class="loading">AI 分析中...</div>
-  <div v-else class="ai-text">{{ summary }}</div>
-  <div class="ai-actions">
-    <button class="ai-btn" @click="refresh">重新分析</button>
+
+  <div v-else-if="!hasLoaded" class="ai-placeholder">
+    <div class="ai-placeholder-text">AI 帮你分析今日任务优先级</div>
+    <button class="ai-btn" @click="refresh">开始分析</button>
   </div>
+
+  <template v-else>
+    <div class="ai-text">{{ summary }}</div>
+    <div v-if="resultTooShort" class="ai-too-short">
+      AI 未返回有效分析，可尝试
+      <button class="ai-link" @click="refresh">重新分析</button>
+    </div>
+    <div class="ai-actions">
+      <button class="ai-btn" @click="refresh">重新分析</button>
+    </div>
+  </template>
 </template>
 
 <style scoped>
 .loading {
   font-size: 12px;
   color: var(--text-disabled);
+}
+.ai-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+.ai-placeholder-text {
+  font-size: 12px;
+  color: var(--text-muted);
 }
 .ai-text {
   font-size: 12px;
@@ -83,5 +121,23 @@ onMounted(refresh);
 .ai-btn:hover {
   border-color: var(--accent);
   color: var(--accent);
+}
+.ai-too-short {
+  font-size: 11px;
+  color: var(--warning);
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: var(--warning-light);
+  border-radius: var(--radius-sm);
+}
+.ai-link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: inherit;
+  font-family: inherit;
+  padding: 0;
+  text-decoration: underline;
 }
 </style>

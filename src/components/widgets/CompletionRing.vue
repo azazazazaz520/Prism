@@ -4,10 +4,20 @@ import { useTaskStore } from '../../composables/useTaskStore';
 
 const { tasks } = useTaskStore();
 
-const todayTotal = computed(() => tasks.value.filter((t) => !t.is_deleted).length);
-const todayDone = computed(() => tasks.value.filter((t) => t.completed && !t.is_deleted).length);
+const activeTasks = computed(() => tasks.value.filter((t) => !t.is_deleted));
+const totalCount = computed(() => activeTasks.value.length);
+const todayDone = computed(() => {
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const tomorrowStart = todayStart + 86400000;
+  return activeTasks.value.filter((t) => {
+    if (!t.completed || !t.completed_at) return false;
+    const ts = new Date(t.completed_at).getTime();
+    return ts >= todayStart && ts < tomorrowStart;
+  }).length;
+});
 const pct = computed(() =>
-  todayTotal.value > 0 ? Math.round((todayDone.value / todayTotal.value) * 100) : 0,
+  totalCount.value > 0 ? Math.round((todayDone.value / totalCount.value) * 100) : 0,
 );
 const circumference = 2 * Math.PI * 28;
 const offset = computed(() => circumference - (pct.value / 100) * circumference);
@@ -43,8 +53,8 @@ const offset = computed(() => circumference - (pct.value / 100) * circumference)
       </text>
     </svg>
     <div>
-      <div class="ri-done">{{ todayDone }} / {{ todayTotal }}</div>
-      <div class="ri-label">已完成</div>
+      <div class="ri-done">{{ todayDone }} / {{ totalCount }}</div>
+      <div class="ri-label">今日完成率</div>
     </div>
   </div>
 </template>

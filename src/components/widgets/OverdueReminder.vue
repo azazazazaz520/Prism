@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
 import { useTaskStore } from '../../composables/useTaskStore';
 
-const { tasks } = useTaskStore();
+const { tasks, updateTaskMeta } = useTaskStore();
 
 function todayStr() {
   const d = new Date();
@@ -15,26 +14,9 @@ const overdueTasks = computed(() =>
 );
 
 async function postpone(taskId: string) {
-  // 直接调用 invoke 更新 due_date 为 null（延期到未指定）
-  try {
-    await invoke('update_task', {
-      args: {
-        id: taskId,
-        title: tasks.value.find((t) => t.id === taskId)?.title ?? '',
-        dueDate: null,
-        tags: tasks.value.find((t) => t.id === taskId)?.tags ?? [],
-        important: tasks.value.find((t) => t.id === taskId)?.important ?? false,
-        pinned: tasks.value.find((t) => t.id === taskId)?.pinned ?? false,
-        isDaily: tasks.value.find((t) => t.id === taskId)?.is_daily ?? false,
-      },
-    });
-    // 同步前端状态
-    tasks.value = tasks.value.map((t) =>
-      t.id === taskId ? { ...t, due_date: null, updated_at: new Date().toISOString() } : t,
-    );
-  } catch (e) {
-    console.warn('延期失败:', e);
-  }
+  const task = tasks.value.find((t) => t.id === taskId);
+  if (!task) return;
+  await updateTaskMeta(taskId, task.tags, task.important, task.pinned, task.is_daily, null);
 }
 </script>
 

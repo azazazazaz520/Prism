@@ -1,21 +1,33 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useTaskStore } from '../../composables/useTaskStore';
-const { pendingCount, overdueCount, tasks } = useTaskStore();
-const completedToday = computed(
-  () => tasks.value.filter((t) => t.completed && !t.is_deleted).length,
-);
+
+const { tasks, overdueCount } = useTaskStore();
+
+const activeTasks = computed(() => tasks.value.filter((t) => !t.is_deleted));
+const pendingToday = computed(() => activeTasks.value.filter((t) => !t.completed).length);
+
+const completedToday = computed(() => {
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const tomorrowStart = todayStart + 86400000;
+  return activeTasks.value.filter((t) => {
+    if (!t.completed || !t.completed_at) return false;
+    const ts = new Date(t.completed_at).getTime();
+    return ts >= todayStart && ts < tomorrowStart;
+  }).length;
+});
 </script>
 
 <template>
   <div class="today-stats">
     <div class="today-stat">
-      <div class="ts-num">{{ pendingCount }}</div>
+      <div class="ts-num">{{ pendingToday }}</div>
       <div class="ts-label">待完成</div>
     </div>
     <div class="today-stat">
       <div class="ts-num accent">{{ completedToday }}</div>
-      <div class="ts-label">已完成</div>
+      <div class="ts-label">今日已完成</div>
     </div>
     <div class="today-stat">
       <div class="ts-num warn">{{ overdueCount }}</div>

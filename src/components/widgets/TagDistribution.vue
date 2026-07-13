@@ -21,7 +21,8 @@ const tagCounts = computed(() => {
 </script>
 
 <template>
-  <div class="tag-bars">
+  <div v-if="tagCounts.length === 0" class="empty">暂无标签</div>
+  <div v-else class="tag-bars">
     <div v-for="t in tagCounts" :key="t.name" class="tag-bar-item">
       <span class="tb-label">{{ t.name }}</span>
       <div class="tb-track"><div class="tb-fill" :style="{ width: t.pct + '%' }"></div></div>
@@ -31,6 +32,12 @@ const tagCounts = computed(() => {
 </template>
 
 <style scoped>
+.empty {
+  font-size: 12px;
+  color: var(--text-disabled);
+  text-align: center;
+  padding: 12px 0;
+}
 .tag-bars {
   display: flex;
   flex-direction: column;

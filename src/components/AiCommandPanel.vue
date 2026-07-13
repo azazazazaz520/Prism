@@ -201,9 +201,28 @@ function autoResize() {
         @input="onInput"
         @keydown="onKeydown"
       ></textarea>
-      <button class="acp-submit" :disabled="loading || !input.trim()" @click="submit">
+      <button
+        class="acp-submit"
+        :class="{ 'is-loading': loading }"
+        :disabled="!loading && !input.trim()"
+        @click="submit"
+      >
+        <!-- 加载中：旋转 spinner -->
         <svg
-          v-if="!loading"
+          v-if="loading"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+        >
+          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+        </svg>
+        <!-- 默认：发送箭头 -->
+        <svg
+          v-else
           width="16"
           height="16"
           viewBox="0 0 24 24"
@@ -216,7 +235,6 @@ function autoResize() {
           <line x1="22" y1="2" x2="11" y2="13" />
           <polygon points="22 2 15 22 11 13 2 9 22 2" />
         </svg>
-        <span v-else>...</span>
       </button>
     </div>
 
@@ -393,6 +411,9 @@ function autoResize() {
   color: var(--text-muted);
   cursor: pointer;
   transition: color var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .acp-submit:hover:not(:disabled) {
@@ -400,8 +421,24 @@ function autoResize() {
 }
 
 .acp-submit:disabled {
-  opacity: 0.3;
+  opacity: 0.25;
   cursor: not-allowed;
+}
+
+.acp-submit.is-loading {
+  color: var(--accent);
+  cursor: default;
+  opacity: 1;
+}
+
+.acp-submit.is-loading svg {
+  animation: acp-spin 0.8s linear infinite;
+}
+
+@keyframes acp-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .acp-error {

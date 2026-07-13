@@ -1,15 +1,16 @@
 <script setup lang="ts">
+import { onMounted, onUnmounted } from 'vue';
 import { usePluginSystem } from '../composables/usePluginSystem';
 import { useTaskStore } from '../composables/useTaskStore';
 import { invoke } from '@tauri-apps/api/core';
 import type { PluginContext } from '../types';
 
-const { enabledPlugins, registerCleanup } = usePluginSystem();
+const { enabledPlugins } = usePluginSystem();
 const { tasks, addTask, toggleTask, deleteTask } = useTaskStore();
 
 // ── 处理来自 iframe 的消息 ──────────────────────
 
-function handleMessage(pluginId: string, event: MessageEvent) {
+function handleMessage(event: MessageEvent) {
   const { type, id, payload } = event.data || {};
   if (!type) return;
 
@@ -31,12 +32,10 @@ function handleMessage(pluginId: string, event: MessageEvent) {
       return result.text || '';
     },
     notify: (title, body) => {
-      // ponytail: 用 Notification API，后续可升级为 Tauri 通知
       new Notification(title, { body });
     },
   };
 
-  // ponytail: 简化消息处理，只处理已知类型
   if (type === 'invoke' && ctx[payload.method as keyof typeof ctx]) {
     const method = ctx[payload.method as keyof typeof ctx] as Function;
     Promise.resolve(method(...(payload.args || []))).then((result) => {
@@ -44,6 +43,9 @@ function handleMessage(pluginId: string, event: MessageEvent) {
     });
   }
 }
+
+onMounted(() => window.addEventListener('message', handleMessage));
+onUnmounted(() => window.removeEventListener('message', handleMessage));
 
 // ── 外部插件列表（非内建） ──────────────────────
 
@@ -68,8 +70,6 @@ const externalPlugins = () => enabledPlugins().filter((p) => !p.builtin);
         }
       "
     />
-    <!-- 消息转发：iframe → 宿主 -->
-    <!-- ponytail: 统一在 window 层监听，按 pluginId 分发 -->
   </div>
 </template>
 

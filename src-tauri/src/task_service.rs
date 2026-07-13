@@ -68,6 +68,38 @@ pub fn daily_completions(data: &store::DataStore, date: &str) -> Vec<String> {
         .collect()
 }
 
+/// 跨天重置每日任务的 completed 状态
+/// 返回被修改过的任务快照列表，供前端 push 到 Supabase
+/// - 今日有完成记录 → completed = true
+/// - 今日无完成记录 → completed = false（昨日完成的自动清零）
+pub fn reset_daily_tasks(data: &mut store::DataStore, today: &str) -> Vec<store::Task> {
+    let today_ids: Vec<String> = data
+        .daily_completions
+        .iter()
+        .filter(|dc| dc.date == today)
+        .map(|dc| dc.task_id.clone())
+        .collect();
+    let now = chrono::Utc::now().to_rfc3339();
+    let mut changed = Vec::new();
+    for task in data.tasks.iter_mut() {
+        if !task.is_daily || task.is_deleted {
+            continue;
+        }
+        let should_be_completed = today_ids.contains(&task.id);
+        if task.completed != should_be_completed {
+            task.completed = should_be_completed;
+            task.completed_at = if should_be_completed {
+                Some(now.clone())
+            } else {
+                None
+            };
+            task.updated_at = now.clone();
+            changed.push(task.clone());
+        }
+    }
+    changed
+}
+
 /// 新增任务
 pub fn add(data: &mut store::DataStore, input: AddTaskInput) -> store::Task {
     let now = chrono::Utc::now().to_rfc3339();

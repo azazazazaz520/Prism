@@ -262,27 +262,47 @@ async function resetPrompt() {
 
 .btn {
   padding: 5px 14px;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
   cursor: pointer;
   border: 1px solid transparent;
-  transition: opacity 0.15s;
+  transition: all var(--transition-fast);
 }
 .btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 .btn-primary {
-  background: var(--accent, #4f46e5);
+  background: var(--accent);
   color: #fff;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
 }
 .btn-danger-outline {
   background: transparent;
-  color: #dc2626;
-  border-color: #fecaca;
+  color: var(--danger);
+  border-color: var(--danger);
 }
 .btn-danger-outline:hover:not(:disabled) {
-  background: #fef2f2;
+  background: var(--danger-light);
+}
+
+[data-theme='hud'] .btn {
+  border-radius: 0;
+  clip-path: polygon(
+    5px 0%,
+    100% 0%,
+    100% calc(100% - 5px),
+    calc(100% - 5px) 100%,
+    0% 100%,
+    0% 5px
+  );
+}
+[data-theme='hud'] .btn-primary {
+  color: #0f1118;
 }
 </style>

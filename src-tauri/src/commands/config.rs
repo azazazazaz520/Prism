@@ -181,3 +181,20 @@ pub fn set_module_enabled(
         config.module_enabled.insert(module_id, enabled);
     })
 }
+
+/// 获取仪表盘布局配置
+#[tauri::command]
+pub fn get_dashboard_layout(state: tauri::State<AppState>) -> Option<String> {
+    state.with_config(|config| config.dashboard_layout.clone())
+}
+
+/// 保存仪表盘布局配置
+#[tauri::command]
+pub fn set_dashboard_layout(
+    state: tauri::State<AppState>,
+    layout: String,
+) -> Result<(), String> {
+    state.with_config_mut(|config| {
+        config.dashboard_layout = Some(layout);
+    })
+}

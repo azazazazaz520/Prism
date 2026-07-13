@@ -5,7 +5,6 @@ import type { DashboardLayout, WidgetDefinition } from '../types';
 const BUILTIN_WIDGETS: WidgetDefinition[] = [
   { id: 'today-overview', title: '今日概览', icon: '', defaultSize: { w: 2, h: 1 } },
   { id: 'completion-ring', title: '完成率', icon: '', defaultSize: { w: 1, h: 1 } },
-  { id: 'heatmap', title: '活跃热力图', icon: '', defaultSize: { w: 2, h: 1 } },
   { id: 'ai-summary', title: 'AI 摘要', icon: '', defaultSize: { w: 2, h: 1 } },
   { id: 'overdue-reminder', title: '过期提醒', icon: '', defaultSize: { w: 2, h: 1 } },
   { id: 'tag-distribution', title: '标签分布', icon: '', defaultSize: { w: 1, h: 1 } },
@@ -61,9 +60,9 @@ function toggleWidget(layout: DashboardLayout, widgetId: string): DashboardLayou
 }
 
 describe('Dashboard 布局纯逻辑', () => {
-  it('buildDefaultLayout 创建 8 个 Widget', () => {
+  it('buildDefaultLayout 创建 7 个 Widget', () => {
     const layout = buildDefaultLayout();
-    expect(layout.widgets).toHaveLength(8);
+    expect(layout.widgets).toHaveLength(7);
     expect(layout.columns).toBe(2);
   });
 
@@ -76,20 +75,20 @@ describe('Dashboard 布局纯逻辑', () => {
       defaultSize: { w: 1, h: 1 },
     };
     const updated = addWidget(layout, 'custom', newDef);
-    expect(updated.widgets).toHaveLength(9);
-    expect(updated.widgets[8].id).toBe('custom');
+    expect(updated.widgets).toHaveLength(8);
+    expect(updated.widgets[7].id).toBe('custom');
   });
 
   it('addWidget 防重复', () => {
     const layout = buildDefaultLayout();
     const updated = addWidget(layout, 'today-overview', BUILTIN_WIDGETS[0]);
-    expect(updated.widgets).toHaveLength(8); // 不增长
+    expect(updated.widgets).toHaveLength(7); // 不增长
   });
 
   it('removeWidget 移除指定 Widget', () => {
     const layout = buildDefaultLayout();
     const updated = removeWidget(layout, 'today-overview');
-    expect(updated.widgets).toHaveLength(7);
+    expect(updated.widgets).toHaveLength(6);
     expect(updated.widgets.find((w) => w.id === 'today-overview')).toBeUndefined();
   });
 

@@ -14,9 +14,11 @@ import AiCommandPanel from './components/AiCommandPanel.vue';
 import AiAssistant from './components/AiAssistant.vue';
 import NoteEditor from './components/NoteEditor.vue';
 import Toolbox from './components/Toolbox.vue';
+import Dashboard from './components/Dashboard.vue';
 import { useModuleRegistry } from './composables/useModuleRegistry';
 import { useTaskStore } from './composables/useTaskStore';
 import { useAiStatus } from './composables/useAiStatus';
+import { useDashboard } from './composables/useDashboard';
 
 // ── 模块注册表 ──────────────────────────────
 
@@ -79,6 +81,8 @@ onUnmounted(() => {
 
 onMounted(async () => {
   await Promise.all([loadAll(), loadAiSettings(), loadModules()]);
+  const { loadLayout } = useDashboard();
+  loadLayout();
   const syncReady = await initSync();
   const appWindow = getCurrentWindow();
   let lastRefresh = 0;
@@ -268,42 +272,9 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
               </div>
             </div>
 
-            <!-- 中部可滚区：AI 面板 -->
+            <!-- 中部可滚区：仪表盘 -->
             <div class="tasks-scroll">
-              <div class="task-detail">
-                <div class="detail-section">
-                  <div class="detail-section-header">
-                    <span class="detail-section-label">AI Command</span>
-                    <span class="detail-section-line"></span>
-                  </div>
-                  <AiCommandPanel
-                    v-if="aiEnabled"
-                    @add-task="
-                      (parsed) =>
-                        addTask(
-                          parsed.title,
-                          parsed.due_date,
-                          parsed.tags,
-                          parsed.important,
-                          parsed.pinned,
-                          parsed.is_daily,
-                        )
-                    "
-                  />
-                  <div v-else class="ai-disabled-hint">
-                    AI 未配置 —
-                    <button
-                      class="link-btn"
-                      @click="
-                        activeModule = 'settings';
-                        settingsInitialSub = 'vendors';
-                      "
-                    >
-                      去设置
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <Dashboard />
             </div>
 
             <!-- 底部固定区：统计 + Sync -->

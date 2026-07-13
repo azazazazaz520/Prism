@@ -53,16 +53,17 @@ const offset = computed(() => circumference - (pct.value / 100) * circumference)
 .ring-wrap {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: var(--space-lg);
 }
 .ri-done {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 .ri-label {
-  font-size: 10px;
-  color: var(--text-tertiary, var(--text-muted));
-  margin-top: 1px;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-top: 2px;
 }
 </style>

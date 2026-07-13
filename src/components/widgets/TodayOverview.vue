@@ -27,7 +27,7 @@ const completedToday = computed(
 <style scoped>
 .today-stats {
   display: flex;
-  gap: 12px;
+  gap: var(--space-md);
 }
 .today-stat {
   flex: 1;
@@ -35,8 +35,8 @@ const completedToday = computed(
 }
 .ts-num {
   font-family: var(--font-mono);
-  font-size: 28px;
-  font-weight: 700;
+  font-size: var(--text-h1);
+  font-weight: var(--font-weight-bold);
   color: var(--text-primary);
   line-height: 1.2;
 }
@@ -48,10 +48,11 @@ const completedToday = computed(
 }
 .ts-label {
   font-family: var(--font-heading);
-  font-size: 8px;
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
   letter-spacing: 2px;
   text-transform: uppercase;
-  color: var(--text-tertiary, var(--text-muted));
+  color: var(--text-muted);
   margin-top: 2px;
 }
 </style>

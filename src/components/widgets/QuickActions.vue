@@ -68,24 +68,27 @@ function handleReset() {
 .qa-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-xs);
 }
 .qa-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: var(--space-sm);
+  padding: var(--space-sm) 10px;
   border: 1px solid var(--border-subtle);
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: var(--text-sm);
+  border-radius: var(--radius-sm);
   transition: all var(--transition-fast);
   text-align: left;
 }
 [data-theme='hud'] .qa-item {
+  font-family: var(--font-sans);
   border-color: var(--border-line);
+  border-radius: 0;
   clip-path: polygon(
     6px 0%,
     100% 0%,

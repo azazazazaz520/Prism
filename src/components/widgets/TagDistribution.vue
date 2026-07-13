@@ -34,16 +34,17 @@ const tagCounts = computed(() => {
 .tag-bars {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-xs);
 }
 .tag-bar-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 .tb-label {
   font-family: var(--font-heading);
-  font-size: 10px;
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
   letter-spacing: 1px;
   color: var(--text-secondary);
   width: 48px;
@@ -55,18 +56,18 @@ const tagCounts = computed(() => {
   height: 4px;
   background: var(--gray-200);
   overflow: hidden;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
 }
 .tb-fill {
   height: 100%;
   background: var(--accent);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   transition: width 0.6s ease;
 }
 .tb-count {
   font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--text-disabled);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
   width: 20px;
 }
 </style>

@@ -13,7 +13,6 @@ export const BUILTIN_WIDGETS: WidgetDefinition[] = [
     defaultSize: { w: 1, h: 1 },
     minSize: { w: 1, h: 1 },
   },
-  { id: 'heatmap', title: '活跃热力图', icon: 'heatmap', defaultSize: { w: 2, h: 1 } },
   { id: 'ai-summary', title: 'AI 今日摘要', icon: 'ai', defaultSize: { w: 2, h: 1 } },
   { id: 'overdue-reminder', title: '过期提醒', icon: 'overdue', defaultSize: { w: 2, h: 1 } },
   {
@@ -34,15 +33,32 @@ export const BUILTIN_WIDGETS: WidgetDefinition[] = [
 ];
 
 function defaultLayout(): DashboardLayout {
-  return {
-    columns: 2,
-    widgets: BUILTIN_WIDGETS.map((w, i) => ({
+  const result: DashboardLayout['widgets'] = [];
+  let row = 0;
+  let col = 0;
+
+  for (const w of BUILTIN_WIDGETS) {
+    result.push({
       id: w.id,
       enabled: true,
-      position: { x: i % 2, y: Math.floor(i / 2) },
+      position: { x: col, y: row },
       size: { ...w.defaultSize },
-    })),
-  };
+    });
+
+    if (w.defaultSize.w >= 2) {
+      // 全宽 widget 占整行
+      row++;
+      col = 0;
+    } else {
+      col++;
+      if (col >= 2) {
+        col = 0;
+        row++;
+      }
+    }
+  }
+
+  return { columns: 2, widgets: result };
 }
 
 // ── 全局单例 ────────────────────────────────────

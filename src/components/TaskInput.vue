@@ -397,14 +397,13 @@ function formatDueDate(d: string): string {
 .qa-btn.active {
   background: var(--accent);
   border-color: var(--accent);
-  color: white;
+  color: #fff;
 }
 
 .qa-btn.active:hover {
-  color: white;
+  color: #fff;
 }
 
-[data-theme='hud'] .qa-btn.active,
 [data-theme='hud'] .qa-btn.active {
   color: #0f1118;
   box-shadow: 0 0 8px var(--accent-glow);
@@ -441,14 +440,13 @@ function formatDueDate(d: string): string {
 .tag-add-btn {
   padding: 4px var(--space-md);
   background: var(--gray-900);
-  color: white;
+  color: #fff;
   border: none;
   border-radius: var(--radius-md);
   font-size: var(--text-xs);
   cursor: pointer;
 }
 
-[data-theme='hud'] .tag-add-btn,
 [data-theme='hud'] .tag-add-btn {
   background: var(--accent);
   color: #0f1118;
@@ -576,7 +574,7 @@ function formatDueDate(d: string): string {
 .task-input-btn {
   padding: 10px var(--space-xl);
   background: var(--accent);
-  color: white;
+  color: #fff;
   border: none;
   border-radius: var(--radius-full);
   font-size: var(--text-base);

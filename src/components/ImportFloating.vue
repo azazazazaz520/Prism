@@ -424,7 +424,7 @@ function formatDate(d: string | null): string {
 }
 .clear-screenshot-btn:hover {
   background: rgba(231, 76, 60, 0.6);
-  color: white;
+  color: #fff;
 }
 
 .input-actions {
@@ -439,7 +439,7 @@ function formatDate(d: string | null): string {
   gap: 6px;
   padding: 8px 18px;
   background: var(--accent);
-  color: white;
+  color: #fff;
   border: none;
   border-radius: 8px;
   font-size: 13px;
@@ -459,7 +459,7 @@ function formatDate(d: string | null): string {
   width: 14px;
   height: 14px;
   border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white;
+  border-top-color: #fff;
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }
@@ -663,7 +663,7 @@ function formatDate(d: string | null): string {
 .add-btn {
   padding: 8px 18px;
   background: var(--accent);
-  color: white;
+  color: #fff;
   border: none;
   border-radius: 8px;
   font-size: 13px;

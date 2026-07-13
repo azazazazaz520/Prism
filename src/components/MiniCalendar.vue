@@ -414,7 +414,7 @@ function isSelected(day: number): boolean {
 
 [data-theme='light'] .mc-day.selected {
   border-radius: var(--radius-md);
-  color: white;
+  color: #fff;
 }
 
 [data-theme='light'] .mc-day-dot {

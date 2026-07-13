@@ -283,7 +283,7 @@ function handleSave() {
 .save-btn {
   padding: var(--space-sm) var(--space-2xl);
   background: var(--accent);
-  color: white;
+  color: #fff;
   border: none;
   border-radius: var(--radius-md);
   font-size: var(--text-base);

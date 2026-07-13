@@ -40,30 +40,26 @@ onMounted(refresh);
 
 <style scoped>
 .loading {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  letter-spacing: 1px;
+  font-size: 12px;
+  color: var(--text-disabled);
 }
 .ai-text {
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
+  font-size: 12px;
   color: var(--text-secondary);
   line-height: 1.6;
 }
 .ai-high {
   color: var(--accent);
-  font-weight: var(--font-weight-semibold);
+  font-weight: 600;
 }
 .ai-actions {
   display: flex;
-  gap: var(--space-xs);
-  margin-top: var(--space-sm);
+  gap: 6px;
+  margin-top: 8px;
 }
 .ai-btn {
   font-family: var(--font-heading);
-  font-size: var(--text-xs);
-  font-weight: var(--font-weight-medium);
+  font-size: 9px;
   letter-spacing: 1px;
   text-transform: uppercase;
   padding: 4px 10px;
@@ -71,13 +67,10 @@ onMounted(refresh);
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  border-radius: var(--radius-sm);
   transition: all var(--transition-fast);
 }
 [data-theme='hud'] .ai-btn {
-  font-family: var(--font-mono);
   border-color: var(--border-line);
-  border-radius: 0;
   clip-path: polygon(
     4px 0%,
     100% 0%,
@@ -90,6 +83,5 @@ onMounted(refresh);
 .ai-btn:hover {
   border-color: var(--accent);
   color: var(--accent);
-  background: var(--accent-bg);
 }
 </style>

@@ -41,10 +41,9 @@ const heatmapData = computed<HeatmapData>(() => {
     <div
       style="
         font-family: var(--font-mono);
-        font-size: var(--text-xs);
-        color: var(--text-muted);
-        margin-bottom: var(--space-xs);
-        letter-spacing: 1px;
+        font-size: 10px;
+        color: var(--text-disabled);
+        margin-bottom: 6px;
       "
     >
       活跃热力图（根据任务完成日期）
@@ -76,14 +75,14 @@ const heatmapData = computed<HeatmapData>(() => {
 .heatmap-cell {
   width: 12px;
   height: 12px;
-  border-radius: var(--radius-sm);
+  border-radius: 2px;
 }
 .heatmap-labels {
   display: flex;
   justify-content: space-between;
+  font-size: 9px;
+  color: var(--text-disabled);
+  margin-top: 4px;
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  margin-top: var(--space-xs);
 }
 </style>

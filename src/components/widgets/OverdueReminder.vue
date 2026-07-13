@@ -49,17 +49,16 @@ async function postpone(taskId: string) {
 
 <style scoped>
 .empty {
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  color: var(--text-muted);
+  font-size: 12px;
+  color: var(--text-disabled);
   text-align: center;
-  padding: var(--space-md) 0;
+  padding: 12px 0;
 }
 .ov-item {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-xs) 0;
+  gap: 8px;
+  padding: 6px 0;
   border-bottom: 1px solid var(--border-subtle);
 }
 .ov-item:last-child {
@@ -67,33 +66,28 @@ async function postpone(taskId: string) {
 }
 .ov-date {
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  font-size: 10px;
   color: var(--danger);
   flex-shrink: 0;
 }
 .ov-title {
   flex: 1;
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
+  font-size: 12px;
   color: var(--text-primary);
 }
 .ov-btn {
   font-family: var(--font-heading);
-  font-size: 10px;
-  font-weight: var(--font-weight-semibold);
+  font-size: 8px;
   letter-spacing: 1px;
   text-transform: uppercase;
   padding: 2px 8px;
-  border: 1px solid var(--accent-muted);
+  border: 1px solid var(--accent-dim);
   background: transparent;
   color: var(--accent);
   cursor: pointer;
-  border-radius: var(--radius-sm);
   transition: all var(--transition-fast);
 }
 [data-theme='hud'] .ov-btn {
-  font-family: var(--font-mono);
-  border-radius: 0;
   clip-path: polygon(
     3px 0%,
     100% 0%,

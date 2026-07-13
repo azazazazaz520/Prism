@@ -143,6 +143,8 @@ export interface FileEntry {
 
 // ── Prompt 管理相关类型 ──────────────────────────────
 
+// ── Prompt 管理相关类型 ──────────────────────────────
+
 /** 单个 Prompt 模板的元数据（前端可见，不含完整内容） */
 export interface PromptMeta {
   name: string;
@@ -150,4 +152,91 @@ export interface PromptMeta {
   vars: string[];
   /** 用户是否已在文件系统中自定义此 Prompt */
   is_customized: boolean;
+}
+
+// ── 仪表盘相关类型 ──────────────────────────────
+
+/** Widget 网格尺寸 */
+export interface WidgetSize {
+  w: number;
+  h: number;
+}
+
+/** 单个 Widget 的定义（内建组件） */
+export interface WidgetDefinition {
+  id: string;
+  title: string;
+  icon: string;
+  defaultSize: WidgetSize;
+  minSize?: WidgetSize;
+}
+
+/** 仪表盘布局持久化结构 */
+export interface DashboardLayout {
+  widgets: {
+    id: string;
+    enabled: boolean;
+    position: { x: number; y: number };
+    size: WidgetSize;
+  }[];
+  columns: number;
+}
+
+// ── 插件系统类型 ──────────────────────────────
+
+export interface PluginManifest {
+  id: string;
+  name: string;
+  version: string;
+  author: string;
+  description?: string;
+  permissions: PluginPermission[];
+  minAppVersion?: string;
+}
+
+export type PluginPermission =
+  | 'tasks:read'
+  | 'tasks:write'
+  | 'ai:invoke'
+  | 'notifications'
+  | 'http';
+
+export interface PluginWidget {
+  id: string;
+  title: string;
+  defaultSize: WidgetSize;
+}
+
+export interface PluginContext {
+  manifest: PluginManifest;
+  // 任务操作
+  getTasks: () => Promise<Task[]>;
+  addTask: (
+    title: string,
+    dueDate: string | null,
+    tags: string[],
+    important: boolean,
+    pinned: boolean,
+    isDaily: boolean,
+  ) => Promise<Task>;
+  toggleTask: (id: string) => Promise<void>;
+  deleteTask: (id: string) => Promise<void>;
+  // AI
+  aiExecute: (mode: string, input: string) => Promise<string>;
+  // 存储
+  saveData: (data: any) => Promise<void>;
+  loadData: () => Promise<any>;
+  // 通知
+  notify: (title: string, body: string) => void;
+}
+
+export interface PluginEntry {
+  manifest: PluginManifest;
+  enabled: boolean;
+  /** 是否内建 */
+  builtin: boolean;
+  /** 是否为模块替换（覆盖内建功能） */
+  overrides?: string[];
+  /** 插件目录路径（相对于 plugins/） */
+  dirName: string;
 }

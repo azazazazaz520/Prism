@@ -113,6 +113,12 @@ pub struct ConfigStore {
     /// 自定义笔记目录路径（绝对路径，None 时使用默认 ~/.todo-app/notes）
     #[serde(default)]
     pub notes_dir: Option<PathBuf>,
+    /// 仪表盘布局配置（JSON 字符串，前端序列化）
+    #[serde(default)]
+    pub dashboard_layout: Option<String>,
+    /// 已安装插件列表（JSON 字符串）
+    #[serde(default)]
+    pub plugins: Option<String>,
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -143,6 +149,8 @@ pub fn default_config_store() -> ConfigStore {
         reminder_minutes: default_reminder_minutes(),
         module_enabled: std::collections::HashMap::new(),
         notes_dir: None,
+        dashboard_layout: None,
+        plugins: None,
     }
 }
 

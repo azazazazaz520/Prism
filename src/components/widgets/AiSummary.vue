@@ -104,6 +104,7 @@ function clear() {
   text-transform: uppercase;
   padding: 4px 10px;
   border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;

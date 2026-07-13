@@ -64,6 +64,7 @@ async function postpone(taskId: string) {
   text-transform: uppercase;
   padding: 2px 8px;
   border: 1px solid var(--accent-dim);
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--accent);
   cursor: pointer;

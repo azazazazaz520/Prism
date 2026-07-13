@@ -59,6 +59,7 @@ function handleReset() {
   gap: 8px;
   padding: 8px 10px;
   border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;

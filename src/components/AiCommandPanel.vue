@@ -376,6 +376,7 @@ function autoResize() {
   padding: var(--space-sm) var(--space-md);
   background: none;
   border: none;
+  border-radius: var(--radius-sm);
   color: var(--text-secondary);
   font-size: var(--text-xs);
   font-family: inherit;
@@ -423,6 +424,7 @@ function autoResize() {
   padding: var(--space-sm);
   background: transparent;
   border: none;
+  border-radius: var(--radius-sm);
   color: var(--text-muted);
   cursor: pointer;
   transition: color var(--transition-fast);
@@ -468,6 +470,7 @@ function autoResize() {
   text-transform: uppercase;
   padding: 2px 8px;
   border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;

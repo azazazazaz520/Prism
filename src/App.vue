@@ -19,7 +19,6 @@ import { useModuleRegistry } from './composables/useModuleRegistry';
 import { useTaskStore } from './composables/useTaskStore';
 import { useAiStatus } from './composables/useAiStatus';
 import { useDashboard } from './composables/useDashboard';
-import { usePluginSystem } from './composables/usePluginSystem';
 
 // ── 模块注册表 ──────────────────────────────
 
@@ -85,49 +84,6 @@ onMounted(async () => {
   const { loadLayout } = useDashboard();
   loadLayout();
 
-  // 将核心模块注册为内建插件
-  const { registerBuiltin } = usePluginSystem();
-  registerBuiltin(
-    {
-      id: 'prism.tasks',
-      name: '任务管理',
-      version: '0.1.0',
-      author: 'Prism',
-      permissions: ['tasks:read', 'tasks:write'],
-    },
-    ['tasks'],
-  );
-  registerBuiltin(
-    {
-      id: 'prism.ai',
-      name: 'AI 助手',
-      version: '0.1.0',
-      author: 'Prism',
-      permissions: ['ai:invoke'],
-    },
-    ['ai-assistant'],
-  );
-  registerBuiltin(
-    {
-      id: 'prism.notes',
-      name: 'Markdown 笔记',
-      version: '0.1.0',
-      author: 'Prism',
-      permissions: ['tasks:read'],
-    },
-    ['notes'],
-  );
-  registerBuiltin(
-    {
-      id: 'prism.devtools',
-      name: '开发者工具箱',
-      version: '0.1.0',
-      author: 'Prism',
-      permissions: [],
-    },
-    ['devtools'],
-  );
-
   const syncReady = await initSync();
   const appWindow = getCurrentWindow();
   let lastRefresh = 0;
@@ -139,6 +95,10 @@ onMounted(async () => {
     loadAiSettings();
   });
   window.addEventListener('prism:force-sync', _handleForceSync);
+  window.addEventListener('prism:nav-settings', ((e: CustomEvent) => {
+    if (e.detail) settingsInitialSub.value = e.detail;
+    activeModule.value = 'settings';
+  }) as EventListener);
   // 仅在同步已配置时启动 30 秒轮询，作为 Realtime WebSocket 的兜底
   if (syncReady) {
     _pollInterval = setInterval(() => {
@@ -423,10 +383,9 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   border-right: 1px solid var(--border-subtle);
 }
 
-[data-theme='hud'] .icon-rail,
 [data-theme='hud'] .icon-rail {
   background:
-    linear-gradient(90deg, rgba(245, 197, 24, 0.05) 0%, transparent 30%), var(--bg-deep, #0f1118);
+    linear-gradient(90deg, var(--accent-glow-s) 0%, transparent 30%), var(--bg-deep, #0f1118);
 }
 
 .rail-brand {
@@ -434,9 +393,8 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   color: var(--accent);
 }
 
-[data-theme='hud'] .rail-brand,
 [data-theme='hud'] .rail-brand {
-  filter: drop-shadow(0 0 6px rgba(245, 197, 24, 0.4));
+  filter: drop-shadow(0 0 6px var(--accent-glow-strong));
 }
 
 .rail-btn {
@@ -453,7 +411,6 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   transition: all 0.2s;
 }
 
-[data-theme='hud'] .rail-btn,
 [data-theme='hud'] .rail-btn {
   clip-path: polygon(
     6px 0%,
@@ -527,7 +484,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
     0% 100%,
     0% 6px
   );
-  box-shadow: 0 0 12px rgba(245, 197, 24, 0.1);
+  box-shadow: 0 0 12px var(--accent-bg);
 }
 
 .rail-spacer {
@@ -543,12 +500,11 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   border-right: 1px solid var(--border-subtle);
 }
 
-[data-theme='hud'] .task-sidebar,
 [data-theme='hud'] .task-sidebar {
   background:
     linear-gradient(
       135deg,
-      rgba(245, 197, 24, 0.04) 0%,
+      var(--accent-glow-s) 0%,
       transparent 40%,
       transparent 70%,
       rgba(0, 0, 0, 0.3) 100%
@@ -620,12 +576,11 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   background: var(--bg-primary);
 }
 
-[data-theme='hud'] .main-area,
 [data-theme='hud'] .main-area {
   background:
     linear-gradient(
       135deg,
-      rgba(245, 197, 24, 0.03) 0%,
+      var(--accent-glow-s) 0%,
       transparent 35%,
       transparent 75%,
       rgba(0, 0, 0, 0.25) 100%
@@ -779,12 +734,11 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   border-left: 1px solid var(--border-subtle);
 }
 
-[data-theme='hud'] .right-panel,
 [data-theme='hud'] .right-panel {
   background:
     linear-gradient(
       135deg,
-      rgba(245, 197, 24, 0.03) 0%,
+      var(--accent-glow-s) 0%,
       transparent 35%,
       transparent 75%,
       rgba(0, 0, 0, 0.25) 100%

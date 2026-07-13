@@ -577,16 +577,19 @@ function formatDueDate(d: string): string {
   color: #fff;
   border: none;
   border-radius: var(--radius-full);
+  font-family: var(--font-heading);
   font-size: var(--text-base);
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
   cursor: pointer;
   transition: all var(--transition-fast);
   white-space: nowrap;
-  font-weight: 500;
 }
 
-[data-theme='hud'] .task-input-btn,
 [data-theme='hud'] .task-input-btn {
   color: #0f1118;
+  border-radius: 0;
   clip-path: polygon(
     var(--cut-lg) 0%,
     100% 0%,
@@ -597,23 +600,16 @@ function formatDueDate(d: string): string {
   );
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.15),
-    0 0 12px rgba(245, 197, 24, 0.15);
-  font-family: var(--font-heading);
-  font-weight: 600;
-  letter-spacing: 1px;
-  text-transform: uppercase;
+    0 0 12px var(--accent-glow);
 }
 
 .task-input-btn:hover {
   background: var(--accent-hover);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
 }
 
-[data-theme='hud'] .task-input-btn:hover,
 [data-theme='hud'] .task-input-btn:hover {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.2),
-    0 0 24px rgba(245, 197, 24, 0.35);
+    0 0 24px var(--accent-glow);
 }
 </style>

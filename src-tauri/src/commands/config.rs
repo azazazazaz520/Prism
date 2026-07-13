@@ -190,10 +190,7 @@ pub fn get_dashboard_layout(state: tauri::State<AppState>) -> Option<String> {
 
 /// 保存仪表盘布局配置
 #[tauri::command]
-pub fn set_dashboard_layout(
-    state: tauri::State<AppState>,
-    layout: String,
-) -> Result<(), String> {
+pub fn set_dashboard_layout(state: tauri::State<AppState>, layout: String) -> Result<(), String> {
     state.with_config_mut(|config| {
         config.dashboard_layout = Some(layout);
     })

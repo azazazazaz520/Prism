@@ -137,4 +137,35 @@ describe('createPluginContext', () => {
     ctx.dispose();
     await expect(ctx.commands.execute('any.cmd')).rejects.toThrow();
   });
+
+  // ── env（宿主环境信息）──────────────────────
+  it('env.theme 读取 document 上的 data-theme 属性', () => {
+    document.documentElement.setAttribute('data-theme', 'hud');
+    const ctx = createPluginContext('com.example.test', []);
+    expect(ctx.env.theme).toBe('hud');
+    document.documentElement.removeAttribute('data-theme');
+  });
+
+  it('env.theme 无 data-theme 属性时默认返回 auto', () => {
+    document.documentElement.removeAttribute('data-theme');
+    const ctx = createPluginContext('com.example.test', []);
+    expect(ctx.env.theme).toBe('auto');
+  });
+
+  it('env.locale 返回 zh-CN', () => {
+    const ctx = createPluginContext('com.example.test', []);
+    expect(ctx.env.locale).toBe('zh-CN');
+  });
+
+  it('env.theme 响应属性变更（getter 动态读取）', () => {
+    document.documentElement.setAttribute('data-theme', 'light');
+    const ctx = createPluginContext('com.example.test', []);
+    expect(ctx.env.theme).toBe('light');
+
+    // 运行时切换主题，getter 应立即反映
+    document.documentElement.setAttribute('data-theme', 'dark');
+    expect(ctx.env.theme).toBe('dark');
+
+    document.documentElement.removeAttribute('data-theme');
+  });
 });

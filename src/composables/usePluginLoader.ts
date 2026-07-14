@@ -98,6 +98,16 @@ export function usePluginLoader() {
       // 自动激活已启用的插件
       for (const [id, entry] of map) {
         if (entry.enabled && entry.state === 'disabled') {
+          // 同步 manifest 权限到持久化配置，确保 Rust 端第三层校验一致
+          const cfg = configs[id];
+          const manifestPerms = entry.manifest.permissions ?? [];
+          const configPerms = cfg?.permissions ?? [];
+          if (JSON.stringify(manifestPerms) !== JSON.stringify(configPerms)) {
+            invoke('set_plugin_config', {
+              pluginId: id,
+              config: { enabled: true, permissions: manifestPerms },
+            }).catch(() => {});
+          }
           activatePlugin(id).catch((e) => {
             console.warn(`[PluginLoader] 自动激活 ${id} 失败:`, e);
           });

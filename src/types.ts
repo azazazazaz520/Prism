@@ -256,6 +256,12 @@ export interface PluginContext {
   env: {
     readonly theme: string;
     readonly locale: string;
+    readonly vue: {
+      ref: (...args: any[]) => any;
+      computed: (...args: any[]) => any;
+      h: (...args: any[]) => any;
+      defineComponent: (...args: any[]) => any;
+    };
   };
   tasks: {
     readonly list?: () => Promise<unknown[]>;
@@ -264,6 +270,9 @@ export interface PluginContext {
     readonly update?: (...args: any[]) => Promise<unknown>;
     readonly toggle?: (id: string) => Promise<unknown>;
     readonly delete?: (id: string) => Promise<void>;
+  };
+  network: {
+    readonly fetch?: (...args: any[]) => Promise<unknown>;
   };
 }
 

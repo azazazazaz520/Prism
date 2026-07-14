@@ -18,6 +18,7 @@ pub struct AddTaskInput {
 /// 更新任务的参数（同时作为 Tauri 命令的请求体）
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[derive(Clone)]
 pub struct UpdateTaskInput {
     pub id: String,
     pub title: String,

@@ -40,6 +40,11 @@ pub fn get_plugins_dir() -> PathBuf {
     get_workspace_dir().join("plugins")
 }
 
+/// 获取脚本目录
+pub fn get_scripts_dir() -> PathBuf {
+    get_workspace_dir().join("scripts")
+}
+
 // ═══════════════════════════════════════════════════════════════
 //  Workspace 初始化
 // ═══════════════════════════════════════════════════════════════
@@ -59,6 +64,9 @@ pub fn ensure_workspace() {
     }
     if let Err(e) = fs::create_dir_all(root.join("plugins")) {
         eprintln!("[store] 无法创建 plugins 目录: {}", e);
+    }
+    if let Err(e) = fs::create_dir_all(root.join("scripts")) {
+        eprintln!("[store] 无法创建 scripts 目录: {}", e);
     }
     // notes.meta.json 不存在时初始化为空数组
     let meta_path = root.join("notes.meta.json");

@@ -88,7 +88,8 @@ export type SettingsSubModule =
   | 'models'
   | 'sync'
   | 'prompts'
-  | 'plugins';
+  | 'plugins'
+  | 'scripts';
 
 /** AI 自然语言解析后的结构化任务 */
 export interface ParsedTask {

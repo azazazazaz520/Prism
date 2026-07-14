@@ -201,6 +201,15 @@ fn check_plugin_permission(
     plugin_id: &str,
     required: &str,
 ) -> Result<(), String> {
+    // 脚本（ID 以 script: 开头）：由前端 Capability Builder 控制权限，Rust 仅做格式校验
+    if plugin_id.starts_with("script:") {
+        let valid_perms = ["tasks:read", "tasks:write", "network", "network:local"];
+        if valid_perms.contains(&required) {
+            return Ok(());
+        }
+        return Err(format!("未知权限标识: {}", required));
+    }
+
     let config = state.with_config(|c| c.plugins.get(plugin_id).cloned());
     match config {
         Some(cfg) if cfg.enabled && cfg.permissions.iter().any(|p| p == required) => Ok(()),
@@ -455,4 +464,111 @@ pub async fn plugin_network_fetch(
         headers: resp_headers,
         body,
     })
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  轻量脚本
+// ═══════════════════════════════════════════════════════════════
+
+/// 单个脚本的元数据（前端可见）
+#[derive(Debug, Serialize, Clone)]
+pub struct ScriptMeta {
+    pub name: String,
+    pub description: Option<String>,
+    pub permissions: Vec<String>,
+}
+
+/// 扫描 `~/.prism/scripts/` 目录，列出所有 .js 文件及其 ==PrismScript== 头部
+#[tauri::command]
+pub fn scan_scripts() -> Vec<ScriptMeta> {
+    let dir = persistence::get_scripts_dir();
+    let mut scripts = Vec::new();
+
+    let entries = match fs::read_dir(&dir) {
+        Ok(e) => e,
+        Err(_) => return scripts,
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("js") {
+            continue;
+        }
+
+        let content = match fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+
+        // 解析 ==PrismScript== 头部
+        let meta = parse_script_header(&content);
+        let name = if meta.name.is_empty() {
+            path.file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string()
+        } else {
+            meta.name
+        };
+
+        scripts.push(ScriptMeta {
+            name,
+            description: meta.description,
+            permissions: meta.permissions,
+        });
+    }
+
+    scripts
+}
+
+/// 读取脚本文件内容
+#[tauri::command]
+pub fn read_script_content(file_name: String) -> Result<String, String> {
+    let dir = persistence::get_scripts_dir();
+    let path = dir.join(&file_name);
+    // 路径沙箱：确保文件在 scripts 目录内
+    let canonical = path.canonicalize().map_err(|e| format!("路径解析失败: {}", e))?;
+    let dir_canonical = dir.canonicalize().unwrap_or(dir);
+    if !canonical.starts_with(&dir_canonical) {
+        return Err("路径穿越检测".to_string());
+    }
+    fs::read_to_string(&canonical).map_err(|e| format!("读取失败: {}", e))
+}
+
+/// 解析 ==PrismScript== 注释头
+fn parse_script_header(content: &str) -> ScriptMeta {
+    let mut name = None;
+    let mut description = None;
+    let mut permissions = Vec::new();
+    let mut in_header = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        if trimmed == "// ==PrismScript==" {
+            in_header = true;
+            continue;
+        }
+        if trimmed == "// ==/PrismScript==" {
+            break;
+        }
+        if !in_header {
+            // 文件不以 ==PrismScript== 开头，不是脚本文件
+            break;
+        }
+
+        if let Some(rest) = trimmed.strip_prefix("// @name ") {
+            name = Some(rest.trim().to_string());
+        } else if let Some(rest) = trimmed.strip_prefix("// @description ") {
+            description = Some(rest.trim().to_string());
+        } else if let Some(rest) = trimmed.strip_prefix("// @permission ") {
+            permissions.push(rest.trim().to_string());
+        }
+    }
+
+    ScriptMeta {
+        name: name.unwrap_or_default(),
+        description,
+        permissions,
+    }
 }

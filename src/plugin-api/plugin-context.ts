@@ -93,6 +93,14 @@ export function createPluginContext(
 
     // ── 菜单扩展点 ────────────────────────────────
     menus: createMenusAPI(pluginId, track),
+
+    // ── 宿主环境信息 ──────────────────────────────
+    env: {
+      get theme(): string {
+        return document.documentElement.dataset.theme || 'auto';
+      },
+      locale: 'zh-CN',
+    },
   };
 
   return ctx;

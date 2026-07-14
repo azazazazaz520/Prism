@@ -30,13 +30,11 @@ pub async fn ai_execute(
             .filter(|t| {
                 t.completed
                     && !t.is_deleted
-                    && t.completed_at
-                        .as_deref()
-                        .is_some_and(|d| {
-                            chrono::DateTime::parse_from_rfc3339(d)
-                                .map(|dt| dt.with_timezone(&chrono::Local).date_naive() == today)
-                                .unwrap_or(false)
-                        })
+                    && t.completed_at.as_deref().is_some_and(|d| {
+                        chrono::DateTime::parse_from_rfc3339(d)
+                            .map(|dt| dt.with_timezone(&chrono::Local).date_naive() == today)
+                            .unwrap_or(false)
+                    })
             })
             .cloned()
             .collect();

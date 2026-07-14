@@ -1,5 +1,6 @@
 import type { PluginPermission } from '../types';
 import { createTasksAPI } from './tasks-impl';
+import { createNetworkAPI } from './network-impl';
 
 // ═══════════════════════════════════════════════════════════════
 //  错误类型
@@ -76,7 +77,7 @@ interface TasksStub {
 }
 
 interface NetworkStub {
-  fetch(url: string, options?: unknown): Promise<unknown>;
+  fetch?(url: string, options?: unknown): Promise<unknown>;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -220,15 +221,17 @@ export function buildCapability(pluginId: string, permissions: PluginPermission[
 
   // ── network 模块（需权限） ───────────────────────
 
+  const networkAPI = createNetworkAPI(pluginId, permissions);
+
   let network: NetworkStub | undefined;
-  if (permSet.has('network')) {
+  if (permSet.has('network') || permSet.has('network:local')) {
     network = {
-      async fetch(_url: string, _options?: unknown): Promise<unknown> {
-        ensureAlive();
-        requirePerm('network');
-        // Phase 3: 通过 Rust Host 代理
-        throw new Error('network.fetch 尚未实现（Phase 3）');
-      },
+      fetch: networkAPI.fetch
+        ? async (url: string, options?: unknown) => {
+            ensureAlive();
+            return networkAPI.fetch!(url, options as any);
+          }
+        : undefined,
     };
   }
 

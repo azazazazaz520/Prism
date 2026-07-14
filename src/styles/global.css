@@ -97,3 +97,75 @@ body {
 [data-theme='hud'] button {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
+
+/* ═══════════════════════════════════════════
+   插件视图边界样式
+   为 [data-plugin] 容器提供主题自适应的隔离环境
+   ═══════════════════════════════════════════ */
+
+/* ── 基础重置：插件容器继承宿主字体和颜色 ──── */
+[data-plugin] {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: var(--text-base, 14px);
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+/* 插件容器内所有元素继承盒模型 */
+[data-plugin] *,
+[data-plugin] *::before,
+[data-plugin] *::after {
+  box-sizing: border-box;
+}
+
+/* ── 浅色主题 ────────────────────────────── */
+[data-theme='light'] [data-plugin] {
+  color-scheme: light;
+}
+
+/* ── 暗色主题 ────────────────────────────── */
+[data-theme='dark'] [data-plugin] {
+  color-scheme: dark;
+}
+
+/* ── HUD 主题 ────────────────────────────── */
+[data-theme='hud'] [data-plugin] {
+  font-family: var(--font-heading), system-ui, sans-serif;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  color: var(--text-primary);
+}
+
+/* HUD 主题下插件容器内的按钮继承切角风格 */
+[data-theme='hud'] [data-plugin] button {
+  font-family: var(--font-heading), system-ui, sans-serif;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  font-size: 10px;
+  border-radius: 0;
+  clip-path: polygon(
+    4px 0%,
+    100% 0%,
+    100% calc(100% - 4px),
+    calc(100% - 4px) 100%,
+    0% 100%,
+    0% 4px
+  );
+}
+
+/* HUD 主题下插件容器内的输入框适配 */
+[data-theme='hud'] [data-plugin] input,
+[data-theme='hud'] [data-plugin] textarea {
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  background: var(--bg-secondary, #1a1c24);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle, #2a2c34);
+  padding: 6px 10px;
+  outline: none;
+}
+
+[data-theme='hud'] [data-plugin] input:focus,
+[data-theme='hud'] [data-plugin] textarea:focus {
+  border-color: var(--accent);
+}

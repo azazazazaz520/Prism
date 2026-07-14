@@ -1,6 +1,6 @@
 use crate::store;
 use crate::AppState;
-use tauri::{LogicalSize, Manager};
+use tauri::{Emitter, LogicalSize, Manager};
 
 // ── 窗口管理 ──────────────────────────────
 
@@ -156,10 +156,18 @@ pub fn get_theme(state: tauri::State<AppState>) -> String {
 }
 
 #[tauri::command]
-pub fn set_theme(state: tauri::State<AppState>, theme: String) -> Result<(), String> {
+pub fn set_theme(
+    state: tauri::State<AppState>,
+    theme: String,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
     state.with_config_mut(|config| {
-        config.theme = theme;
-    })
+        config.theme = theme.clone();
+    })?;
+    // 广播主题变更到所有窗口（悬浮窗/导入窗等独立 webview）
+    app.emit("theme-changed", theme)
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 // ── 模块配置 ──────────────────────────────
@@ -179,5 +187,19 @@ pub fn set_module_enabled(
 ) -> Result<(), String> {
     state.with_config_mut(|config| {
         config.module_enabled.insert(module_id, enabled);
+    })
+}
+
+/// 获取仪表盘布局配置
+#[tauri::command]
+pub fn get_dashboard_layout(state: tauri::State<AppState>) -> Option<String> {
+    state.with_config(|config| config.dashboard_layout.clone())
+}
+
+/// 保存仪表盘布局配置
+#[tauri::command]
+pub fn set_dashboard_layout(state: tauri::State<AppState>, layout: String) -> Result<(), String> {
+    state.with_config_mut(|config| {
+        config.dashboard_layout = Some(layout);
     })
 }

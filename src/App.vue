@@ -14,9 +14,11 @@ import AiCommandPanel from './components/AiCommandPanel.vue';
 import AiAssistant from './components/AiAssistant.vue';
 import NoteEditor from './components/NoteEditor.vue';
 import Toolbox from './components/Toolbox.vue';
+import Dashboard from './components/Dashboard.vue';
 import { useModuleRegistry } from './composables/useModuleRegistry';
 import { useTaskStore } from './composables/useTaskStore';
 import { useAiStatus } from './composables/useAiStatus';
+import { useDashboard } from './composables/useDashboard';
 
 // ── 模块注册表 ──────────────────────────────
 
@@ -79,6 +81,9 @@ onUnmounted(() => {
 
 onMounted(async () => {
   await Promise.all([loadAll(), loadAiSettings(), loadModules()]);
+  const { loadLayout } = useDashboard();
+  loadLayout();
+
   const syncReady = await initSync();
   const appWindow = getCurrentWindow();
   let lastRefresh = 0;
@@ -90,6 +95,10 @@ onMounted(async () => {
     loadAiSettings();
   });
   window.addEventListener('prism:force-sync', _handleForceSync);
+  window.addEventListener('prism:nav-settings', ((e: CustomEvent) => {
+    if (e.detail) settingsInitialSub.value = e.detail;
+    activeModule.value = 'settings';
+  }) as EventListener);
   // 仅在同步已配置时启动 30 秒轮询，作为 Realtime WebSocket 的兜底
   if (syncReady) {
     _pollInterval = setInterval(() => {
@@ -178,6 +187,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
         </svg>
       </button>
       <button
+        v-if="isEnabled('notes')"
         :class="['rail-btn', { active: activeModule === 'notes' }]"
         data-tooltip="Notes"
         @click="handleSwitchModule('notes')"
@@ -190,6 +200,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
         </svg>
       </button>
       <button
+        v-if="isEnabled('ai-assistant')"
         :class="['rail-btn', { active: activeModule === 'ai-assistant' }]"
         data-tooltip="AI"
         @click="handleSwitchModule('ai-assistant')"
@@ -199,6 +210,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
         </svg>
       </button>
       <button
+        v-if="isEnabled('devtools')"
         :class="['rail-btn', { active: activeModule === 'devtools' }]"
         data-tooltip="Toolbox"
         @click="handleSwitchModule('devtools')"
@@ -207,6 +219,17 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
           <path
             d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
           />
+        </svg>
+      </button>
+      <button
+        v-if="isEnabled('floating')"
+        class="rail-btn"
+        data-tooltip="Floating"
+        @click="handleSwitchModule('floating')"
+      >
+        <svg viewBox="0 0 24 24">
+          <rect x="4" y="4" width="16" height="16" rx="2" />
+          <rect x="8" y="8" width="8" height="8" rx="1" />
         </svg>
       </button>
       <div class="rail-spacer"></div>
@@ -268,42 +291,9 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
               </div>
             </div>
 
-            <!-- 中部可滚区：AI 面板 -->
+            <!-- 中部可滚区：仪表盘 -->
             <div class="tasks-scroll">
-              <div class="task-detail">
-                <div class="detail-section">
-                  <div class="detail-section-header">
-                    <span class="detail-section-label">AI Command</span>
-                    <span class="detail-section-line"></span>
-                  </div>
-                  <AiCommandPanel
-                    v-if="aiEnabled"
-                    @add-task="
-                      (parsed) =>
-                        addTask(
-                          parsed.title,
-                          parsed.due_date,
-                          parsed.tags,
-                          parsed.important,
-                          parsed.pinned,
-                          parsed.is_daily,
-                        )
-                    "
-                  />
-                  <div v-else class="ai-disabled-hint">
-                    AI 未配置 —
-                    <button
-                      class="link-btn"
-                      @click="
-                        activeModule = 'settings';
-                        settingsInitialSub = 'vendors';
-                      "
-                    >
-                      去设置
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <Dashboard />
             </div>
 
             <!-- 底部固定区：统计 + Sync -->
@@ -407,10 +397,9 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   border-right: 1px solid var(--border-subtle);
 }
 
-[data-theme='hud'] .icon-rail,
 [data-theme='hud'] .icon-rail {
   background:
-    linear-gradient(90deg, rgba(245, 197, 24, 0.05) 0%, transparent 30%), var(--bg-deep, #0f1118);
+    linear-gradient(90deg, var(--accent-glow-s) 0%, transparent 30%), var(--bg-deep, #0f1118);
 }
 
 .rail-brand {
@@ -418,9 +407,8 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   color: var(--accent);
 }
 
-[data-theme='hud'] .rail-brand,
 [data-theme='hud'] .rail-brand {
-  filter: drop-shadow(0 0 6px rgba(245, 197, 24, 0.4));
+  filter: drop-shadow(0 0 6px var(--accent-glow-strong));
 }
 
 .rail-btn {
@@ -437,7 +425,6 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   transition: all 0.2s;
 }
 
-[data-theme='hud'] .rail-btn,
 [data-theme='hud'] .rail-btn {
   clip-path: polygon(
     6px 0%,
@@ -511,7 +498,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
     0% 100%,
     0% 6px
   );
-  box-shadow: 0 0 12px rgba(245, 197, 24, 0.1);
+  box-shadow: 0 0 12px var(--accent-bg);
 }
 
 .rail-spacer {
@@ -527,12 +514,11 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   border-right: 1px solid var(--border-subtle);
 }
 
-[data-theme='hud'] .task-sidebar,
 [data-theme='hud'] .task-sidebar {
   background:
     linear-gradient(
       135deg,
-      rgba(245, 197, 24, 0.04) 0%,
+      var(--accent-glow-s) 0%,
       transparent 40%,
       transparent 70%,
       rgba(0, 0, 0, 0.3) 100%
@@ -604,12 +590,11 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   background: var(--bg-primary);
 }
 
-[data-theme='hud'] .main-area,
 [data-theme='hud'] .main-area {
   background:
     linear-gradient(
       135deg,
-      rgba(245, 197, 24, 0.03) 0%,
+      var(--accent-glow-s) 0%,
       transparent 35%,
       transparent 75%,
       rgba(0, 0, 0, 0.25) 100%
@@ -763,12 +748,11 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   border-left: 1px solid var(--border-subtle);
 }
 
-[data-theme='hud'] .right-panel,
 [data-theme='hud'] .right-panel {
   background:
     linear-gradient(
       135deg,
-      rgba(245, 197, 24, 0.03) 0%,
+      var(--accent-glow-s) 0%,
       transparent 35%,
       transparent 75%,
       rgba(0, 0, 0, 0.25) 100%

@@ -181,8 +181,8 @@ function handleKeydown(e: KeyboardEvent) {
 }
 
 .dialog-btn-confirm:hover:not(:disabled) {
-  background: var(--accent-dark);
-  border-color: var(--accent-dark);
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 
 .dialog-btn-danger {

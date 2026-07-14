@@ -397,14 +397,13 @@ function formatDueDate(d: string): string {
 .qa-btn.active {
   background: var(--accent);
   border-color: var(--accent);
-  color: white;
+  color: #fff;
 }
 
 .qa-btn.active:hover {
-  color: white;
+  color: #fff;
 }
 
-[data-theme='hud'] .qa-btn.active,
 [data-theme='hud'] .qa-btn.active {
   color: #0f1118;
   box-shadow: 0 0 8px var(--accent-glow);
@@ -441,14 +440,13 @@ function formatDueDate(d: string): string {
 .tag-add-btn {
   padding: 4px var(--space-md);
   background: var(--gray-900);
-  color: white;
+  color: #fff;
   border: none;
   border-radius: var(--radius-md);
   font-size: var(--text-xs);
   cursor: pointer;
 }
 
-[data-theme='hud'] .tag-add-btn,
 [data-theme='hud'] .tag-add-btn {
   background: var(--accent);
   color: #0f1118;
@@ -576,19 +574,22 @@ function formatDueDate(d: string): string {
 .task-input-btn {
   padding: 10px var(--space-xl);
   background: var(--accent);
-  color: white;
+  color: #fff;
   border: none;
   border-radius: var(--radius-full);
+  font-family: var(--font-heading);
   font-size: var(--text-base);
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
   cursor: pointer;
   transition: all var(--transition-fast);
   white-space: nowrap;
-  font-weight: 500;
 }
 
-[data-theme='hud'] .task-input-btn,
 [data-theme='hud'] .task-input-btn {
   color: #0f1118;
+  border-radius: 0;
   clip-path: polygon(
     var(--cut-lg) 0%,
     100% 0%,
@@ -599,23 +600,16 @@ function formatDueDate(d: string): string {
   );
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.15),
-    0 0 12px rgba(245, 197, 24, 0.15);
-  font-family: var(--font-heading);
-  font-weight: 600;
-  letter-spacing: 1px;
-  text-transform: uppercase;
+    0 0 12px var(--accent-glow);
 }
 
 .task-input-btn:hover {
   background: var(--accent-hover);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
 }
 
-[data-theme='hud'] .task-input-btn:hover,
 [data-theme='hud'] .task-input-btn:hover {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.2),
-    0 0 24px rgba(245, 197, 24, 0.35);
+    0 0 24px var(--accent-glow);
 }
 </style>

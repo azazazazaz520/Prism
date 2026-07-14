@@ -30,6 +30,15 @@ const customTags = ref<string[]>([]);
 /** 初始加载与同步合并的加载态（全局单例） */
 const isLoading = ref(false);
 
+/** 任务数据（全局单例，跨组件共享） */
+const tasks = ref<Task[]>([]);
+
+/** 任务派生标签（全局单例） */
+const allTags = ref<string[]>([]);
+
+/** 今日已完成任务 ID 列表（全局单例） */
+const dailyCompletedIds = ref<string[]>([]);
+
 /** 是否已初始化认证和同步 */
 let syncInitialized = false;
 
@@ -57,11 +66,7 @@ export function useTaskStore() {
   } = useSync();
   const syncCode = useSyncCode();
 
-  // ── 响应式状态 ──────────────────────────────
-
-  const tasks = ref<Task[]>([]);
-  const allTags = ref<string[]>([]);
-  const dailyCompletedIds = ref<string[]>([]);
+  // ── 副作用（仅 App.vue 首调用时触发） ──────────────
 
   // ── 同步回调 ──────────────────────────────
 
@@ -420,32 +425,38 @@ export function useTaskStore() {
   }, 'updateTask');
 
   const updateTaskMeta = wrap(
-    async (id: string, tags: string[], important: boolean, pinned: boolean, isDaily: boolean) => {
+    async (
+      id: string,
+      tags: string[],
+      important: boolean,
+      pinned: boolean,
+      isDaily: boolean,
+      dueDate?: string | null,
+    ) => {
       if (!tasks.value.find((t) => t.id === id)) return;
       const task = tasks.value.find((t) => t.id === id)!;
       await invoke('update_task', {
         args: {
           id,
           title: task.title,
-          dueDate: task.due_date,
+          dueDate: dueDate !== undefined ? dueDate : task.due_date,
           tags,
           important,
           pinned,
           isDaily,
         },
       });
-      tasks.value = tasks.value.map((t) =>
-        t.id === id
-          ? {
-              ...t,
-              tags,
-              important,
-              pinned,
-              is_daily: isDaily,
-              updated_at: new Date().toISOString(),
-            }
-          : t,
-      );
+      const patch: Partial<Task> = {
+        tags,
+        important,
+        pinned,
+        is_daily: isDaily,
+        updated_at: new Date().toISOString(),
+      };
+      if (dueDate !== undefined) {
+        (patch as any).due_date = dueDate;
+      }
+      tasks.value = tasks.value.map((t) => (t.id === id ? { ...t, ...patch } : t));
       syncAllTags();
       const updated = tasks.value.find((t) => t.id === id);
       if (updated) onTaskChanged(updated);

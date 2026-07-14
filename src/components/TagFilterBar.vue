@@ -125,7 +125,7 @@ function handleAddTag() {
 
 .tag-chip.active {
   background: var(--accent);
-  color: white;
+  color: #fff;
   border-color: var(--accent);
 }
 

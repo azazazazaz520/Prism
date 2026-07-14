@@ -318,7 +318,7 @@ const hasMessages = computed(() => messages.value.length > 0);
 
 .msg-row.user .msg-bubble {
   background: var(--accent);
-  color: white;
+  color: #fff;
   border-bottom-right-radius: 4px;
 }
 

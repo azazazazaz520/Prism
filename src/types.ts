@@ -82,7 +82,13 @@ export interface VendorPreset {
 }
 
 /** 设置页子模块 */
-export type SettingsSubModule = 'preferences' | 'vendors' | 'models' | 'sync' | 'prompts';
+export type SettingsSubModule =
+  | 'preferences'
+  | 'vendors'
+  | 'models'
+  | 'sync'
+  | 'prompts'
+  | 'plugins';
 
 /** AI 自然语言解析后的结构化任务 */
 export interface ParsedTask {

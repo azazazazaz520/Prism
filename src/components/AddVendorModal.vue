@@ -283,14 +283,27 @@ function handleSave() {
 .save-btn {
   padding: var(--space-sm) var(--space-2xl);
   background: var(--accent);
-  color: white;
+  color: #fff;
   border: none;
   border-radius: var(--radius-md);
+  font-family: var(--font-heading);
   font-size: var(--text-base);
   cursor: pointer;
-  transition: opacity var(--transition-fast);
+  transition: all var(--transition-fast);
 }
 .save-btn:hover {
-  opacity: 0.85;
+  background: var(--accent-hover);
+}
+[data-theme='hud'] .save-btn {
+  border-radius: 0;
+  color: #0f1118;
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
 }
 </style>

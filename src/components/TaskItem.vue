@@ -643,7 +643,7 @@ const dueLabel = computed(() => {
 
 .task-delete-btn {
   background: none;
-  border: none;
+  border: 1px solid transparent;
   color: var(--gray-400);
   font-size: 14px;
   cursor: pointer;
@@ -656,7 +656,20 @@ const dueLabel = computed(() => {
 
 .task-delete-btn:hover {
   color: var(--danger);
+  border-color: var(--danger);
   background: var(--danger-light);
+}
+
+[data-theme='hud'] .task-delete-btn {
+  border-radius: 0;
+  clip-path: polygon(
+    3px 0%,
+    100% 0%,
+    100% calc(100% - 3px),
+    calc(100% - 3px) 100%,
+    0% 100%,
+    0% 3px
+  );
 }
 
 .task-actions {
@@ -678,7 +691,7 @@ const dueLabel = computed(() => {
 
 .task-menu-btn {
   background: none;
-  border: none;
+  border: 1px solid transparent;
   color: var(--gray-400);
   font-size: 13px;
   cursor: pointer;
@@ -689,8 +702,21 @@ const dueLabel = computed(() => {
 }
 
 .task-menu-btn:hover {
-  color: var(--gray-700);
+  color: var(--accent);
+  border-color: var(--accent);
   background: var(--bg-hover);
+}
+
+[data-theme='hud'] .task-menu-btn {
+  border-radius: 0;
+  clip-path: polygon(
+    3px 0%,
+    100% 0%,
+    100% calc(100% - 3px),
+    calc(100% - 3px) 100%,
+    0% 100%,
+    0% 3px
+  );
 }
 
 .task-menu {
@@ -734,7 +760,7 @@ const dueLabel = computed(() => {
 
 .menu-toggle.on {
   background: var(--accent);
-  color: white;
+  color: #fff;
 }
 
 .menu-divider {
@@ -804,11 +830,30 @@ const dueLabel = computed(() => {
 
 .menu-tag-add {
   background: var(--accent);
-  color: white;
+  color: #fff;
   border: none;
   border-radius: var(--radius-sm);
+  font-family: var(--font-heading);
   font-size: var(--text-xs);
   padding: var(--space-xs) var(--space-sm);
   cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.menu-tag-add:hover {
+  background: var(--accent-hover);
+}
+
+[data-theme='hud'] .menu-tag-add {
+  color: #0f1118;
+  border-radius: 0;
+  clip-path: polygon(
+    3px 0%,
+    100% 0%,
+    100% calc(100% - 3px),
+    calc(100% - 3px) 100%,
+    0% 100%,
+    0% 3px
+  );
 }
 </style>

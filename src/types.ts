@@ -143,6 +143,8 @@ export interface FileEntry {
 
 // ── Prompt 管理相关类型 ──────────────────────────────
 
+// ── Prompt 管理相关类型 ──────────────────────────────
+
 /** 单个 Prompt 模板的元数据（前端可见，不含完整内容） */
 export interface PromptMeta {
   name: string;
@@ -150,4 +152,32 @@ export interface PromptMeta {
   vars: string[];
   /** 用户是否已在文件系统中自定义此 Prompt */
   is_customized: boolean;
+}
+
+// ── 仪表盘相关类型 ──────────────────────────────
+
+/** Widget 网格尺寸 */
+export interface WidgetSize {
+  w: number;
+  h: number;
+}
+
+/** 单个 Widget 的定义（内建组件） */
+export interface WidgetDefinition {
+  id: string;
+  title: string;
+  icon: string;
+  defaultSize: WidgetSize;
+  minSize?: WidgetSize;
+}
+
+/** 仪表盘布局持久化结构 */
+export interface DashboardLayout {
+  widgets: {
+    id: string;
+    enabled: boolean;
+    position: { x: number; y: number };
+    size: WidgetSize;
+  }[];
+  columns: number;
 }

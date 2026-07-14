@@ -252,7 +252,7 @@ function isToday(day: number): boolean {
 
 .dp-day.today {
   background: var(--accent);
-  color: white;
+  color: #fff;
 }
 
 .dp-clear {

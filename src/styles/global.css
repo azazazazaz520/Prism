@@ -69,8 +69,8 @@ body {
   z-index: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(245, 197, 24, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(245, 197, 24, 0.025) 1px, transparent 1px);
+    linear-gradient(var(--accent-glow-xs) 1px, transparent 1px),
+    linear-gradient(90deg, var(--accent-glow-xs) 1px, transparent 1px);
   background-size: 40px 40px;
 }
 

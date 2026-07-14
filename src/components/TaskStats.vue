@@ -53,17 +53,35 @@ const progressPct = computed(() =>
 
 .clear-btn {
   background: none;
-  border: none;
+  border: 1px solid var(--border-default);
   color: var(--text-muted);
-  font-size: var(--text-sm);
+  font-family: var(--font-heading);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
   cursor: pointer;
-  padding: 2px 6px;
+  padding: 4px 10px;
   border-radius: var(--radius-sm);
-  transition: color var(--transition-fast);
+  transition: all var(--transition-fast);
 }
 
 .clear-btn:hover {
+  border-color: var(--danger);
   color: var(--danger);
+}
+
+[data-theme='hud'] .clear-btn {
+  border-color: var(--border-line);
+  border-radius: 0;
+  clip-path: polygon(
+    4px 0%,
+    100% 0%,
+    100% calc(100% - 4px),
+    calc(100% - 4px) 100%,
+    0% 100%,
+    0% 4px
+  );
 }
 
 /* ── 进度条 ──────────────────────────── */

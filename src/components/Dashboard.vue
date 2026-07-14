@@ -27,7 +27,7 @@ const {
 //  常量
 // ══════════════════════════════════════════════════════
 
-const COLS = 2;
+const cols = computed(() => layout.value.columns);
 const ROW_HEIGHT = 110;
 
 // ══════════════════════════════════════════════════════
@@ -89,7 +89,7 @@ interface RenderSlot {
 }
 
 function linearIdx(x: number, y: number): number {
-  return y * COLS + x;
+  return y * cols.value + x;
 }
 
 const renderSlots = computed<RenderSlot[]>(() => {
@@ -119,7 +119,7 @@ const renderSlots = computed<RenderSlot[]>(() => {
   let oi = 0;
 
   for (let y = 0; y < 200 && oi < others.length; y++) {
-    for (let x = 0; x < COLS; x++) {
+    for (let x = 0; x < cols.value; x++) {
       // ghost 占用的格子 → 跳过
       const blocked =
         x >= target.x && x < target.x + draggedW && y >= target.y && y < target.y + draggedH;
@@ -198,13 +198,13 @@ function onDragMove(e: PointerEvent) {
 
   const gridRect = gridRef.value.getBoundingClientRect();
   const gap = 10;
-  const colWidth = (gridRect.width - gap) / COLS;
+  const colWidth = (gridRect.width - gap) / cols.value;
 
   // 指针相对于 grid 的位置（带滚动偏移）
   const relX = e.clientX - gridRect.left;
   const relY = e.clientY - gridRect.top + gridRef.value.scrollTop;
 
-  const maxX = dragWidget.value ? COLS - dragWidget.value.size.w : 1;
+  const maxX = dragWidget.value ? cols.value - dragWidget.value.size.w : 1;
 
   // 边界阻尼 — 允许略微超界但有弹性阻力
   let rawX = relX / colWidth;
@@ -249,8 +249,8 @@ function onDragEnd() {
   const INERTIA_THRESHOLD = 0.15;
   if (speed > INERTIA_THRESHOLD) {
     const gridRect = gridRef.value!.getBoundingClientRect();
-    const colWidth = (gridRect.width - 10) / COLS;
-    const maxX = dragWidget.value ? COLS - dragWidget.value.size.w : 1;
+    const colWidth = (gridRect.width - 10) / cols.value;
+    const maxX = dragWidget.value ? cols.value - dragWidget.value.size.w : 1;
 
     let virtualPx = dragTarget.value.x * colWidth;
     let virtualPy = dragTarget.value.y * ROW_HEIGHT;

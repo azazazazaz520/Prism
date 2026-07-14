@@ -94,6 +94,14 @@ pub struct SyncStore {
     pub last_sync_at: Option<String>,
 }
 
+/// 插件持久化配置
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PluginConfig {
+    pub enabled: bool,
+    #[serde(default)]
+    pub permissions: Vec<String>,
+}
+
 /// 应用配置（存储于 config.json）
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ConfigStore {
@@ -116,6 +124,9 @@ pub struct ConfigStore {
     /// 仪表盘布局配置（JSON 字符串，前端序列化）
     #[serde(default)]
     pub dashboard_layout: Option<String>,
+    /// 插件配置（key=plugin.id, value=PluginConfig）
+    #[serde(default)]
+    pub plugins: std::collections::HashMap<String, PluginConfig>,
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -147,6 +158,7 @@ pub fn default_config_store() -> ConfigStore {
         module_enabled: std::collections::HashMap::new(),
         notes_dir: None,
         dashboard_layout: None,
+        plugins: std::collections::HashMap::new(),
     }
 }
 

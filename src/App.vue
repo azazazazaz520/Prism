@@ -187,6 +187,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
         </svg>
       </button>
       <button
+        v-if="isEnabled('notes')"
         :class="['rail-btn', { active: activeModule === 'notes' }]"
         data-tooltip="Notes"
         @click="handleSwitchModule('notes')"
@@ -199,6 +200,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
         </svg>
       </button>
       <button
+        v-if="isEnabled('ai-assistant')"
         :class="['rail-btn', { active: activeModule === 'ai-assistant' }]"
         data-tooltip="AI"
         @click="handleSwitchModule('ai-assistant')"
@@ -208,6 +210,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
         </svg>
       </button>
       <button
+        v-if="isEnabled('devtools')"
         :class="['rail-btn', { active: activeModule === 'devtools' }]"
         data-tooltip="Toolbox"
         @click="handleSwitchModule('devtools')"
@@ -216,6 +219,17 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
           <path
             d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
           />
+        </svg>
+      </button>
+      <button
+        v-if="isEnabled('floating')"
+        class="rail-btn"
+        data-tooltip="Floating"
+        @click="handleSwitchModule('floating')"
+      >
+        <svg viewBox="0 0 24 24">
+          <rect x="4" y="4" width="16" height="16" rx="2" />
+          <rect x="8" y="8" width="8" height="8" rx="1" />
         </svg>
       </button>
       <div class="rail-spacer"></div>

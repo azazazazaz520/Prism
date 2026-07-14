@@ -73,14 +73,13 @@ function statusClass(state: string): string {
             <span :class="['pm-card-status', statusClass(entry.state)]">
               {{ statusLabel(entry.state) }}
             </span>
-            <label class="pm-toggle">
-              <input
-                type="checkbox"
-                :checked="entry.enabled"
-                @change="togglePlugin(entry.manifest.id)"
-              />
-              <span class="pm-toggle-track"></span>
-            </label>
+            <div
+              class="pm-toggle"
+              :class="{ 'pm-toggle-on': entry.enabled }"
+              @click.stop="togglePlugin(entry.manifest.id)"
+            >
+              <span class="pm-toggle-knob"></span>
+            </div>
           </div>
         </div>
         <p v-if="entry.manifest.description" class="pm-card-desc">
@@ -238,28 +237,20 @@ function statusClass(state: string): string {
 
 .pm-toggle {
   position: relative;
-  display: inline-block;
   width: 32px;
   height: 18px;
-  cursor: pointer;
-}
-
-.pm-toggle input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.pm-toggle-track {
-  position: absolute;
-  inset: 0;
-  background: var(--gray-200);
   border-radius: 9px;
+  background: var(--gray-200);
+  cursor: pointer;
   transition: background var(--transition-fast);
+  flex-shrink: 0;
 }
 
-.pm-toggle-track::after {
-  content: '';
+.pm-toggle-on {
+  background: var(--accent);
+}
+
+.pm-toggle-knob {
   position: absolute;
   left: 2px;
   top: 2px;
@@ -270,11 +261,7 @@ function statusClass(state: string): string {
   transition: transform var(--transition-fast);
 }
 
-.pm-toggle input:checked + .pm-toggle-track {
-  background: var(--accent);
-}
-
-.pm-toggle input:checked + .pm-toggle-track::after {
+.pm-toggle-on .pm-toggle-knob {
   transform: translateX(14px);
 }
 

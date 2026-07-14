@@ -300,6 +300,8 @@ pub fn run() {
             commands::plugins::plugin_tasks_toggle,
             commands::plugins::plugin_tasks_delete,
             commands::plugins::plugin_network_fetch,
+            commands::plugins::scan_scripts,
+            commands::plugins::read_script_content,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

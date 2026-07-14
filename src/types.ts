@@ -247,6 +247,12 @@ export interface PluginContext {
       opts: { mount(container: HTMLElement): void; unmount(): void },
     ): Disposable;
   };
+  menus: {
+    register(
+      location: string,
+      items: { id: string; label: string; icon?: string; action: () => void | Promise<void> }[],
+    ): Disposable;
+  };
 }
 
 /** Capability 会话（Plugin Loader 内部使用） */

@@ -15,6 +15,7 @@ import AiAssistant from './components/AiAssistant.vue';
 import NoteEditor from './components/NoteEditor.vue';
 import Toolbox from './components/Toolbox.vue';
 import Dashboard from './components/Dashboard.vue';
+import PluginViewHost from './components/PluginViewHost.vue';
 import { useModuleRegistry } from './composables/useModuleRegistry';
 import { useTaskStore } from './composables/useTaskStore';
 import { useAiStatus } from './composables/useAiStatus';
@@ -298,6 +299,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
             <!-- 中部可滚区：仪表盘 -->
             <div class="tasks-scroll">
               <Dashboard />
+              <PluginViewHost location="panel" />
             </div>
 
             <!-- 底部固定区：统计 + Sync -->

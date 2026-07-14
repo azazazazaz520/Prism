@@ -16,6 +16,7 @@ import VendorList from './VendorList.vue';
 import SyncSetup from './SyncSetup.vue';
 import PromptEditor from './PromptEditor.vue';
 import PluginManager from './PluginManager.vue';
+import PluginViewHost from './PluginViewHost.vue';
 
 const { theme, setTheme } = useTheme();
 const { allModules, isEnabled, toggle: toggleModule } = useModuleRegistry();
@@ -278,6 +279,7 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
 
         <div v-else-if="activeSub === 'plugins'" class="sub-page sub-page-full">
           <PluginManager />
+          <PluginViewHost location="settings" />
         </div>
       </div>
     </div>

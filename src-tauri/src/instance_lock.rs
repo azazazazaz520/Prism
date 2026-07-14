@@ -109,8 +109,10 @@ fn is_same_process(pid: u32, expected_name: &str) -> bool {
     #[cfg(unix)]
     {
         // /proc/PID/comm 仅包含进程名（不含路径），最多 15 字符
+        // 因此 expected_name 也需要截断到 15 字符再比较
         if let Ok(name) = std::fs::read_to_string(format!("/proc/{}/comm", pid)) {
-            return name.trim().eq_ignore_ascii_case(expected_name);
+            let max_len = expected_name.len().min(15);
+            return name.trim().eq_ignore_ascii_case(&expected_name[..max_len]);
         }
         false
     }

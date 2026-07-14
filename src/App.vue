@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { getActivePageRegistrations, activatePluginPage } from './plugin-api/views-impl';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { AppModule, SettingsSubModule } from './types';
@@ -64,9 +65,12 @@ const { aiEnabled, load: loadAiSettings } = useAiStatus();
 /** 当前侧边栏选中的功能模块 */
 const activeModule = ref<AppModule>('tasks');
 
-/** 非 tasks 模块时 grid 只保留 icon-rail + 主内容区 */
+/** 是否有插件页面正在激活 */
+const isPluginPageActive = computed(() => getActivePageRegistrations().length > 0);
+
+/** 非 tasks 模块或插件页激活时 grid 只保留 icon-rail + 主内容区 */
 const gridColumns = computed(() =>
-  activeModule.value === 'tasks' ? '56px 280px 1fr 300px' : '56px 1fr',
+  activeModule.value === 'tasks' && !isPluginPageActive.value ? '56px 280px 1fr 300px' : '56px 1fr',
 );
 
 // ── 生命周期 ──────────────────────────────
@@ -247,6 +251,8 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
         </svg>
       </button>
       <div class="rail-spacer"></div>
+      <!-- 插件图标轨按钮 -->
+      <PluginViewHost location="rail" />
       <button
         :class="['rail-btn', { active: activeModule === 'settings' }]"
         data-tooltip="Settings"
@@ -262,7 +268,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
     </nav>
 
     <!-- Sidebar: 280px 分组任务列表 + 内联输入 -->
-    <aside v-if="activeModule === 'tasks'" class="task-sidebar">
+    <aside v-if="activeModule === 'tasks' && !isPluginPageActive" class="task-sidebar">
       <div class="sidebar-header">
         <span class="sidebar-label">Operations</span>
         <span class="sidebar-count">{{ tasks.length }}</span>
@@ -283,7 +289,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
 
     <!-- 主内容区 -->
     <main class="main-area">
-      <Transition name="module-fade" mode="out-in">
+      <Transition v-if="!isPluginPageActive" name="module-fade" mode="out-in">
         <div v-if="activeModule === 'tasks' && isEnabled('tasks')" key="tasks" class="module-tasks">
           <div v-if="isLoading" class="loading-overlay">
             <span class="loading-spinner"></span>
@@ -351,10 +357,32 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
           <SettingsPanel :initial-sub="settingsInitialSub" />
         </div>
       </Transition>
+
+      <!-- 插件全屏页面（Transition 外，不受模块 fade 动画影响） -->
+      <div v-if="isPluginPageActive" class="module-plugin-page">
+        <div class="plugin-page-topbar">
+          <button class="plugin-page-back" @click="activatePluginPage('')">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+            返回
+          </button>
+        </div>
+        <PluginViewHost location="page" />
+      </div>
     </main>
 
     <!-- 右侧面板 (仅任务模块) -->
-    <aside v-if="activeModule === 'tasks'" class="right-panel">
+    <aside v-if="activeModule === 'tasks' && !isPluginPageActive" class="right-panel">
       <div class="right-panel-header">
         <span class="right-panel-label"><span class="rp-dot"></span>Cal & Tags</span>
       </div>
@@ -632,6 +660,54 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.module-plugin-page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+.plugin-page-topbar {
+  display: flex;
+  align-items: center;
+  padding: var(--space-sm) var(--space-xl);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.plugin-page-back {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.plugin-page-back:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+
+[data-theme='hud'] .plugin-page-back {
+  border-radius: 0;
+  clip-path: polygon(
+    4px 0%,
+    100% 0%,
+    100% calc(100% - 4px),
+    calc(100% - 4px) 100%,
+    0% 100%,
+    0% 4px
+  );
 }
 
 /* ── 三段式任务布局 ────────────────────── */

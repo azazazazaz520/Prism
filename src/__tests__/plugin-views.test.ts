@@ -94,6 +94,26 @@ describe('Views API', () => {
     expect(panels.some((v) => v.pluginId === 'com.b')).toBe(true);
   });
 
+  it('registerRail 返回 Disposable', () => {
+    const api = createViewsAPI(pluginId, track);
+    const d = api.registerRail(prefix + 'railBtn', {} as any);
+    expect(typeof d.dispose).toBe('function');
+  });
+
+  it('registerPage 返回 Disposable', () => {
+    const api = createViewsAPI(pluginId, track);
+    const d = api.registerPage(prefix + 'testPage', {} as any);
+    expect(typeof d.dispose).toBe('function');
+  });
+
+  it('rail 和 page 注册到正确位置', () => {
+    const api = createViewsAPI(pluginId, track);
+    api.registerRail(prefix + 'railBtn', {} as any);
+    api.registerPage(prefix + 'testPage', {} as any);
+    expect(getViewRegistrations('rail').some((v) => v.id === prefix + 'railBtn')).toBe(true);
+    expect(getViewRegistrations('page').some((v) => v.id === prefix + 'testPage')).toBe(true);
+  });
+
   it('ctx.dispose() 自动清理所有已注册视图（auto-track）', () => {
     const api = createViewsAPI(pluginId, track);
     api.registerPanel(prefix + 'view1', {} as any);

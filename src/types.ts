@@ -253,6 +253,10 @@ export interface PluginContext {
       items: { id: string; label: string; icon?: string; action: () => void | Promise<void> }[],
     ): Disposable;
   };
+  env: {
+    readonly theme: string;
+    readonly locale: string;
+  };
 }
 
 /** Capability 会话（Plugin Loader 内部使用） */

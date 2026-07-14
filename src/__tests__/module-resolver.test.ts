@@ -8,22 +8,22 @@ describe('rewriteImports', () => {
   it('替换单行单引号 prism:* import', () => {
     const src = `import { commands } from 'prism:api';`;
     const result = rewriteImports(src, pluginId, token);
-    expect(result).toContain('/__prism/api/api.js?pluginId=com.example.test&token=abc123');
+    expect(result).toContain('prism-api://localhost/api.js?pluginId=com.example.test&token=abc123');
     expect(result).not.toContain("'prism:api'");
   });
 
   it('替换单行双引号 prism:* import', () => {
     const src = `import { ref } from "prism:commands";`;
     const result = rewriteImports(src, pluginId, token);
-    expect(result).toContain('/__prism/api/commands.js?');
+    expect(result).toContain('prism-api://localhost/commands.js?');
     expect(result).not.toContain('"prism:commands"');
   });
 
   it('同时替换多个 prism:* import', () => {
     const src = `import { ui } from 'prism:api';\nimport { commands } from 'prism:commands';`;
     const result = rewriteImports(src, pluginId, token);
-    expect(result).toContain('/__prism/api/api.js?');
-    expect(result).toContain('/__prism/api/commands.js?');
+    expect(result).toContain('prism-api://localhost/api.js?');
+    expect(result).toContain('prism-api://localhost/commands.js?');
     expect(result).not.toContain('prism:');
   });
 

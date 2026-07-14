@@ -11,6 +11,7 @@ pub(crate) mod ai;
 pub(crate) mod models;
 pub(crate) mod note_service;
 pub(crate) mod persistence;
+pub(crate) mod plugin_protocol;
 pub(crate) mod prompt;
 pub(crate) mod store;
 pub(crate) mod task_service;
@@ -159,6 +160,10 @@ pub fn run() {
     let sync = store::load_sync();
     let running = Arc::new(std::sync::atomic::AtomicBool::new(true));
 
+    // 插件一次性 token 注册表（3s TTL）
+    let token_registry = std::sync::Arc::new(plugin_protocol::TokenRegistry::new());
+    let token_registry_clone = token_registry.clone();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
@@ -167,6 +172,57 @@ pub fn run() {
             data: Mutex::new(data),
             config: Mutex::new(config),
             sync: Mutex::new(sync),
+        })
+        .manage(token_registry)
+        .register_asynchronous_uri_scheme_protocol("prism-api", move |_ctx, request, responder| {
+            let registry = token_registry_clone.clone();
+            tauri::async_runtime::spawn(async move {
+                let uri = request.uri().to_string();
+                // 解析 prism-api://localhost/api.js?pluginId=X&token=Y
+                // 提取模块名（路径部分）和查询参数
+                let path = request.uri().path().trim_start_matches('/');
+                let module_name = path.trim_end_matches(".js");
+
+                // 解析查询参数
+                let query = uri.split('?').nth(1).unwrap_or("");
+                let params: std::collections::HashMap<String, String> = query
+                    .split('&')
+                    .filter_map(|p| {
+                        let mut parts = p.splitn(2, '=');
+                        Some((
+                            parts.next()?.to_string(),
+                            parts.next()?.to_string(),
+                        ))
+                    })
+                    .collect();
+
+                let plugin_id = params.get("pluginId").cloned().unwrap_or_default();
+                let token = params.get("token").cloned().unwrap_or_default();
+
+                let result = plugin_protocol::handle_api_request(
+                    &registry,
+                    module_name,
+                    &plugin_id,
+                    &token,
+                );
+
+                match result {
+                    Ok(body) => {
+                        let response = tauri::http::Response::builder()
+                            .header("Content-Type", "application/javascript")
+                            .body(body.as_bytes().to_vec())
+                            .unwrap();
+                        responder.respond(response);
+                    }
+                    Err(e) => {
+                        let response = tauri::http::Response::builder()
+                            .status(403)
+                            .body(format!("// Error: {}", e).as_bytes().to_vec())
+                            .unwrap();
+                        responder.respond(response);
+                    }
+                }
+            });
         })
         .invoke_handler(tauri::generate_handler![
             // 任务命令 (commands::tasks)

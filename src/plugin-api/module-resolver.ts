@@ -12,8 +12,8 @@
 // [ \t] 严格限定空格/Tab，禁用 \s 防止跨行匹配
 const PRISM_IMPORT_RE = /from[ \t]+['"](prism:[a-z:]+)['"]/g;
 
-/** API 端点路径前缀 */
-const API_PREFIX = '/__prism/api';
+/** API 端点：Tauri custom protocol scheme */
+const API_PREFIX = 'prism-api://localhost';
 
 /**
  * 将源码中的 `prism:*` 裸模块替换为携带插件身份和 token 的绝对 URL。

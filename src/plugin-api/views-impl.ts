@@ -47,7 +47,7 @@ export function clearViewRegistrations(): void {
  * 为指定插件创建 Views API。
  * 所有注册方法返回 Disposable，停用插件时自动卸载。
  */
-export function createViewsAPI(pluginId: string) {
+export function createViewsAPI(pluginId: string, track: (d: Disposable) => Disposable) {
   const prefix = `${pluginId}.`;
 
   function checkId(id: string): void {
@@ -77,7 +77,8 @@ export function createViewsAPI(pluginId: string) {
     registry.value = [...registry.value, reg];
 
     let disposed = false;
-    return {
+    // 自动追踪：插件停用时 ctx.dispose() 必然清理
+    return track({
       dispose() {
         if (disposed) return;
         disposed = true;
@@ -86,7 +87,7 @@ export function createViewsAPI(pluginId: string) {
         // 从注册表移除
         registry.value = registry.value.filter((v) => v !== reg);
       },
-    };
+    });
   }
 
   return {

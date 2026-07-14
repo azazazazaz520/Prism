@@ -52,7 +52,7 @@ export function clearMenuRegistrations(): void {
  * 为指定插件创建 Menus API。
  * `register(location, items)` 返回 Disposable，停用插件时自动移除。
  */
-export function createMenusAPI(pluginId: string) {
+export function createMenusAPI(pluginId: string, track: (d: Disposable) => Disposable) {
   const prefix = `${pluginId}.`;
 
   function checkId(id: string): void {
@@ -78,14 +78,14 @@ export function createMenusAPI(pluginId: string) {
     registry.value = [...registry.value, ...regs];
 
     let disposed = false;
-    return {
+    // 自动追踪：插件停用时 ctx.dispose() 必然清理，不会因插件作者忘记 track 而残留
+    return track({
       dispose() {
         if (disposed) return;
         disposed = true;
-        // 从注册表移除该组菜单项
         registry.value = registry.value.filter((v) => !regs.includes(v));
       },
-    };
+    });
   }
 
   return { register };

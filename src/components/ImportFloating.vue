@@ -2,6 +2,8 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { listen } from '@tauri-apps/api/event';
+import { initTheme } from '../composables/useTheme';
 import type { ParsedTask } from '../types';
 
 // ── 扩展 ParsedTask：加入前端选择状态 ──────────────
@@ -45,7 +47,6 @@ const allSelected = computed(
 const selectedCount = computed(() => candidates.value.filter((c) => c.selected).length);
 
 onMounted(async () => {
-  // 透明窗口
   document.documentElement.style.background = 'transparent';
   document.documentElement.style.overflow = 'hidden';
   document.body.style.margin = '0';
@@ -53,17 +54,25 @@ onMounted(async () => {
   document.body.style.background = 'transparent';
   document.body.style.overflow = 'hidden';
 
+  // 加载主题（首次显示时自仓库读取）
+  await initTheme();
   checkScreenshot();
 
   const appWindow = getCurrentWindow();
   unlistenFocus = await appWindow.listen('tauri://focus', () => {
     checkScreenshot();
   });
+  // 监听主窗口主题变更
+  unlistenTheme = await listen<string>('theme-changed', (event) => {
+    document.documentElement.setAttribute('data-theme', event.payload);
+  });
 });
 
 let unlistenFocus: (() => void) | null = null;
+let unlistenTheme: (() => void) | null = null;
 onUnmounted(() => {
   if (unlistenFocus) unlistenFocus();
+  if (unlistenTheme) unlistenTheme();
 });
 
 // ── AI 解析 ──────────────────────────────
@@ -152,12 +161,23 @@ function formatDate(d: string | null): string {
     <!-- 顶部拖拽栏 -->
     <div class="topbar" data-tauri-drag-region>
       <span class="topbar-title">Import</span>
-      <button class="close-btn" @click.stop="closeWindow">&times;</button>
+      <button class="close-btn" @click.stop="closeWindow">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
     </div>
 
     <!-- 输入区 -->
     <div class="input-section">
-      <!-- 截图预览 -->
       <div v-if="screenshotImage" class="screenshot-preview">
         <img :src="'data:image/png;base64,' + screenshotImage" class="screenshot-img" />
         <button class="clear-screenshot-btn" @click="clearScreenshot">清除截图</button>
@@ -206,7 +226,6 @@ function formatDate(d: string | null): string {
           :key="i"
           :class="['card', { expanded: task.expanded }]"
         >
-          <!-- 卡片摘要行 -->
           <div class="card-summary" @click="toggleExpand(i)">
             <input
               type="checkbox"
@@ -232,7 +251,6 @@ function formatDate(d: string | null): string {
             </svg>
           </div>
 
-          <!-- 展开编辑区 -->
           <div v-if="task.expanded" class="card-detail">
             <div class="field">
               <label>标题</label>
@@ -317,14 +335,15 @@ function formatDate(d: string | null): string {
   max-height: 560px;
   display: flex;
   flex-direction: column;
-  background: rgba(22, 22, 28, 0.96);
+  background: var(--bg-secondary);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
-  clip-path: inset(0 round 16px);
+  clip-path: inset(0 round var(--radius-lg));
   filter: drop-shadow(0 2px 16px rgba(0, 0, 0, 0.35));
   overflow: hidden;
   font-family: var(--font-sans);
   user-select: none;
+  color: var(--text-primary);
 }
 
 /* ── 顶部栏 ────────────────────── */
@@ -333,17 +352,18 @@ function formatDate(d: string | null): string {
   align-items: center;
   justify-content: space-between;
   padding: 8px 14px;
-  background: rgba(255, 255, 255, 0.04);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: var(--bg-hover);
+  border-bottom: 1px solid var(--border-subtle);
   cursor: move;
   -webkit-app-region: drag;
 }
 
 .topbar-title {
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-secondary);
   letter-spacing: 0.5px;
+  font-family: var(--font-heading);
 }
 
 .close-btn {
@@ -351,18 +371,19 @@ function formatDate(d: string | null): string {
   z-index: 1;
   background: none;
   border: none;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-muted);
   font-size: 18px;
   cursor: pointer;
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   line-height: 1;
   -webkit-app-region: no-drag;
-  transition: all 0.15s;
+  transition: all var(--transition-fast);
 }
+
 .close-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.8);
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 /* ── 输入区 ────────────────────── */
@@ -374,31 +395,33 @@ function formatDate(d: string | null): string {
 .chat-textarea {
   width: 100%;
   min-height: 72px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 13px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--text-base);
   padding: 10px 12px;
   resize: vertical;
   outline: none;
   font-family: var(--font-sans);
   line-height: 1.5;
 }
+
 .chat-textarea:focus {
   border-color: var(--accent);
 }
+
 .chat-textarea::placeholder {
-  color: rgba(255, 255, 255, 0.25);
+  color: var(--text-disabled);
 }
 
 /* ── 截图预览 ────────────────────── */
 .screenshot-preview {
   position: relative;
-  margin-bottom: 8px;
-  border-radius: 8px;
+  margin-bottom: var(--space-sm);
+  border-radius: var(--radius-sm);
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-subtle);
 }
 
 .screenshot-img {
@@ -406,31 +429,32 @@ function formatDate(d: string | null): string {
   max-height: 180px;
   object-fit: contain;
   display: block;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--bg-tertiary);
 }
 
 .clear-screenshot-btn {
   position: absolute;
   top: 6px;
   right: 6px;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.55);
   border: none;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-secondary);
   font-size: 11px;
   padding: 3px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--transition-fast);
 }
+
 .clear-screenshot-btn:hover {
-  background: rgba(231, 76, 60, 0.6);
-  color: white;
+  background: var(--danger);
+  color: #fff;
 }
 
 .input-actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: 8px;
+  margin-top: var(--space-sm);
 }
 
 .parse-btn {
@@ -439,17 +463,21 @@ function formatDate(d: string | null): string {
   gap: 6px;
   padding: 8px 18px;
   background: var(--accent);
-  color: white;
+  color: #fff;
   border: none;
-  border-radius: 8px;
-  font-size: 13px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-base);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-fast);
+  font-family: var(--font-heading);
+  letter-spacing: 0.5px;
 }
+
 .parse-btn:hover:not(:disabled) {
   background: var(--accent-hover);
 }
+
 .parse-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -459,10 +487,11 @@ function formatDate(d: string | null): string {
   width: 14px;
   height: 14px;
   border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white;
+  border-top-color: #fff;
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -470,12 +499,12 @@ function formatDate(d: string | null): string {
 }
 
 .error-msg {
-  margin-top: 8px;
-  font-size: 12px;
+  margin-top: var(--space-sm);
+  font-size: var(--text-sm);
   color: var(--danger);
   padding: 6px 10px;
-  background: rgba(243, 139, 168, 0.12);
-  border-radius: 6px;
+  background: var(--danger-light);
+  border-radius: var(--radius-sm);
 }
 
 /* ── 结果列表 ────────────────────── */
@@ -484,7 +513,7 @@ function formatDate(d: string | null): string {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .results-header {
@@ -492,26 +521,27 @@ function formatDate(d: string | null): string {
   align-items: center;
   justify-content: space-between;
   padding: 8px 14px;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--bg-hover);
 }
 
 .results-count {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.45);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
 }
 
 .toggle-all-btn {
   background: none;
   border: none;
   color: var(--accent);
-  font-size: 11px;
+  font-size: var(--text-xs);
   cursor: pointer;
   padding: 2px 8px;
-  border-radius: 4px;
-  transition: all 0.15s;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
 }
+
 .toggle-all-btn:hover {
-  background: rgba(45, 212, 191, 0.12);
+  background: var(--accent-muted);
 }
 
 .card-list {
@@ -519,24 +549,26 @@ function formatDate(d: string | null): string {
   overflow-y: auto;
   padding: 6px 14px;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+  scrollbar-color: var(--border-default) transparent;
 }
 
 /* ── 卡片 ────────────────────── */
 .card {
   margin-bottom: 4px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-sm);
+  background: var(--bg-hover);
+  border: 1px solid var(--border-subtle);
   transition: all 0.2s;
   overflow: hidden;
 }
+
 .card:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-active);
 }
+
 .card.expanded {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: var(--bg-active);
+  border-color: var(--border-default);
 }
 
 .card-summary {
@@ -557,15 +589,15 @@ function formatDate(d: string | null): string {
 
 .card-title {
   flex: 1;
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.85);
+  font-size: var(--text-base);
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .card-date {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--accent);
   white-space: nowrap;
   flex-shrink: 0;
@@ -574,50 +606,55 @@ function formatDate(d: string | null): string {
 .card-badge {
   font-size: 10px;
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   white-space: nowrap;
   flex-shrink: 0;
 }
+
 .card-badge.important {
-  background: rgba(250, 179, 135, 0.2);
+  background: var(--warning-light);
   color: var(--warning);
 }
+
 .card-badge.tag {
-  background: rgba(45, 212, 191, 0.15);
+  background: var(--accent-muted);
   color: var(--accent);
 }
 
 .expand-arrow {
-  color: rgba(255, 255, 255, 0.3);
+  color: var(--text-disabled);
   flex-shrink: 0;
 }
 
 /* ── 展开编辑区 ────────────────────── */
 .card-detail {
   padding: 6px 12px 10px 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .field {
-  margin-bottom: 8px;
+  margin-bottom: var(--space-sm);
 }
+
 .field label {
   display: block;
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.35);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
   margin-bottom: 3px;
 }
+
 .field-input {
   width: 100%;
   padding: 6px 10px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
   outline: none;
   font-family: var(--font-sans);
 }
+
 .field-input:focus {
   border-color: var(--accent);
 }
@@ -626,14 +663,16 @@ function formatDate(d: string | null): string {
   display: flex;
   gap: 16px;
 }
+
 .toggle-label {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.55);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
   cursor: pointer;
 }
+
 .toggle-label input {
   accent-color: var(--accent);
 }
@@ -644,38 +683,120 @@ function formatDate(d: string | null): string {
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.02);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-hover);
   flex-shrink: 0;
 }
 
 .selected-hint {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.35);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
 }
 
 .success-hint {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--success);
   font-weight: 500;
 }
 
 .add-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   padding: 8px 18px;
   background: var(--accent);
-  color: white;
+  color: #fff;
   border: none;
-  border-radius: 8px;
-  font-size: 13px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-base);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-fast);
+  font-family: var(--font-heading);
+  letter-spacing: 0.5px;
 }
+
 .add-btn:hover:not(:disabled) {
   background: var(--accent-hover);
 }
+
 .add-btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
+}
+
+/* ═══════════════════════════════════════════
+   HUD / 终末地风格 — data-theme="hud"
+   ═══════════════════════════════════════════ */
+
+[data-theme='hud'] .import-window {
+  clip-path: var(--cut-corner);
+  filter: none;
+  box-shadow: var(--shadow-lg);
+}
+
+[data-theme='hud'] .parse-btn {
+  border-radius: 0;
+  clip-path: polygon(
+    var(--cut-sm) 0%,
+    100% 0%,
+    100% calc(100% - var(--cut-sm)),
+    calc(100% - var(--cut-sm)) 100%,
+    0% 100%,
+    0% var(--cut-sm)
+  );
+}
+
+[data-theme='hud'] .add-btn {
+  border-radius: 0;
+  clip-path: polygon(
+    var(--cut-sm) 0%,
+    100% 0%,
+    100% calc(100% - var(--cut-sm)),
+    calc(100% - var(--cut-sm)) 100%,
+    0% 100%,
+    0% var(--cut-sm)
+  );
+}
+
+[data-theme='hud'] .close-btn {
+  border-radius: 0;
+  clip-path: polygon(
+    var(--cut-sm) 0%,
+    100% 0%,
+    100% calc(100% - var(--cut-sm)),
+    calc(100% - var(--cut-sm)) 100%,
+    0% 100%,
+    0% var(--cut-sm)
+  );
+}
+
+[data-theme='hud'] .chat-textarea {
+  border-radius: 0;
+  clip-path: polygon(
+    var(--cut-sm) 0%,
+    100% 0%,
+    100% calc(100% - var(--cut-sm)),
+    calc(100% - var(--cut-sm)) 100%,
+    0% 100%,
+    0% var(--cut-sm)
+  );
+}
+
+[data-theme='hud'] .card {
+  background: var(--bg-tertiary);
+  border-color: var(--border-line);
+}
+
+[data-theme='hud'] .topbar {
+  border-bottom-color: var(--border-line);
+}
+
+[data-theme='hud'] .results-section {
+  border-top-color: var(--border-line);
+}
+
+[data-theme='hud'] .bottom-bar {
+  border-top-color: var(--border-line);
 }
 </style>

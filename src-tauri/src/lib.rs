@@ -208,6 +208,8 @@ pub fn run() {
             commands::config::set_theme,
             commands::config::get_module_enabled,
             commands::config::set_module_enabled,
+            commands::config::get_dashboard_layout,
+            commands::config::set_dashboard_layout,
             // 笔记命令
             commands::notes::list_note_tree,
             commands::notes::read_note,

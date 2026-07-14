@@ -52,12 +52,20 @@ function setMode(m: AiMode) {
   modeDropdownOpen.value = false;
 }
 
+import { useAiResultCache } from '../composables/useAiResultCache';
+
+const {
+  commandResult: result,
+  commandError: error,
+  saveCommandResult,
+  saveCommandError,
+  clearCommandResult,
+} = useAiResultCache();
+
 // ── 输入 ────────────────────────────────
 
 const input = ref('');
 const loading = ref(false);
-const result = ref<AiExecuteResult | null>(null);
-const error = ref('');
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 
 // 检测命令前缀自动切换模式
@@ -92,20 +100,24 @@ async function submit() {
   }
 
   loading.value = true;
-  error.value = '';
-  result.value = null;
+  clearCommandResult();
 
   try {
     const res = await invoke<AiExecuteResult>('ai_execute', {
       mode: currentMode,
       input: sendText,
     });
-    result.value = res;
+    saveCommandResult(res);
   } catch (e: any) {
-    error.value = typeof e === 'string' ? e : 'AI 请求失败';
+    saveCommandError(typeof e === 'string' ? e : 'AI 请求失败');
   } finally {
     loading.value = false;
   }
+}
+
+function clearResult() {
+  clearCommandResult();
+  addedTaskIndices.value.clear();
 }
 
 function onKeydown(e: KeyboardEvent) {
@@ -129,7 +141,7 @@ function createTask(task: ParsedTask, idx: number) {
   addedTaskIndices.value.add(idx);
   // 全部添加后清空结果
   if (addedTaskIndices.value.size >= (result.value?.tasks.length ?? 0)) {
-    result.value = null;
+    clearCommandResult();
     input.value = '';
     addedTaskIndices.value.clear();
     nextTick(() => {
@@ -201,9 +213,28 @@ function autoResize() {
         @input="onInput"
         @keydown="onKeydown"
       ></textarea>
-      <button class="acp-submit" :disabled="loading || !input.trim()" @click="submit">
+      <button
+        class="acp-submit"
+        :class="{ 'is-loading': loading }"
+        :disabled="!loading && !input.trim()"
+        @click="submit"
+      >
+        <!-- 加载中：旋转 spinner -->
         <svg
-          v-if="!loading"
+          v-if="loading"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+        >
+          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+        </svg>
+        <!-- 默认：发送箭头 -->
+        <svg
+          v-else
           width="16"
           height="16"
           viewBox="0 0 24 24"
@@ -216,7 +247,6 @@ function autoResize() {
           <line x1="22" y1="2" x2="11" y2="13" />
           <polygon points="22 2 15 22 11 13 2 9 22 2" />
         </svg>
-        <span v-else>...</span>
       </button>
     </div>
 
@@ -241,6 +271,9 @@ function autoResize() {
 
     <!-- 回复区 -->
     <div v-if="result" class="acp-result">
+      <div class="acp-result-actions">
+        <button class="acp-clear-btn" @click="clearResult">清除结果</button>
+      </div>
       <div v-if="result.text" class="acp-text">{{ result.text }}</div>
 
       <!-- /add 模式：任务预览 + 创建按钮 -->
@@ -343,6 +376,7 @@ function autoResize() {
   padding: var(--space-sm) var(--space-md);
   background: none;
   border: none;
+  border-radius: var(--radius-sm);
   color: var(--text-secondary);
   font-size: var(--text-xs);
   font-family: inherit;
@@ -390,9 +424,13 @@ function autoResize() {
   padding: var(--space-sm);
   background: transparent;
   border: none;
+  border-radius: var(--radius-sm);
   color: var(--text-muted);
   cursor: pointer;
   transition: color var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .acp-submit:hover:not(:disabled) {
@@ -400,10 +438,48 @@ function autoResize() {
 }
 
 .acp-submit:disabled {
-  opacity: 0.3;
+  opacity: 0.25;
   cursor: not-allowed;
 }
 
+.acp-submit.is-loading {
+  color: var(--accent);
+  cursor: default;
+  opacity: 1;
+}
+
+.acp-submit.is-loading svg {
+  animation: acp-spin 0.8s linear infinite;
+}
+
+@keyframes acp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.acp-result-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-xs);
+}
+.acp-clear-btn {
+  font-family: var(--font-heading);
+  font-size: 8px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.acp-clear-btn:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
 .acp-error {
   margin-top: var(--space-xs);
   font-size: var(--text-xs);

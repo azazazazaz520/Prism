@@ -452,6 +452,19 @@ async function handleCopy() {
   cursor: not-allowed;
 }
 
+[data-theme='hud'] .btn-primary {
+  border-radius: 0;
+  color: #0f1118;
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+}
+
 .btn-block {
   width: 100%;
 }
@@ -488,6 +501,19 @@ async function handleCopy() {
 .btn-secondary:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+[data-theme='hud'] .btn-secondary {
+  border-radius: 0;
+  border-color: var(--border-line);
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
 }
 
 /* ── Icon button ────────────────────────── */
@@ -533,6 +559,22 @@ async function handleCopy() {
 .btn-retry:hover {
   background: var(--danger);
   color: #fff;
+}
+
+[data-theme='hud'] .btn-retry {
+  border-radius: 0;
+  clip-path: polygon(
+    4px 0%,
+    100% 0%,
+    100% calc(100% - 4px),
+    calc(100% - 4px) 100%,
+    0% 100%,
+    0% 4px
+  );
+}
+
+[data-theme='hud'] .btn-retry:hover {
+  color: #0f1118;
 }
 
 /* ── Error banner ───────────────────────── */

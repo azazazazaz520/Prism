@@ -206,13 +206,15 @@ function handleSave() {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   background: var(--bg-primary);
+  color: var(--text-secondary);
   cursor: pointer;
   font-size: var(--text-sm);
   transition: all var(--transition-fast);
 }
 .preset-btn.selected {
-  border-color: var(--text-primary);
-  background: var(--bg-hover);
+  border-color: var(--accent);
+  background: var(--accent-glow-s);
+  color: var(--text-primary);
   font-weight: 500;
 }
 
@@ -221,12 +223,12 @@ function handleSave() {
   justify-content: space-between;
   align-items: center;
   padding: var(--space-sm) 0;
-  border-bottom: 1px solid var(--bg-hover);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .field-row label {
   font-size: var(--text-sm);
-  color: var(--gray-700);
+  color: var(--text-secondary);
   flex-shrink: 0;
   width: 80px;
 }
@@ -234,27 +236,29 @@ function handleSave() {
 .field-row input {
   flex: 1;
   padding: 5px var(--space-sm);
-  border: 1px solid var(--gray-300);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
   outline: none;
   text-align: right;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
 }
 .field-row input:focus {
-  border-color: var(--gray-600);
+  border-color: var(--accent);
 }
 
 .toggle {
   width: 40px;
   height: 22px;
-  background: var(--gray-400);
+  background: var(--border-default);
   border-radius: 11px;
   position: relative;
   cursor: pointer;
   transition: background var(--transition-normal);
 }
 .toggle.on {
-  background: var(--gray-900);
+  background: var(--accent);
 }
 .toggle-knob {
   width: 18px;
@@ -278,14 +282,28 @@ function handleSave() {
 
 .save-btn {
   padding: var(--space-sm) var(--space-2xl);
-  background: var(--gray-900);
-  color: white;
+  background: var(--accent);
+  color: #fff;
   border: none;
   border-radius: var(--radius-md);
+  font-family: var(--font-heading);
   font-size: var(--text-base);
   cursor: pointer;
+  transition: all var(--transition-fast);
 }
 .save-btn:hover {
-  background: var(--gray-800);
+  background: var(--accent-hover);
+}
+[data-theme='hud'] .save-btn {
+  border-radius: 0;
+  color: #0f1118;
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
 }
 </style>

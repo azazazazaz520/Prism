@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 
 const props = withDefaults(
   defineProps<{
@@ -24,10 +24,17 @@ const activeSub = ref<SettingsSubModule>(props.initialSub);
 /** 主题选择器展开状态 */
 const isThemeOpen = ref(false);
 
+/** 触发器 DOM 引用，用于计算下拉菜单位置 */
+const themeTriggerRef = ref<HTMLElement | null>(null);
+
+/** 下拉菜单 fixed 定位样式 */
+const dropdownStyle = ref({ top: '0px', left: '0px', minWidth: '0px' });
+
 const themeOptions = [
   { value: 'auto', label: '跟随系统' },
   { value: 'light', label: '浅色' },
   { value: 'dark', label: '深色' },
+  { value: 'hud', label: 'HUD' },
 ] as const;
 
 function selectTheme(value: ThemeMode) {
@@ -35,20 +42,49 @@ function selectTheme(value: ThemeMode) {
   isThemeOpen.value = false;
 }
 
+/** 切换下拉菜单并计算 fixed 定位 */
+function toggleThemeDropdown() {
+  isThemeOpen.value = !isThemeOpen.value;
+  if (isThemeOpen.value) {
+    // nextTick 等 DOM 更新后再取位置
+    nextTick(() => {
+      if (themeTriggerRef.value) {
+        const rect = themeTriggerRef.value.getBoundingClientRect();
+        dropdownStyle.value = {
+          top: `${rect.bottom + 4}px`,
+          left: `${rect.left}px`,
+          minWidth: `${rect.width}px`,
+        };
+      }
+    });
+  }
+}
+
 /** 点击外部关闭下拉菜单 */
 function handleClickOutside(event: MouseEvent) {
   const target = event.target as HTMLElement;
-  if (!target.closest('.custom-select')) {
+  if (!target.closest('.custom-select') && !target.closest('.select-dropdown')) {
+    isThemeOpen.value = false;
+  }
+}
+
+/** 滚动/缩放时关闭下拉，避免位置错位 */
+function handleScrollOrResize() {
+  if (isThemeOpen.value) {
     isThemeOpen.value = false;
   }
 }
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside);
+  window.addEventListener('scroll', handleScrollOrResize, true);
+  window.addEventListener('resize', handleScrollOrResize);
 });
 
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside);
+  window.removeEventListener('scroll', handleScrollOrResize, true);
+  window.removeEventListener('resize', handleScrollOrResize);
 });
 
 /** 提醒提前分钟数 */
@@ -73,7 +109,6 @@ async function saveReminder() {
 const subModules: { key: SettingsSubModule; label: string }[] = [
   { key: 'preferences', label: '偏好设置' },
   { key: 'vendors', label: '供应商' },
-  { key: 'models', label: '默认模型' },
   { key: 'prompts', label: 'Prompt' },
   { key: 'sync', label: '跨设备同步' },
 ];
@@ -146,7 +181,12 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
             <div class="setting-row">
               <label>主题模式</label>
               <div class="custom-select" :class="{ open: isThemeOpen }">
-                <button type="button" class="select-trigger" @click="isThemeOpen = !isThemeOpen">
+                <button
+                  ref="themeTriggerRef"
+                  type="button"
+                  class="select-trigger"
+                  @click="toggleThemeDropdown"
+                >
                   {{ themeOptions.find((o) => o.value === theme)?.label || '跟随系统' }}
                   <svg
                     width="12"
@@ -161,17 +201,19 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
                     <polyline points="6 9 12 15 18 9" />
                   </svg>
                 </button>
-                <div v-if="isThemeOpen" class="select-dropdown">
-                  <button
-                    v-for="opt in themeOptions"
-                    :key="opt.value"
-                    type="button"
-                    :class="['dropdown-item', { selected: theme === opt.value }]"
-                    @click="selectTheme(opt.value)"
-                  >
-                    {{ opt.label }}
-                  </button>
-                </div>
+                <Teleport to="body">
+                  <div v-if="isThemeOpen" class="select-dropdown" :style="dropdownStyle">
+                    <button
+                      v-for="opt in themeOptions"
+                      :key="opt.value"
+                      type="button"
+                      :class="['dropdown-item', { selected: theme === opt.value }]"
+                      @click="selectTheme(opt.value)"
+                    >
+                      {{ opt.label }}
+                    </button>
+                  </div>
+                </Teleport>
               </div>
             </div>
           </div>
@@ -216,10 +258,6 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
         </div>
 
         <!-- TODO: 默认模型选择器——当前仅展示占位文本 -->
-        <div v-else-if="activeSub === 'models'" class="sub-page sub-placeholder">
-          <p>默认模型设置将在后续版本中完善。</p>
-        </div>
-
         <!-- 同步 -->
         <div v-else-if="activeSub === 'sync'" class="sub-page">
           <SyncSetup />
@@ -440,11 +478,8 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
 }
 
 .select-dropdown {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  z-index: 100;
+  position: fixed;
+  z-index: 1000;
   background: var(--bg-primary);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
@@ -517,5 +552,95 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
 
 .toggle-btn.on .toggle-knob {
   transform: translateX(20px);
+}
+
+/* ── 暗色适配 ──────────────────────────── */
+[data-theme='hud'] .settings-group,
+[data-theme='hud'] .settings-group {
+  background: var(--bg-tertiary);
+  border-color: var(--border-subtle);
+  box-shadow: none;
+  border-radius: 0;
+  clip-path: polygon(
+    12px 0%,
+    100% 0%,
+    100% calc(100% - 12px),
+    calc(100% - 12px) 100%,
+    0% 100%,
+    0% 12px
+  );
+}
+
+[data-theme='hud'] .group-title,
+[data-theme='hud'] .group-title {
+  font-family: var(--font-heading);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent-dim);
+}
+
+[data-theme='hud'] .nav-item,
+[data-theme='hud'] .nav-item {
+  font-family: var(--font-heading);
+  letter-spacing: 1px;
+  border-radius: 0;
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+}
+
+[data-theme='hud'] .nav-item.active,
+[data-theme='hud'] .nav-item.active {
+  background: var(--accent-glow);
+}
+
+[data-theme='hud'] .setting-row,
+[data-theme='hud'] .setting-row {
+  border-bottom-color: var(--border-subtle);
+}
+
+[data-theme='hud'] .select-trigger,
+[data-theme='hud'] .select-trigger {
+  background: var(--bg-secondary);
+  border-color: var(--border-line);
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+  border-radius: 0;
+}
+
+[data-theme='hud'] .select-dropdown,
+[data-theme='hud'] .select-dropdown {
+  background: var(--bg-elevated);
+  border-color: var(--border-line);
+  border-radius: 0;
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+}
+
+[data-theme='hud'] .toggle-btn,
+[data-theme='hud'] .toggle-btn {
+  background: var(--gray-300);
+}
+
+[data-theme='hud'] .toggle-btn.on,
+[data-theme='hud'] .toggle-btn.on {
+  background: var(--accent);
 }
 </style>

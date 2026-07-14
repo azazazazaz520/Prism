@@ -203,6 +203,71 @@ function handleKeydown(e: KeyboardEvent) {
   background: var(--bg-hover);
 }
 
+[data-theme='hud'] .dialog-container,
+[data-theme='hud'] .dialog-container {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-line);
+  clip-path: polygon(
+    12px 0%,
+    100% 0%,
+    100% calc(100% - 12px),
+    calc(100% - 12px) 100%,
+    0% 100%,
+    0% 12px
+  );
+  border-radius: 0;
+}
+
+[data-theme='hud'] .dialog-input,
+[data-theme='hud'] .dialog-input {
+  background: var(--bg-deep, #0f1118);
+  border: 1px solid var(--border-line);
+  color: var(--text-primary);
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+  border-radius: 0;
+}
+
+[data-theme='hud'] .dialog-input:focus,
+[data-theme='hud'] .dialog-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+[data-theme='hud'] .dialog-btn,
+[data-theme='hud'] .dialog-btn {
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+  border-radius: 0;
+  background: var(--bg-secondary);
+  border-color: var(--border-line);
+}
+
+[data-theme='hud'] .dialog-btn-confirm,
+[data-theme='hud'] .dialog-btn-confirm {
+  background: var(--accent);
+  color: #0f1118;
+  border-color: var(--accent);
+}
+
+[data-theme='hud'] .dialog-btn-confirm:hover:not(:disabled),
+[data-theme='hud'] .dialog-btn-confirm:hover:not(:disabled) {
+  background: var(--accent-hover);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
 /* 过渡动画 */
 .dialog-fade-enter-active,
 .dialog-fade-leave-active {

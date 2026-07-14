@@ -1,24 +1,22 @@
 import { ref, watchEffect } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 
-export type ThemeMode = 'auto' | 'light' | 'dark';
+export type ThemeMode = 'auto' | 'light' | 'dark' | 'hud';
 
 const theme = ref<ThemeMode>('auto');
 
-/** 应用主题到 <html data-theme=""> */
 function apply(mode: ThemeMode) {
   document.documentElement.setAttribute('data-theme', mode);
 }
 
-/** 从后端加载持久化主题 */
 async function loadFromBackend(): Promise<ThemeMode> {
   try {
     const saved = await invoke<string>('get_theme');
-    if (saved === 'light' || saved === 'dark' || saved === 'auto') {
+    if (saved === 'light' || saved === 'dark' || saved === 'auto' || saved === 'hud') {
       return saved as ThemeMode;
     }
   } catch {
-    // 首次运行或命令未注册
+    /* 首次运行 */
   }
   return 'auto';
 }

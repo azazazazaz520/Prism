@@ -8,12 +8,13 @@ use crate::store;
 
 pub const PARSE_INPUT: &str = "parse-input.md";
 pub const DAILY_FOCUS: &str = "daily-focus.md";
-pub const DECOMPOSE: &str = "decompose.md";
 pub const OVERDUE_SUGGEST: &str = "overdue-suggest.md";
 pub const CHAT: &str = "chat.md";
 pub const JSON_EXPLAIN: &str = "json-explain.md";
 pub const REGEX_GENERATE: &str = "regex-generate.md";
 pub const WECHAT_PARSE: &str = "wechat-parse.md";
+pub const EXECUTE_AUTO: &str = "execute-auto.md";
+pub const DAILY_SUMMARY: &str = "daily-summary.md";
 
 // ═══════════════════════════════════════════════════════════════
 //  编译时内嵌默认 prompt（文件缺失时回退）
@@ -40,22 +41,28 @@ const DEFAULT_PARSE_INPUT: &str = "\
 const DEFAULT_DAILY_FOCUS: &str = "\
 # 今日聚焦
 
-你是一个 TODO 应用的智能排序助手。根据以下未完成任务列表，综合考虑截止日期紧迫度、重要性标记、任务描述中的关键词，推荐今天应优先处理的 3-5 项任务，并给出简短理由。
+你是一个 TODO 应用的智能排序助手。以下是用户全部未完成任务列表（每条含标题、标签、是否重要、截止日期）。今天是 {{today}}。
 
-今天是 {{today}}。
+## 分析要求
 
-请**只**返回一个 JSON 对象，格式如下（不要包含其他文字）：
-{\"items\":[{\"task_id\":\"...\",\"reason\":\"明天到期且标记重要\"}],\"summary\":\"一句话总结今日任务概况\"}";
+1. **压力评估**：tasks 总量有多少？到期/过期任务是否有积压？整体节奏健康还是紧迫？
+2. **优先级推荐**：综合考虑截止日期、重要标记、标签暗示的上下文，推荐今天最应优先处理的 3-5 条。每条附一个具体理由（不要只说\"明天到期\"——说清楚为什么这一条比别的更急）。
+3. **行动建议**：如果多条任务标签相同或有明显的顺序依赖，指出可以合并处理的。
 
-const DEFAULT_DECOMPOSE: &str = "\
-# 任务拆解
+## 输出格式
 
-你是一个任务管理助手。把一个抽象的大任务拆解成 3-5 个具体可执行的小步骤。每个步骤应该是有明确完成标准的具体动作。
-{{subtask_hint}}
+只返回 JSON（不要 markdown 包裹、不要注释）：
 
-请**只**返回一个 JSON 数组，格式如下（不要包含其他文字）：
-[{\"title\":\"...\",\"estimated_minutes\":30}, ...]
-estimated_minutes 为估计耗时（分钟），可为 null。";
+```json
+{
+  \"items\": [
+    { \"task_id\": \"具体任务id\", \"reason\": \"为何今天优先——结合截止日/重要性/标签\" }
+  ],
+  \"summary\": \"2-3 句中文：先总览全局（共N条未完成·M条已过期·压力评估），再点出今天最该盯的 1-2 件事\"
+}
+```
+
+summary 至少 40 字。items 至少 1 条（如果确实没有未完成任务则 items 为空且 summary 说明无需操作）。";
 
 const DEFAULT_OVERDUE_SUGGEST: &str = "\
 # 过期任务处理建议
@@ -129,6 +136,82 @@ const DEFAULT_WECHAT_PARSE: &str = "\
 [{\"title\":\"提交项目报告\",\"due_date\":\"2026-06-29\",\"tags\":[\"工作\"],\"important\":true,\"pinned\":false,\"is_daily\":false}]
 如果没有发现任何任务，返回空数组 []。";
 
+const DEFAULT_EXECUTE_AUTO: &str = "\
+# 任务管理助手（自动模式）
+
+你是 Prism TODO 应用的 AI 助手。默认将所有用户输入视为**创建任务**，除非明确匹配其他意图。
+
+## 核心规则：默认就是添加任务
+
+以下内容**全部**按添加任务处理：
+- 含时间/日期的通知、消息、聊天记录 → 提取为任务
+- 含动作词（请/尽快/记得/别忘了/要/需要）→ 提取为任务
+- 含 @ 群组标记、地点信息 → 提取为任务
+- 任何有明确事项描述的文本 → 提取为任务
+- **一句话中可能包含多条任务，请逐一提取**
+
+## 特殊意图（仅以下情况不按添加处理）
+
+- **总结日报**: 用户说\"总结\"\"日报\"\"今天做了什么\"\"工作汇报\" → mode: summary
+- **今日聚焦**: 用户说\"该做什么\"\"优先级\"\"建议\"\"分析任务\" → mode: focus
+- **闲聊**: 用户说\"你好\"\"谢谢\"或问和任务管理无关的问题 → mode: chat
+
+## 时间解析规则
+
+- \"今天下午2:00-5:00\" → due_date 为当天的 YYYY-MM-DD，title 中保留时间信息
+- \"明天/周五/下周一/5月20日\" → 提取为 due_date
+- 时间段（2:00-5:00）→ 保留在 title 中
+- 无法确定日期的 → due_date 为 null
+
+## 输出格式
+
+请**只**返回一个 JSON 对象：
+
+- 添加任务: {\"mode\":\"add\",\"text\":\"已解析为 N 条任务\",\"tasks\":[{\"title\":\"...\",\"due_date\":null,\"tags\":[],\"important\":false,\"pinned\":false,\"is_daily\":false}],\"focus\":null}
+- 日报总结: {\"mode\":\"summary\",\"text\":\"...\",\"tasks\":[],\"focus\":null}
+- 今日聚焦: {\"mode\":\"focus\",\"text\":\"...\",\"tasks\":[],\"focus\":{\"items\":[{\"task_id\":\"...\",\"reason\":\"...\"}],\"summary\":\"...\"}}
+- 闲聊: {\"mode\":\"chat\",\"text\":\"...\",\"tasks\":[],\"focus\":null}
+
+## 示例
+
+输入: \"@所有人 今天下午2：00-5：00 计组实验最后一次验收。机电楼303，304。请未验收的同学请尽快到实验室。\"
+输出: {\"mode\":\"add\",\"text\":\"已解析为 1 条任务\",\"tasks\":[{\"title\":\"计组实验最后一次验收（2:00-5:00，机电楼303/304）\",\"due_date\":\"2026-07-12\",\"tags\":[\"学习\"],\"important\":true,\"pinned\":false,\"is_daily\":false}],\"focus\":null}
+
+输入: \"明天提交项目报告 #工作\"
+输出: {\"mode\":\"add\",\"text\":\"已解析为 1 条任务\",\"tasks\":[{\"title\":\"提交项目报告\",\"due_date\":\"2026-07-13\",\"tags\":[\"工作\"],\"important\":false,\"pinned\":false,\"is_daily\":false}],\"focus\":null}
+
+输入: \"hello 你好\"
+输出: {\"mode\":\"chat\",\"text\":\"你好！我是 Prism 任务管理助手，可以帮你添加任务、总结日报、分析优先级。\",\"tasks\":[],\"focus\":null}
+
+输入: \"帮我总结一下今天做了什么\"
+输出: {\"mode\":\"summary\",\"text\":\"\",\"tasks\":[],\"focus\":null}
+
+{{context}}
+
+用户输入：{{input}}";
+
+const DEFAULT_DAILY_SUMMARY: &str = "\
+# 日报总结
+
+你是 Prism 任务管理应用的日报助手。根据用户今日已完成的任务，生成简洁的工作日报。
+
+## 要点
+- 概括今日完成的主要工作（2-3 句）
+- 列出已完成任务清单
+- 如果有未完成的重要任务，提醒明天继续
+- 语气积极但不浮夸
+
+## 格式
+用 Markdown 格式，包含标题和列表。
+
+今天是 {{today}}。
+
+已完成任务：
+{{completed_tasks}}
+
+所有待办任务：
+{{pending_tasks}}";
+
 // ═══════════════════════════════════════════════════════════════
 //  Prompt 注册表 — 单一真相来源
 // ═══════════════════════════════════════════════════════════════
@@ -156,11 +239,6 @@ fn registry() -> Vec<PromptTemplate> {
             vars: &["today"],
         },
         PromptTemplate {
-            name: DECOMPOSE,
-            default_content: DEFAULT_DECOMPOSE,
-            vars: &["subtask_hint"],
-        },
-        PromptTemplate {
             name: OVERDUE_SUGGEST,
             default_content: DEFAULT_OVERDUE_SUGGEST,
             vars: &["today"],
@@ -184,6 +262,16 @@ fn registry() -> Vec<PromptTemplate> {
             name: WECHAT_PARSE,
             default_content: DEFAULT_WECHAT_PARSE,
             vars: &["tags_hint"],
+        },
+        PromptTemplate {
+            name: EXECUTE_AUTO,
+            default_content: DEFAULT_EXECUTE_AUTO,
+            vars: &["context", "input"],
+        },
+        PromptTemplate {
+            name: DAILY_SUMMARY,
+            default_content: DEFAULT_DAILY_SUMMARY,
+            vars: &["today", "completed_tasks", "pending_tasks"],
         },
     ]
 }
@@ -338,12 +426,13 @@ mod tests {
         for expected in &[
             PARSE_INPUT,
             DAILY_FOCUS,
-            DECOMPOSE,
             OVERDUE_SUGGEST,
             CHAT,
             JSON_EXPLAIN,
             REGEX_GENERATE,
             WECHAT_PARSE,
+            EXECUTE_AUTO,
+            DAILY_SUMMARY,
         ] {
             assert!(
                 all_names.contains(expected),
@@ -356,7 +445,7 @@ mod tests {
     #[test]
     fn test_registry_entry_count_matches_name_constants() {
         // 注册表条目数应等于名称常量数（防止多余条目）
-        let expected_count = 8;
+        let expected_count = 9;
         assert_eq!(
             registry().len(),
             expected_count,

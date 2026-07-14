@@ -54,6 +54,8 @@ async function toggleEnabled(vendor: Vendor) {
 }
 
 async function setActive(id: string | null) {
+  // 点击已激活的卡片不做切换（避免单一供应商时误取消选中）
+  if (activeVendorId.value === id) return;
   await invoke('set_active_vendor', { id });
   activeVendorId.value = id;
 }
@@ -76,7 +78,10 @@ async function setActive(id: string | null) {
       >
         <div class="vendor-header">
           <span class="vendor-name">{{ v.name }}</span>
-          <span :class="['vendor-badge', v.provider]">{{ v.provider }}</span>
+          <div class="vendor-header-right">
+            <span v-if="activeVendorId === v.id" class="vendor-active-tag">已选择</span>
+            <span :class="['vendor-badge', v.provider]">{{ v.provider }}</span>
+          </div>
         </div>
         <div class="vendor-model">{{ v.model }}</div>
         <div class="vendor-actions">
@@ -127,12 +132,31 @@ async function setActive(id: string | null) {
 
 .add-btn {
   padding: var(--space-sm) var(--space-2xl);
-  background: var(--gray-900);
-  color: white;
+  background: var(--accent);
+  color: #fff;
   border: none;
   border-radius: var(--radius-full);
+  font-family: var(--font-heading);
   font-size: var(--text-base);
   cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.add-btn:hover {
+  background: var(--accent-hover);
+}
+
+[data-theme='hud'] .add-btn {
+  border-radius: 0;
+  color: #0f1118;
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
 }
 
 .vendor-card {
@@ -148,13 +172,30 @@ async function setActive(id: string | null) {
 }
 .vendor-card.active {
   border-color: var(--accent);
-  background: var(--accent-light);
+  background: var(--accent-glow-s);
+  box-shadow: 0 0 8px var(--accent-glow);
 }
 
 .vendor-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.vendor-header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.vendor-active-tag {
+  font-size: 10px;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  letter-spacing: 1px;
 }
 
 .vendor-name {
@@ -198,17 +239,36 @@ async function setActive(id: string | null) {
   background: var(--bg-hover);
   border: 1px solid var(--gray-300);
   border-radius: var(--radius-sm);
+  font-family: var(--font-heading);
   font-size: var(--text-xs);
+  letter-spacing: 0.5px;
   cursor: pointer;
   color: var(--gray-700);
+  transition: all var(--transition-fast);
 }
 .action-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
   background: var(--border-subtle);
 }
 .action-btn.danger {
   color: var(--danger);
 }
 .action-btn.danger:hover {
+  border-color: var(--danger);
   background: var(--danger-light);
+}
+[data-theme='hud'] .action-btn {
+  border-color: var(--border-line);
+  border-radius: 0;
+  color: var(--text-secondary);
+  clip-path: polygon(
+    4px 0%,
+    100% 0%,
+    100% calc(100% - 4px),
+    calc(100% - 4px) 100%,
+    0% 100%,
+    0% 4px
+  );
 }
 </style>

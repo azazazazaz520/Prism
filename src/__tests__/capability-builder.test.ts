@@ -21,16 +21,17 @@ describe('Capability Builder', () => {
     const cap = buildCapability('test.plugin', ['tasks:read']);
     expect(cap.tasks).toBeDefined();
     expect(cap.tasks!.list).toBeDefined();
-    // 写方法存在但调用时抛 PermissionError
-    expect(cap.tasks!.create).toBeDefined();
+    // 仅有 read 权限时 write 方法为 undefined
+    expect(cap.tasks!.create).toBeUndefined();
+    expect(cap.tasks!.delete).toBeUndefined();
   });
 
-  it('tasks:write 权限同时需要 tasks:read', () => {
-    // 仅 write 没有 read → tasks 模块为 undefined
+  it('tasks:write 不提供只读方法（仅有 list 为 undefined）', () => {
+    // 仅 write 没有 read → tasks 模块存在，但 list 为 undefined
     const cap = buildCapability('test.plugin', ['tasks:write']);
     expect(cap.tasks).toBeDefined();
-    // list 不可用（缺少 read）
-    expect(() => cap.tasks!.list()).rejects.toThrow(PermissionError);
+    expect(cap.tasks!.list).toBeUndefined();
+    expect(cap.tasks!.create).toBeDefined();
   });
 
   it('tasks:read + tasks:write 提供完整读写', () => {
@@ -52,9 +53,10 @@ describe('Capability Builder', () => {
     expect(cap.network).toBeDefined();
   });
 
-  it('写操作在仅有 read 权限时抛 PermissionError', async () => {
+  it('写操作在仅有 read 权限时 create 为 undefined', () => {
     const cap = buildCapability('test.plugin', ['tasks:read']);
-    await expect(cap.tasks!.create({ title: 'x' } as any)).rejects.toThrow(PermissionError);
+    expect(cap.tasks!.create).toBeUndefined();
+    expect(cap.tasks!.list).toBeDefined();
   });
 
   it('PermissionError 包含完整上下文', () => {
@@ -67,9 +69,9 @@ describe('Capability Builder', () => {
     expect(err.message).toContain('create');
   });
 
-  it('invalidate 后所有模块调用抛 SessionExpiredError', async () => {
-    const cap = buildCapability('test.plugin', ['tasks:read']);
+  it('invalidate 后 tasks.list() 抛 SessionExpiredError', async () => {
+    const cap = buildCapability('test.plugin', ['tasks:read', 'tasks:write']);
     cap.invalidate();
-    await expect(cap.tasks!.list()).rejects.toThrow();
+    await expect(cap.tasks!.list!()).rejects.toThrow();
   });
 });

@@ -1,4 +1,5 @@
 import type { PluginPermission } from '../types';
+import { createTasksAPI } from './tasks-impl';
 
 // ═══════════════════════════════════════════════════════════════
 //  错误类型
@@ -66,10 +67,12 @@ interface CommandsStub {
 }
 
 interface TasksStub {
-  list(filter?: unknown): Promise<unknown[]>;
-  create(task: unknown): Promise<unknown>;
-  update(id: string, fields: unknown): Promise<unknown>;
-  delete(id: string): Promise<void>;
+  list?(): Promise<unknown[]>;
+  listByDate?(date: string): Promise<unknown[]>;
+  create?(title: string, opts?: unknown): Promise<unknown>;
+  update?(id: string, fields: unknown): Promise<unknown>;
+  toggle?(id: string): Promise<unknown>;
+  delete?(id: string): Promise<void>;
 }
 
 interface NetworkStub {
@@ -171,29 +174,47 @@ export function buildCapability(pluginId: string, permissions: PluginPermission[
 
   // ── tasks 模块（需权限） ──────────────────────────
 
+  const tasksAPI = createTasksAPI(pluginId, permissions);
+
   let tasks: TasksStub | undefined;
   if (permSet.has('tasks:read') || permSet.has('tasks:write')) {
     tasks = {
-      async list(_filter?: unknown): Promise<unknown[]> {
-        ensureAlive();
-        requirePerm('tasks:read');
-        // Phase 3: 实际实现通过 Tauri invoke
-        return [];
-      },
-      async create(task: unknown): Promise<unknown> {
-        ensureAlive();
-        requirePerm('tasks:write');
-        return {};
-      },
-      async update(_id: string, _fields: unknown): Promise<unknown> {
-        ensureAlive();
-        requirePerm('tasks:write');
-        return {};
-      },
-      async delete(_id: string): Promise<void> {
-        ensureAlive();
-        requirePerm('tasks:write');
-      },
+      list: tasksAPI.list
+        ? async () => {
+            ensureAlive();
+            return tasksAPI.list!();
+          }
+        : undefined,
+      listByDate: tasksAPI.listByDate
+        ? async (date: string) => {
+            ensureAlive();
+            return tasksAPI.listByDate!(date);
+          }
+        : undefined,
+      create: tasksAPI.create
+        ? async (title: string, opts?: unknown) => {
+            ensureAlive();
+            return tasksAPI.create!(title, opts as any);
+          }
+        : undefined,
+      update: tasksAPI.update
+        ? async (id: string, fields: unknown) => {
+            ensureAlive();
+            return tasksAPI.update!(id, fields as any);
+          }
+        : undefined,
+      toggle: tasksAPI.toggle
+        ? async (id: string) => {
+            ensureAlive();
+            return tasksAPI.toggle!(id);
+          }
+        : undefined,
+      delete: tasksAPI.delete
+        ? async (id: string) => {
+            ensureAlive();
+            return tasksAPI.delete!(id);
+          }
+        : undefined,
     };
   }
 

@@ -181,3 +181,87 @@ export interface DashboardLayout {
   }[];
   columns: number;
 }
+
+// ── 插件系统类型 ──────────────────────────────
+
+/** 插件权限标识 */
+export type PluginPermission = 'tasks:read' | 'tasks:write' | 'network' | 'network:local';
+
+/** 插件清单（manifest.json 结构） */
+export interface PluginManifest {
+  id: string;
+  name: string;
+  version: string;
+  description?: string;
+  author: string;
+  license?: string;
+  main: string;
+  engines: { prism: string };
+  activationEvents?: string[];
+  permissions?: PluginPermission[];
+  contributes?: {
+    commands?: { id: string; title: string }[];
+    views?: { id: string; title: string; location: 'sidebar' | 'panel' }[];
+    menus?: { id: string; command: string; location: 'task-context' | 'editor-context' }[];
+  };
+}
+
+/** 插件诊断信息 */
+export interface PluginDiagnostics {
+  status: 'ok' | 'error';
+  lastError?: string;
+  errorCount: number;
+  lastErrorAt?: string;
+  deactivatedAt?: string;
+}
+
+/** 可丢弃资源 */
+export interface Disposable {
+  dispose(): void;
+}
+
+/** 插件上下文（注入给每个插件的 activate(ctx)） */
+export interface PluginContext {
+  readonly pluginId: string;
+  readonly runtimeId: string;
+  readonly permissions: ReadonlySet<PluginPermission>;
+  track<T extends Disposable>(disposable: T): T;
+  dispose(): void;
+  log(level: 'debug' | 'info' | 'warn' | 'error', message: string): void;
+  commands: {
+    register(id: string, callback: () => void | Promise<void>): Disposable;
+    execute(id: string, ...args: unknown[]): Promise<void>;
+  };
+}
+
+/** Capability 会话（Plugin Loader 内部使用） */
+export interface CapabilitySession {
+  pluginId: string;
+  permissions: PluginPermission[];
+  /** 一次性随机 token，activate 期间有效，Protocol Handler 响应后即销 */
+  token: string;
+  createdAt: number;
+}
+
+/** 插件 API 层自定义错误 */
+export class PluginPermissionError extends Error {
+  pluginId: string;
+  permission: string;
+  operation: string;
+  constructor(pluginId: string, permission: string, operation: string) {
+    super(`[${pluginId}] 缺少权限 ${permission} 以执行 ${operation}`);
+    this.name = 'PluginPermissionError';
+    this.pluginId = pluginId;
+    this.permission = permission;
+    this.operation = operation;
+  }
+}
+
+export class PluginSessionExpiredError extends Error {
+  pluginId: string;
+  constructor(pluginId: string) {
+    super(`[${pluginId}] 会话已过期`);
+    this.name = 'PluginSessionExpiredError';
+    this.pluginId = pluginId;
+  }
+}

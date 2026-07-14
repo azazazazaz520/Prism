@@ -232,6 +232,11 @@ pub fn run() {
             commands::prompt::get_prompt,
             commands::prompt::update_prompt,
             commands::prompt::reset_prompt,
+            // 插件管理命令
+            commands::plugins::scan_plugins,
+            commands::plugins::get_plugin_configs,
+            commands::plugins::set_plugin_config,
+            commands::plugins::read_plugin_file,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

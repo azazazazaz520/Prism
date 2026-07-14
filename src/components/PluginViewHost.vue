@@ -5,6 +5,7 @@ import {
   type ViewRegistration,
   type ViewLocation,
 } from '../plugin-api/views-impl';
+import PluginErrorBoundary from './PluginErrorBoundary.vue';
 
 const props = defineProps<{
   location: ViewLocation;
@@ -49,9 +50,11 @@ onBeforeUnmount(() => {
 <template>
   <div v-if="views.length > 0" class="plugin-view-host" :data-location="location">
     <template v-for="v in views" :key="v.id">
-      <!-- Vue 组件视图 -->
+      <!-- Vue 组件视图（ErrorBoundary 包裹，防止插件异常崩溃整个应用） -->
       <div v-if="v.component" class="plugin-vue-view" :data-plugin="v.pluginId">
-        <component :is="v.component as Component" />
+        <PluginErrorBoundary>
+          <component :is="v.component as Component" />
+        </PluginErrorBoundary>
       </div>
       <!-- Raw DOM 视图 -->
       <div

@@ -242,6 +242,8 @@ export interface PluginContext {
     registerSidebar(id: string, component: unknown): Disposable;
     registerPanel(id: string, component: unknown): Disposable;
     registerSettings(id: string, component: unknown): Disposable;
+    registerRail(id: string, component: unknown): Disposable;
+    registerPage(id: string, component: unknown): Disposable;
     registerDomView(
       id: string,
       opts: { mount(container: HTMLElement): void; unmount(): void },

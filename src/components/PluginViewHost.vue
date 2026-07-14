@@ -96,6 +96,46 @@ onBeforeUnmount(() => {
   </div>
 </template>
 
+<style>
+/* ── 插件 rail 按钮：继承宿主 .rail-btn 样式 ── */
+.plugin-rail-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s;
+}
+
+.plugin-rail-btn:hover {
+  background: var(--accent-glow-s);
+  color: var(--text-secondary);
+}
+
+.plugin-rail-btn svg {
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.5;
+}
+
+[data-theme='hud'] .plugin-rail-btn {
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+  border-radius: 0;
+}
+</style>
+
 <style scoped>
 .plugin-view-host {
   display: contents;

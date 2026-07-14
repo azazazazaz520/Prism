@@ -257,6 +257,14 @@ export interface PluginContext {
     readonly theme: string;
     readonly locale: string;
   };
+  tasks: {
+    readonly list?: () => Promise<unknown[]>;
+    readonly listByDate?: (date: string) => Promise<unknown[]>;
+    readonly create?: (...args: any[]) => Promise<unknown>;
+    readonly update?: (...args: any[]) => Promise<unknown>;
+    readonly toggle?: (id: string) => Promise<unknown>;
+    readonly delete?: (id: string) => Promise<void>;
+  };
 }
 
 /** Capability 会话（Plugin Loader 内部使用） */

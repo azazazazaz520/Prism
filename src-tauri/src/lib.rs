@@ -293,6 +293,12 @@ pub fn run() {
             commands::plugins::get_plugin_configs,
             commands::plugins::set_plugin_config,
             commands::plugins::read_plugin_file,
+            commands::plugins::plugin_tasks_list,
+            commands::plugins::plugin_tasks_list_by_date,
+            commands::plugins::plugin_tasks_create,
+            commands::plugins::plugin_tasks_update,
+            commands::plugins::plugin_tasks_toggle,
+            commands::plugins::plugin_tasks_delete,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

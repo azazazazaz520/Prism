@@ -186,3 +186,97 @@ pub fn read_plugin_file(plugin_id: String, file_path: String) -> Result<String, 
     let safe_path = resolve_plugin_path(&plugin_id, &file_path)?;
     fs::read_to_string(&safe_path).map_err(|e| format!("读取文件失败: {}", e))
 }
+
+// ═══════════════════════════════════════════════════════════════
+//  领域命令 — prism:tasks
+// ═══════════════════════════════════════════════════════════════
+
+/// 校验插件是否持有指定权限。
+/// 从 ConfigStore.plugins 读取已持久化的权限列表，
+/// 不信任前端传入的任何权限声明（第三层防线）。
+fn check_plugin_permission(
+    state: &AppState,
+    plugin_id: &str,
+    required: &str,
+) -> Result<(), String> {
+    let config = state.with_config(|c| c.plugins.get(plugin_id).cloned());
+    match config {
+        Some(cfg) if cfg.enabled && cfg.permissions.iter().any(|p| p == required) => Ok(()),
+        Some(_) => Err(format!(
+            "插件 '{}' 缺少权限 '{}'",
+            plugin_id, required
+        )),
+        None => Err(format!("插件 '{}' 未找到或未启用", plugin_id)),
+    }
+}
+
+/// 获取所有活跃任务（过滤已软删除），仅限 tasks:read 权限
+#[tauri::command]
+pub fn plugin_tasks_list(
+    state: tauri::State<AppState>,
+    plugin_id: String,
+) -> Result<Vec<crate::store::Task>, String> {
+    check_plugin_permission(&state, &plugin_id, "tasks:read")?;
+    Ok(state.read_data(crate::task_service::list))
+}
+
+/// 获取指定日期的任务，仅限 tasks:read 权限
+#[tauri::command]
+pub fn plugin_tasks_list_by_date(
+    state: tauri::State<AppState>,
+    plugin_id: String,
+    date: String,
+) -> Result<Vec<crate::store::Task>, String> {
+    check_plugin_permission(&state, &plugin_id, "tasks:read")?;
+    Ok(state.read_data(|d| crate::task_service::list_by_date(d, &date)))
+}
+
+/// 新增任务，仅限 tasks:write 权限
+#[tauri::command]
+pub fn plugin_tasks_create(
+    state: tauri::State<AppState>,
+    plugin_id: String,
+    args: crate::task_service::AddTaskInput,
+) -> Result<crate::store::Task, String> {
+    check_plugin_permission(&state, &plugin_id, "tasks:write")?;
+    state.write_data(|d| crate::task_service::add(d, args))
+}
+
+/// 更新任务（标题、标签、重要/置顶/每日标记），仅限 tasks:write 权限
+#[tauri::command]
+pub fn plugin_tasks_update(
+    state: tauri::State<AppState>,
+    plugin_id: String,
+    args: crate::task_service::UpdateTaskInput,
+) -> Result<(), String> {
+    check_plugin_permission(&state, &plugin_id, "tasks:write")?;
+    state.write_data(|d| {
+        crate::task_service::update(d, args);
+    })
+}
+
+/// 切换任务完成状态，仅限 tasks:write 权限
+#[tauri::command]
+pub fn plugin_tasks_toggle(
+    state: tauri::State<AppState>,
+    plugin_id: String,
+    id: String,
+) -> Result<crate::store::Task, String> {
+    check_plugin_permission(&state, &plugin_id, "tasks:write")?;
+    state
+        .write_data(|d| crate::task_service::toggle(d, &id))
+        .and_then(|opt| opt.ok_or_else(|| format!("task not found: {id}")))
+}
+
+/// 软删除任务，仅限 tasks:write 权限
+#[tauri::command]
+pub fn plugin_tasks_delete(
+    state: tauri::State<AppState>,
+    plugin_id: String,
+    id: String,
+) -> Result<(), String> {
+    check_plugin_permission(&state, &plugin_id, "tasks:write")?;
+    state.write_data(|d| {
+        crate::task_service::delete(d, &id);
+    })
+}

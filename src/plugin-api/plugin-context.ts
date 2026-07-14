@@ -2,6 +2,7 @@ import type { PluginContext, PluginPermission, Disposable } from '../types';
 import { DisposableStore } from './disposable';
 import { createViewsAPI } from './views-impl';
 import { createMenusAPI } from './menus-impl';
+import { createTasksAPI } from './tasks-impl';
 
 /**
  * 创建 PluginContext 实例。
@@ -93,6 +94,9 @@ export function createPluginContext(
 
     // ── 菜单扩展点 ────────────────────────────────
     menus: createMenusAPI(pluginId, track),
+
+    // ── 领域扩展点 ────────────────────────────────
+    tasks: createTasksAPI(pluginId, permissions),
 
     // ── 宿主环境信息 ──────────────────────────────
     env: {

@@ -1,102 +1,34 @@
 import { describe, it, expect } from 'vitest';
-import type { DashboardLayout, WidgetDefinition } from '../types';
+import { BUILTIN_WIDGETS } from '../composables/useDashboard';
 
-// 模拟 Widget 注册表（测试纯逻辑）
-const BUILTIN_WIDGETS: WidgetDefinition[] = [
-  { id: 'today-overview', title: '今日概览', icon: '', defaultSize: { w: 2, h: 1 } },
-  { id: 'completion-ring', title: '完成率', icon: '', defaultSize: { w: 1, h: 1 } },
-  { id: 'ai-summary', title: 'AI 摘要', icon: '', defaultSize: { w: 2, h: 1 } },
-  { id: 'overdue-reminder', title: '过期提醒', icon: '', defaultSize: { w: 2, h: 1 } },
-  { id: 'tag-distribution', title: '标签分布', icon: '', defaultSize: { w: 1, h: 1 } },
-  { id: 'quick-actions', title: '快捷操作', icon: '', defaultSize: { w: 1, h: 1 } },
-  { id: 'ai-command', title: 'AI 指令', icon: '', defaultSize: { w: 2, h: 1 } },
-];
-
-function buildDefaultLayout(): DashboardLayout {
-  return {
-    columns: 2,
-    widgets: BUILTIN_WIDGETS.map((w, i) => ({
-      id: w.id,
-      enabled: true,
-      position: { x: i % 2, y: Math.floor(i / 2) },
-      size: w.defaultSize,
-    })),
-  };
-}
-
-function addWidget(
-  layout: DashboardLayout,
-  widgetId: string,
-  definition: WidgetDefinition,
-): DashboardLayout {
-  if (layout.widgets.some((w) => w.id === widgetId)) return layout;
-  const maxY = layout.widgets.reduce((max, w) => Math.max(max, w.position.y), -1);
-  return {
-    ...layout,
-    widgets: [
-      ...layout.widgets,
-      {
-        id: widgetId,
-        enabled: true,
-        position: { x: 0, y: maxY + 1 },
-        size: definition.defaultSize,
-      },
-    ],
-  };
-}
-
-function removeWidget(layout: DashboardLayout, widgetId: string): DashboardLayout {
-  return {
-    ...layout,
-    widgets: layout.widgets.filter((w) => w.id !== widgetId),
-  };
-}
-
-function toggleWidget(layout: DashboardLayout, widgetId: string): DashboardLayout {
-  return {
-    ...layout,
-    widgets: layout.widgets.map((w) => (w.id === widgetId ? { ...w, enabled: !w.enabled } : w)),
-  };
-}
+// 测试默认布局逻辑：直接引用 real BUILTIN_WIDGETS 和 defaultLayout 语义
+// 避免维护测试专用副本，确保生产 registry 变更时测试自动感知
 
 describe('Dashboard 布局纯逻辑', () => {
-  it('buildDefaultLayout 创建 7 个 Widget', () => {
-    const layout = buildDefaultLayout();
-    expect(layout.widgets).toHaveLength(7);
-    expect(layout.columns).toBe(2);
+  it('BUILTIN_WIDGETS 包含 7 个内建 Widget', () => {
+    expect(BUILTIN_WIDGETS).toHaveLength(7);
   });
 
-  it('addWidget 添加新 Widget 到末尾', () => {
-    const layout = buildDefaultLayout();
-    const newDef: WidgetDefinition = {
-      id: 'custom',
-      title: '自定义',
-      icon: '',
-      defaultSize: { w: 1, h: 1 },
-    };
-    const updated = addWidget(layout, 'custom', newDef);
-    expect(updated.widgets).toHaveLength(8);
-    expect(updated.widgets[7].id).toBe('custom');
+  it('所有 Widget 都有唯一的 id', () => {
+    const ids = BUILTIN_WIDGETS.map((w) => w.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('addWidget 防重复', () => {
-    const layout = buildDefaultLayout();
-    const updated = addWidget(layout, 'today-overview', BUILTIN_WIDGETS[0]);
-    expect(updated.widgets).toHaveLength(7); // 不增长
+  it('所有 Widget 的 defaultSize 合法', () => {
+    for (const w of BUILTIN_WIDGETS) {
+      expect(w.defaultSize.w).toBeGreaterThanOrEqual(1);
+      expect(w.defaultSize.h).toBeGreaterThanOrEqual(1);
+    }
   });
 
-  it('removeWidget 移除指定 Widget', () => {
-    const layout = buildDefaultLayout();
-    const updated = removeWidget(layout, 'today-overview');
-    expect(updated.widgets).toHaveLength(6);
-    expect(updated.widgets.find((w) => w.id === 'today-overview')).toBeUndefined();
+  it('全宽 Widget (w>=2) 和半宽 Widget (w=1) 都有定义', () => {
+    const full = BUILTIN_WIDGETS.filter((w) => w.defaultSize.w >= 2);
+    const half = BUILTIN_WIDGETS.filter((w) => w.defaultSize.w === 1);
+    expect(full.length).toBeGreaterThan(0);
+    expect(half.length).toBeGreaterThan(0);
   });
 
-  it('toggleWidget 切换启用状态', () => {
-    const layout = buildDefaultLayout();
-    const updated = toggleWidget(layout, 'today-overview');
-    expect(updated.widgets.find((w) => w.id === 'today-overview')!.enabled).toBe(false);
-    const reverted = toggleWidget(updated, 'today-overview');
-    expect(reverted.widgets.find((w) => w.id === 'today-overview')!.enabled).toBe(true);
+  it('BUILTIN_WIDGETS 中不再包含已下线的 heatmap', () => {
+    expect(BUILTIN_WIDGETS.find((w) => w.id === 'heatmap')).toBeUndefined();
   });
 });

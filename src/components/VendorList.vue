@@ -54,10 +54,10 @@ async function toggleEnabled(vendor: Vendor) {
 }
 
 async function setActive(id: string | null) {
-  // 点击已激活的供应商 → 取消选中
-  const newId = activeVendorId.value === id ? null : id;
-  await invoke('set_active_vendor', { id: newId });
-  activeVendorId.value = newId;
+  // 点击已激活的卡片不做切换（避免单一供应商时误取消选中）
+  if (activeVendorId.value === id) return;
+  await invoke('set_active_vendor', { id });
+  activeVendorId.value = id;
 }
 </script>
 

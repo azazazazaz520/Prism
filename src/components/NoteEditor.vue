@@ -10,6 +10,9 @@ import TreeNode from './TreeNode.vue';
 import MarkdownEditor from './MarkdownEditor.vue';
 import MarkdownToolbar from './MarkdownToolbar.vue';
 
+// TODO: 待后续编辑器重构时，消费 menus 注册表中 location 为 editor-context 的项。
+// import { getMenuRegistrations } from '../plugin-api/menus-impl';
+
 // ── 状态 ──────────────────────────────
 
 const tree = ref<FileEntry[]>([]);

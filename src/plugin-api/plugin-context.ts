@@ -15,6 +15,9 @@ export function createPluginContext(
   const store = new DisposableStore();
   const perms = new Set(permissions) as ReadonlySet<PluginPermission>;
 
+  // track 提取为独立函数，供 views/menus API 自动追踪注册资源
+  const track = <T extends Disposable>(d: T): T => store.track(d);
+
   // ── 命令注册表（内存） ──────────────────────────
   const commandRegistry = new Map<string, () => void | Promise<void>>();
 
@@ -24,9 +27,7 @@ export function createPluginContext(
     permissions: perms,
 
     // ── 资源追踪 ──────────────────────────────────
-    track<T extends Disposable>(d: T): T {
-      return store.track(d);
-    },
+    track,
 
     dispose(): void {
       commandRegistry.clear();
@@ -88,10 +89,10 @@ export function createPluginContext(
     },
 
     // ── 视图扩展点 ────────────────────────────────
-    views: createViewsAPI(pluginId),
+    views: createViewsAPI(pluginId, track),
 
     // ── 菜单扩展点 ────────────────────────────────
-    menus: createMenusAPI(pluginId),
+    menus: createMenusAPI(pluginId, track),
   };
 
   return ctx;

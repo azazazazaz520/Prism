@@ -40,6 +40,7 @@ const {
   isLoading,
   loadAll,
   refreshTasks,
+  pushTask,
   initSync,
   pullAndMerge,
   addTask,
@@ -73,7 +74,15 @@ const gridColumns = computed(() =>
 // 在 setup 顶层注册清理，避免 async onMounted 中 await 后丢失组件上下文
 let _unlistenFocus: (() => void) | null = null;
 let _pollInterval: ReturnType<typeof setInterval> | null = null;
-const _handleForceSync = () => refreshTasks();
+const _handleForceSync = async () => {
+  await refreshTasks();
+  // 推送插件创建/修改的任务到 Supabase
+  for (const t of tasks.value) {
+    if (t.profile_id) {
+      pushTask(t).catch(() => {});
+    }
+  }
+};
 
 onUnmounted(() => {
   _unlistenFocus?.();

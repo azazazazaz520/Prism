@@ -1,8 +1,10 @@
+import { ref, computed, h, defineComponent, type Component } from 'vue';
 import type { PluginContext, PluginPermission, Disposable } from '../types';
 import { DisposableStore } from './disposable';
 import { createViewsAPI } from './views-impl';
 import { createMenusAPI } from './menus-impl';
 import { createTasksAPI } from './tasks-impl';
+import { createNetworkAPI } from './network-impl';
 
 /**
  * 创建 PluginContext 实例。
@@ -97,6 +99,7 @@ export function createPluginContext(
 
     // ── 领域扩展点 ────────────────────────────────
     tasks: createTasksAPI(pluginId, permissions),
+    network: createNetworkAPI(pluginId, permissions),
 
     // ── 宿主环境信息 ──────────────────────────────
     env: {
@@ -104,6 +107,8 @@ export function createPluginContext(
         return document.documentElement.dataset.theme || 'auto';
       },
       locale: 'zh-CN',
+      // 注入宿主 Vue 运行时，确保插件和宿主共享同一响应式系统
+      vue: { ref, computed, h, defineComponent },
     },
   };
 

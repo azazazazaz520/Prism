@@ -19,6 +19,7 @@ import { useModuleRegistry } from './composables/useModuleRegistry';
 import { useTaskStore } from './composables/useTaskStore';
 import { useAiStatus } from './composables/useAiStatus';
 import { useDashboard } from './composables/useDashboard';
+import { usePluginLoader } from './composables/usePluginLoader';
 
 // ── 模块注册表 ──────────────────────────────
 
@@ -83,6 +84,9 @@ onMounted(async () => {
   await Promise.all([loadAll(), loadAiSettings(), loadModules()]);
   const { loadLayout } = useDashboard();
   loadLayout();
+  // 初始化插件系统（扫描 + 加载配置）
+  const { loadPlugins } = usePluginLoader();
+  loadPlugins();
 
   const syncReady = await initSync();
   const appWindow = getCurrentWindow();

@@ -1,0 +1,13 @@
+{
+  "name": "prism-plugin",
+  "version": "0.1.0",
+  "description": "Prism 插件 CLI 工具链 — init / check / pack",
+  "type": "module",
+  "bin": {
+    "prism-plugin": "./bin/cli.js"
+  },
+  "dependencies": {
+    "archiver": "^7.0.1"
+  },
+  "license": "MIT"
+}

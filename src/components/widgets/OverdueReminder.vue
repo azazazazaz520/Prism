@@ -16,7 +16,11 @@ const overdueTasks = computed(() =>
 async function postpone(taskId: string) {
   const task = tasks.value.find((t) => t.id === taskId);
   if (!task) return;
-  await updateTaskMeta(taskId, task.tags, task.important, task.pinned, task.is_daily, null);
+  // 延期一天：若原截止日已过期，顺延到明天；否则保持原逻辑清零
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  const newDue = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  await updateTaskMeta(taskId, task.tags, task.important, task.pinned, task.is_daily, newDue);
 }
 </script>
 

@@ -1,6 +1,7 @@
 import type { PluginContext, PluginPermission, Disposable } from '../types';
 import { DisposableStore } from './disposable';
 import { createViewsAPI } from './views-impl';
+import { createMenusAPI } from './menus-impl';
 
 /**
  * 创建 PluginContext 实例。
@@ -88,6 +89,9 @@ export function createPluginContext(
 
     // ── 视图扩展点 ────────────────────────────────
     views: createViewsAPI(pluginId),
+
+    // ── 菜单扩展点 ────────────────────────────────
+    menus: createMenusAPI(pluginId),
   };
 
   return ctx;

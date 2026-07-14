@@ -71,18 +71,17 @@ impl TokenRegistry {
 fn generate_api_module(module_name: &str, plugin_id: &str) -> String {
     match module_name {
         "api" => format!(
-            r#"// prism:api 薄封装（由 Plugin Protocol 自动生成）
-// 插件: {plugin_id}
+            r#"// prism:api (Plugin Protocol)
 export const api = {{
   ui: {{
-    notice(msg, level = 'info') {{ console.log('[{{plugin_id}}]', msg); }},
+    notice(msg, level = 'info') {{ console.log('[{}]', msg); }},
   }},
   storage: {{
-    async get(key) {{ return JSON.parse(localStorage.getItem('plugin:{{plugin_id}}:' + key) || 'null'); }},
-    async set(key, value) {{ localStorage.setItem('plugin:{{plugin_id}}:' + key, JSON.stringify(value)); }},
-    async delete(key) {{ localStorage.removeItem('plugin:{{plugin_id}}:' + key); }},
+    async get(key) {{ return JSON.parse(localStorage.getItem('plugin:{}:' + key) || 'null'); }},
+    async set(key, value) {{ localStorage.setItem('plugin:{}:' + key, JSON.stringify(value)); }},
+    async delete(key) {{ localStorage.removeItem('plugin:{}:' + key); }},
     async keys() {{
-      const prefix = 'plugin:{{plugin_id}}:';
+      const prefix = 'plugin:{}:';
       const result = [];
       for (let i = 0; i < localStorage.length; i++) {{
         const k = localStorage.key(i);
@@ -92,18 +91,19 @@ export const api = {{
     }},
   }},
   diagnostics: {{
-    log(level, msg) {{ console[level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log']('[diag:{{plugin_id}}]', msg); }},
+    log(level, msg) {{ console[level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log']('[diag:{}]', msg); }},
   }},
 }};"#,
-            plugin_id = plugin_id
+            plugin_id, plugin_id, plugin_id, plugin_id, plugin_id, plugin_id
         ),
-        "commands" => format!(
-            r#"// prism:commands 薄封装（由 Plugin Protocol 自动生成）
-// 插件: {plugin_id}
+        "commands" => {{
+            let prefix = format!("{}.", plugin_id);
+            format!(
+                r#"// prism:commands (Plugin Protocol)
 const _registry = new Map();
 export const commands = {{
   register(id, callback) {{
-    const prefix = '{plugin_id}.';
+    const prefix = '{}';
     if (!id || !id.startsWith(prefix)) throw new TypeError('命令 ID 必须以 ' + prefix + ' 为前缀');
     _registry.set(id, callback);
     return {{ dispose() {{ _registry.delete(id); }} }};
@@ -114,13 +114,36 @@ export const commands = {{
     return cb(...args);
   }},
 }};"#,
-            plugin_id = plugin_id
+                prefix
+            )
+        }},
+        "tasks" => format!(
+            r#"// prism:tasks (Plugin Protocol)
+const _pid = '{}';
+const _invoke = window.__TAURI_INTERNALS__?.invoke || (() => {{ throw new Error('Tauri IPC 不可用'); }});
+export const tasks = {{
+  list: () => _invoke('plugin_tasks_list', {{ pluginId: _pid }}),
+  listByDate: (date) => _invoke('plugin_tasks_list_by_date', {{ pluginId: _pid, date }}),
+  create: (title, opts) => _invoke('plugin_tasks_create', {{ pluginId: _pid, args: {{ title, ...opts }} }}),
+  update: (id, args) => _invoke('plugin_tasks_update', {{ pluginId: _pid, args: {{ id, ...args }} }}),
+  toggle: (id) => _invoke('plugin_tasks_toggle', {{ pluginId: _pid, id }}),
+  delete: (id) => _invoke('plugin_tasks_delete', {{ pluginId: _pid, id }}),
+}};"#,
+            plugin_id
+        ),
+        "network" => format!(
+            r#"// prism:network (Plugin Protocol)
+const _pid2 = '{}';
+const _invoke2 = window.__TAURI_INTERNALS__?.invoke || (() => {{ throw new Error('Tauri IPC 不可用'); }});
+export const network = {{
+  fetch: (url, options) => _invoke2('plugin_network_fetch', {{ pluginId: _pid2, url, options }}),
+}};"#,
+            plugin_id
         ),
         _ => format!(
-            r#"// 未知模块: {module}（插件: {plugin_id}）
+            r#"// Unknown module: {module}
 export default {{}};"#,
-            module = module_name,
-            plugin_id = plugin_id
+            module = module_name
         ),
     }
 }

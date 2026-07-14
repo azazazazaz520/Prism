@@ -35,11 +35,16 @@ pub fn get_notes_dir(config: &ConfigStore) -> PathBuf {
     }
 }
 
+/// 获取插件目录
+pub fn get_plugins_dir() -> PathBuf {
+    get_workspace_dir().join("plugins")
+}
+
 // ═══════════════════════════════════════════════════════════════
 //  Workspace 初始化
 // ═══════════════════════════════════════════════════════════════
 
-/// 确保 Workspace 目录结构存在（notes/、prompts/、notes.meta.json）
+/// 确保 Workspace 目录结构存在（notes/、prompts/、plugins/、notes.meta.json）
 /// 目录创建失败时记录 stderr 但不阻塞启动（用户可能无权限写入父目录）
 pub fn ensure_workspace() {
     let root = get_workspace_dir();
@@ -51,6 +56,9 @@ pub fn ensure_workspace() {
     }
     if let Err(e) = fs::create_dir_all(root.join("prompts")) {
         eprintln!("[store] 无法创建 prompts 目录: {}", e);
+    }
+    if let Err(e) = fs::create_dir_all(root.join("plugins")) {
+        eprintln!("[store] 无法创建 plugins 目录: {}", e);
     }
     // notes.meta.json 不存在时初始化为空数组
     let meta_path = root.join("notes.meta.json");

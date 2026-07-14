@@ -10,6 +10,14 @@
       rel="stylesheet"
     />
     <title>Prism</title>
+    <!-- 插件 Import Map：将 vue 映射到宿主实例，插件 import { ref } from 'vue' 可共享宿主 Vue runtime -->
+    <script type="importmap">
+      {
+        "imports": {
+          "vue": "/node_modules/vue/dist/vue.runtime.esm-bundler.js"
+        }
+      }
+    </script>
   </head>
   <body>
     <div id="app"></div>

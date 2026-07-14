@@ -1,18 +1,20 @@
+import { ref, shallowRef, type Component } from 'vue';
 import type { Disposable } from '../types';
-import { shallowRef, type Component } from 'vue';
 
 // ═══════════════════════════════════════════════════════════════
 //  类型
 // ═══════════════════════════════════════════════════════════════
 
-export type ViewLocation = 'sidebar' | 'panel' | 'settings';
+export type ViewLocation = 'sidebar' | 'panel' | 'settings' | 'rail' | 'page';
 
 export interface ViewRegistration {
   id: string;
   pluginId: string;
   location: ViewLocation;
-  /** Vue 组件（registerSidebar/registerPanel/registerSettings 使用） */
+  /** Vue 组件（非 dom 位置使用） */
   component?: Component | null;
+  /** 点击 rail 按钮时的回调，用于切换到对应 page */
+  onActivate?: () => void;
   /** Raw DOM 生命周期（registerDomView 使用） */
   domMount?: (container: HTMLElement) => void;
   domUnmount?: () => void;
@@ -40,6 +42,26 @@ export function clearViewRegistrations(): void {
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  活跃插件页面
+// ═══════════════════════════════════════════════════════════════
+
+/** 当前激活的插件页面 pluginId，null 表示未激活任一插件页面 */
+const activePagePluginId = ref<string | null>(null);
+
+/** 激活指定插件的页面（供 rail 按钮 onClick 调用） */
+export function activatePluginPage(pluginId: string) {
+  activePagePluginId.value = pluginId;
+}
+
+/** 获取当前激活的插件页面注册信息 */
+export function getActivePageRegistrations(): ViewRegistration[] {
+  if (!activePagePluginId.value) return [];
+  return registry.value.filter(
+    (v) => v.location === 'page' && v.pluginId === activePagePluginId.value,
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  Views API 工厂
 // ═══════════════════════════════════════════════════════════════
 
@@ -61,6 +83,7 @@ export function createViewsAPI(pluginId: string, track: (d: Disposable) => Dispo
     location: ViewLocation,
     component?: Component | null,
     dom?: { mount: (container: HTMLElement) => void; unmount: () => void },
+    onActivate?: () => void,
   ): Disposable {
     checkId(id);
 
@@ -71,20 +94,21 @@ export function createViewsAPI(pluginId: string, track: (d: Disposable) => Dispo
       component: component ?? null,
       domMount: dom?.mount,
       domUnmount: dom?.unmount,
+      onActivate,
     };
 
-    // 添加到注册表（触发响应式更新）
     registry.value = [...registry.value, reg];
 
     let disposed = false;
-    // 自动追踪：插件停用时 ctx.dispose() 必然清理
     return track({
       dispose() {
         if (disposed) return;
         disposed = true;
-        // 先调 unmount（如有）
         reg.domUnmount?.();
-        // 从注册表移除
+        // 如果当前激活的页面来自本插件，清空激活状态
+        if (activePagePluginId.value === pluginId) {
+          activePagePluginId.value = null;
+        }
         registry.value = registry.value.filter((v) => v !== reg);
       },
     });
@@ -106,7 +130,19 @@ export function createViewsAPI(pluginId: string, track: (d: Disposable) => Dispo
       return register(id, 'settings', component);
     },
 
-    /** 注册 Raw DOM 视图（Monaco/Three.js 等非 Vue 库） */
+    /** 注册图标轨按钮，点击时激活本插件的 page 视图 */
+    registerRail(id: string, component: Component): Disposable {
+      return register(id, 'rail', component, undefined, () => {
+        activatePluginPage(pluginId);
+      });
+    },
+
+    /** 注册全屏页面视图，由对应插件的 rail 按钮激活时显示 */
+    registerPage(id: string, component: Component): Disposable {
+      return register(id, 'page', component);
+    },
+
+    /** 注册 Raw DOM 视图 */
     registerDomView(
       id: string,
       opts: { mount(container: HTMLElement): void; unmount(): void },

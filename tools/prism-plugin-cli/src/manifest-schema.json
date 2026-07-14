@@ -1,0 +1,94 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["id", "name", "version", "author", "main", "engines"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+$",
+      "description": "命名空间格式标识符，如 com.example.my-plugin"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(-[\\w.]+)?$"
+    },
+    "description": { "type": "string" },
+    "author": {
+      "type": "string",
+      "minLength": 1
+    },
+    "license": { "type": "string" },
+    "main": {
+      "type": "string",
+      "minLength": 1
+    },
+    "engines": {
+      "type": "object",
+      "required": ["prism"],
+      "properties": {
+        "prism": { "type": "string" }
+      }
+    },
+    "permissions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["tasks:read", "tasks:write", "network", "network:local"]
+      }
+    },
+    "activationEvents": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "contributes": {
+      "type": "object",
+      "properties": {
+        "commands": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "title"],
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" }
+            }
+          }
+        },
+        "views": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "title", "location"],
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" },
+              "location": {
+                "type": "string",
+                "enum": ["sidebar", "panel", "settings", "rail", "page"]
+              }
+            }
+          }
+        },
+        "menus": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "command", "location"],
+            "properties": {
+              "id": { "type": "string" },
+              "command": { "type": "string" },
+              "location": {
+                "type": "string",
+                "enum": ["task-context", "editor-context"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

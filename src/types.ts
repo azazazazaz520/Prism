@@ -238,6 +238,15 @@ export interface PluginContext {
     register(id: string, callback: () => void | Promise<void>): Disposable;
     execute(id: string, ...args: unknown[]): Promise<void>;
   };
+  views: {
+    registerSidebar(id: string, component: unknown): Disposable;
+    registerPanel(id: string, component: unknown): Disposable;
+    registerSettings(id: string, component: unknown): Disposable;
+    registerDomView(
+      id: string,
+      opts: { mount(container: HTMLElement): void; unmount(): void },
+    ): Disposable;
+  };
 }
 
 /** Capability 会话（Plugin Loader 内部使用） */

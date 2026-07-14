@@ -1,5 +1,6 @@
 import type { PluginContext, PluginPermission, Disposable } from '../types';
 import { DisposableStore } from './disposable';
+import { createViewsAPI } from './views-impl';
 
 /**
  * 创建 PluginContext 实例。
@@ -84,6 +85,9 @@ export function createPluginContext(
         await callback();
       },
     },
+
+    // ── 视图扩展点 ────────────────────────────────
+    views: createViewsAPI(pluginId),
   };
 
   return ctx;

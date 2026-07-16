@@ -6,8 +6,8 @@
   "bin": {
     "prism-plugin": "./bin/cli.js"
   },
+  "license": "MIT",
   "dependencies": {
-    "archiver": "^7.0.1"
-  },
-  "license": "MIT"
+    "adm-zip": "^0.6.0"
+  }
 }

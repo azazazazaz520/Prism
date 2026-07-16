@@ -1,9 +1,26 @@
-import { resolve, basename } from 'path';
-import { readFileSync, createWriteStream, existsSync } from 'fs';
-import archiver from 'archiver';
+import { resolve, relative, join } from 'path';
+import { readdirSync, statSync, readFileSync, existsSync } from 'fs';
+import AdmZip from 'adm-zip';
+
+function collectFiles(dir, baseDir, ignore) {
+  const result = [];
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    const rel = relative(baseDir, full).replace(/\\/g, '/');
+    if (
+      ignore.some((p) => (p.endsWith('/**') ? rel.startsWith(p.slice(0, -3)) : rel.startsWith(p)))
+    )
+      continue;
+    if (statSync(full).isDirectory()) {
+      result.push(...collectFiles(full, baseDir, ignore));
+    } else {
+      result.push({ full, rel });
+    }
+  }
+  return result;
+}
 
 export async function pack({ cwd }) {
-  // 读取 manifest 获取 id 和 version
   const manifestPath = resolve(cwd, 'manifest.json');
   if (!existsSync(manifestPath)) {
     throw new Error('manifest.json 不存在，请先运行 prism-plugin init');
@@ -23,25 +40,13 @@ export async function pack({ cwd }) {
   const outName = `${manifest.id}-${manifest.version}.prism-plugin`;
   const outPath = resolve(cwd, outName);
 
-  return new Promise((resolve, reject) => {
-    const output = createWriteStream(outPath);
-    const archive = archiver('zip', { zlib: { level: 9 } });
+  const zip = new AdmZip();
+  const files = collectFiles(cwd, cwd, ['node_modules', '.git', outName]);
+  for (const { full, rel } of files) {
+    zip.addFile(rel, readFileSync(full));
+  }
+  zip.writeZip(outPath);
 
-    output.on('close', () => {
-      console.log(`已生成: ${outName} (${(archive.pointer() / 1024).toFixed(1)} KB)`);
-      resolve();
-    });
-
-    archive.on('error', (e) => reject(e));
-    archive.pipe(output);
-
-    // 添加目录中所有文件，排除 node_modules / .git / 已生成的 .prism-plugin
-    archive.glob('**/*', {
-      cwd,
-      ignore: ['node_modules/**', '.git/**', '*.prism-plugin'],
-      dot: false,
-    });
-
-    archive.finalize();
-  });
+  const { size } = statSync(outPath);
+  console.log(`已生成: ${outName} (${(size / 1024).toFixed(1)} KB)`);
 }

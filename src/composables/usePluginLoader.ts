@@ -2,7 +2,7 @@ import { ref, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { PluginManifest, PluginDiagnostics, PluginContext } from '../types';
 import { validateManifest, checkEngines, PRISM_VERSION } from './usePluginManifest';
-import { rewriteImports, createBlobUrl } from '../plugin-api/module-resolver';
+import { rewriteImports, createModuleUrl } from '../plugin-api/module-resolver';
 import { buildCapability } from '../plugin-api/capability-builder';
 import { createPluginContext } from '../plugin-api/plugin-context';
 
@@ -154,13 +154,8 @@ export function usePluginLoader() {
       });
 
       const rewritten = rewriteImports(source, pluginId, token);
-      const blobUrl = createBlobUrl(rewritten, pluginId);
-      let module: any;
-      try {
-        module = await import(/* @vite-ignore */ blobUrl);
-      } finally {
-        URL.revokeObjectURL(blobUrl);
-      }
+      const moduleUrl = createModuleUrl(rewritten);
+      const module = await import(/* @vite-ignore */ moduleUrl);
 
       const permissions = entry.manifest.permissions ?? [];
       const ctx = createPluginContext(pluginId, permissions);

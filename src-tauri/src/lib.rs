@@ -189,22 +189,15 @@ pub fn run() {
                     .split('&')
                     .filter_map(|p| {
                         let mut parts = p.splitn(2, '=');
-                        Some((
-                            parts.next()?.to_string(),
-                            parts.next()?.to_string(),
-                        ))
+                        Some((parts.next()?.to_string(), parts.next()?.to_string()))
                     })
                     .collect();
 
                 let plugin_id = params.get("pluginId").cloned().unwrap_or_default();
                 let token = params.get("token").cloned().unwrap_or_default();
 
-                let result = plugin_protocol::handle_api_request(
-                    &registry,
-                    module_name,
-                    &plugin_id,
-                    &token,
-                );
+                let result =
+                    plugin_protocol::handle_api_request(&registry, module_name, &plugin_id, &token);
 
                 match result {
                     Ok(body) => {

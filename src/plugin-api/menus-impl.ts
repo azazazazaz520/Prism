@@ -8,14 +8,26 @@ import { shallowRef } from 'vue';
 /** 菜单挂载位置 */
 export type MenuLocation = 'task-context' | 'editor-context';
 
+/** 传递给 editor-context 菜单回调的选中文本上下文 */
+export interface EditorSelection {
+  /** 选中的纯文本 */
+  text: string;
+  /** 选区起始位置（CodeMirror doc offset） */
+  from: number;
+  /** 选区结束位置（CodeMirror doc offset） */
+  to: number;
+  /** 用 newText 替换选区内容 */
+  replace(newText: string): void;
+}
+
 /** 单个菜单项（由插件提供） */
 export interface MenuItem {
   /** 唯一标识，必须以 `{pluginId}.` 为前缀 */
   id: string;
   /** 显示文本 */
   label: string;
-  /** 点击回调 */
-  action: () => void | Promise<void>;
+  /** 点击回调。editor-context 菜单项可接收 EditorSelection 参数 */
+  action: (selection?: EditorSelection) => void | Promise<void>;
   /** 可选的 SVG 图标字符串 */
   icon?: string;
 }

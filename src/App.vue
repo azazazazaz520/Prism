@@ -17,6 +17,7 @@ import NoteEditor from './components/NoteEditor.vue';
 import Toolbox from './components/Toolbox.vue';
 import Dashboard from './components/Dashboard.vue';
 import PluginViewHost from './components/PluginViewHost.vue';
+import ContextMenu, { type ContextMenuItem } from './components/ContextMenu.vue';
 import { useModuleRegistry } from './composables/useModuleRegistry';
 import { useTaskStore } from './composables/useTaskStore';
 import { useAiStatus } from './composables/useAiStatus';
@@ -88,13 +89,83 @@ const _handleForceSync = async () => {
   }
 };
 
+// ── 全局右键菜单 ──────────────────────────
+const globalMenuVisible = ref(false);
+const globalMenuX = ref(0);
+const globalMenuY = ref(0);
+const globalMenuItems = ref<ContextMenuItem[]>([]);
+
+function buildClipboardItems(target: HTMLElement): ContextMenuItem[] {
+  const isEditable =
+    target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+
+  if (!isEditable) return [];
+
+  const hasSelection = !!window.getSelection()?.toString();
+
+  const items: ContextMenuItem[] = [];
+  if (hasSelection) {
+    items.push({
+      id: 'copy',
+      label: '复制',
+      action: () => {
+        document.execCommand('copy');
+      },
+    });
+    items.push({
+      id: 'cut',
+      label: '剪切',
+      action: () => {
+        document.execCommand('cut');
+      },
+    });
+  }
+  items.push({
+    id: 'paste',
+    label: '粘贴',
+    action: () => {
+      document.execCommand('paste');
+    },
+  });
+  items.push({
+    id: 'selectAll',
+    label: '全选',
+    action: () => {
+      document.execCommand('selectAll');
+    },
+  });
+  return items;
+}
+
+function onGlobalContextMenu(event: MouseEvent) {
+  event.preventDefault();
+  const target = event.target as HTMLElement;
+  const items = buildClipboardItems(target);
+  if (items.length === 0) return;
+
+  const menuHeight = Math.min(items.length * 36 + 8, 300);
+  const y =
+    event.clientY + menuHeight > window.innerHeight ? event.clientY - menuHeight : event.clientY;
+
+  globalMenuX.value = event.clientX;
+  globalMenuY.value = y;
+  globalMenuItems.value = items;
+  globalMenuVisible.value = true;
+}
+
+function hideGlobalMenu() {
+  globalMenuVisible.value = false;
+}
+
 onUnmounted(() => {
   _unlistenFocus?.();
   window.removeEventListener('prism:force-sync', _handleForceSync);
   if (_pollInterval) clearInterval(_pollInterval);
+  document.removeEventListener('contextmenu', onGlobalContextMenu);
 });
 
 onMounted(async () => {
+  document.addEventListener('contextmenu', onGlobalContextMenu);
   await Promise.all([loadAll(), loadAiSettings(), loadModules()]);
   const { loadLayout } = useDashboard();
   loadLayout();
@@ -401,6 +472,14 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
       </div>
     </aside>
   </div>
+
+  <ContextMenu
+    :visible="globalMenuVisible"
+    :x="globalMenuX"
+    :y="globalMenuY"
+    :items="globalMenuItems"
+    @close="hideGlobalMenu"
+  />
 </template>
 
 <style scoped>

@@ -1,0 +1,7 @@
+# Trivy 安全扫描配置
+# BlueOak-1.0.0 是合法的宽松开源许可证（Blue Oak Council），被 npm 核心包（jackspeak、
+# minipass、path-scurry、package-json-from-dist）使用。Trivy 扫描器未收录此许可证，
+# 此处手动放行。
+license:
+  allowlist:
+    - BlueOak-1.0.0

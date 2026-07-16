@@ -138,10 +138,11 @@ function buildClipboardItems(target: HTMLElement): ContextMenuItem[] {
 }
 
 function onGlobalContextMenu(event: MouseEvent) {
-  event.preventDefault();
   const target = event.target as HTMLElement;
   const items = buildClipboardItems(target);
   if (items.length === 0) return;
+
+  event.preventDefault();
 
   const menuHeight = Math.min(items.length * 36 + 8, 300);
   const y =

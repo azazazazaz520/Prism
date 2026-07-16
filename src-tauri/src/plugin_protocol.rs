@@ -44,7 +44,9 @@ impl TokenRegistry {
     /// 消费 token：验证有效 → 返回插件身份 → 立即注销
     pub fn consume(&self, token: &str) -> Result<TokenEntry, String> {
         let mut map = self.tokens.lock().unwrap();
-        let entry = map.remove(token).ok_or_else(|| "token 无效或已过期".to_string())?;
+        let entry = map
+            .remove(token)
+            .ok_or_else(|| "token 无效或已过期".to_string())?;
 
         // 检查 TTL
         if entry.created_at.elapsed().as_secs() > 3 {
@@ -96,7 +98,7 @@ export const api = {{
 }};"#,
             plugin_id, plugin_id, plugin_id, plugin_id, plugin_id, plugin_id
         ),
-        "commands" => {{
+        "commands" => {
             let prefix = format!("{}.", plugin_id);
             format!(
                 r#"// prism:commands (Plugin Protocol)
@@ -116,7 +118,7 @@ export const commands = {{
 }};"#,
                 prefix
             )
-        }},
+        }
         "tasks" => format!(
             r#"// prism:tasks (Plugin Protocol)
 const _pid = '{}';

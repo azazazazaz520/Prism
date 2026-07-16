@@ -29,9 +29,7 @@ fn resolve_plugin_path(plugin_id: &str, relative_path: &str) -> Result<PathBuf, 
 
     // 规范化插件根目录
     let plugin_root = plugins_dir.join(plugin_id);
-    let canonical_root = plugin_root
-        .canonicalize()
-        .unwrap_or(plugin_root);
+    let canonical_root = plugin_root.canonicalize().unwrap_or(plugin_root);
 
     // 校验路径前缀：必须在插件目录之内
     if !canonical.starts_with(&canonical_root) {
@@ -109,11 +107,11 @@ pub fn scan_plugins() -> Vec<PluginManifestInfo> {
         };
 
         // 提取必要字段
-        let id = manifest.get("id").and_then(|v| v.as_str()).unwrap_or(&plugin_id);
-        let name = manifest
-            .get("name")
+        let id = manifest
+            .get("id")
             .and_then(|v| v.as_str())
-            .unwrap_or(id);
+            .unwrap_or(&plugin_id);
+        let name = manifest.get("name").and_then(|v| v.as_str()).unwrap_or(id);
         let version = manifest
             .get("version")
             .and_then(|v| v.as_str())
@@ -213,10 +211,7 @@ fn check_plugin_permission(
     let config = state.with_config(|c| c.plugins.get(plugin_id).cloned());
     match config {
         Some(cfg) if cfg.enabled && cfg.permissions.iter().any(|p| p == required) => Ok(()),
-        Some(_) => Err(format!(
-            "插件 '{}' 缺少权限 '{}'",
-            plugin_id, required
-        )),
+        Some(_) => Err(format!("插件 '{}' 缺少权限 '{}'", plugin_id, required)),
         None => Err(format!("插件 '{}' 未找到或未启用", plugin_id)),
     }
 }
@@ -376,22 +371,20 @@ fn validate_network_url(url: &str, has_local_perm: bool) -> Result<(), String> {
     let is_local = match host {
         "localhost" | "127.0.0.1" | "0.0.0.0" | "[::1]" | "::1" => true,
         other => {
-            other.starts_with("10.")
-                || other.starts_with("192.168.")
-                || {
-                    // 172.16.0.0/12
-                    if other.starts_with("172.") && other.len() > 4 {
-                        let rest = &other[4..]; // skip "172."
-                        let parts: Vec<&str> = rest.split('.').collect();
-                        parts.len() >= 2
-                            && parts[0]
-                                .parse::<u8>()
-                                .map(|n| (16..=31).contains(&n))
-                                .unwrap_or(false)
-                    } else {
-                        false
-                    }
+            other.starts_with("10.") || other.starts_with("192.168.") || {
+                // 172.16.0.0/12
+                if other.starts_with("172.") && other.len() > 4 {
+                    let rest = &other[4..]; // skip "172."
+                    let parts: Vec<&str> = rest.split('.').collect();
+                    parts.len() >= 2
+                        && parts[0]
+                            .parse::<u8>()
+                            .map(|n| (16..=31).contains(&n))
+                            .unwrap_or(false)
+                } else {
+                    false
                 }
+            }
         }
     };
 
@@ -457,7 +450,10 @@ pub async fn plugin_network_fetch(
         .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
         .collect();
 
-    let body = resp.text().await.map_err(|e| format!("读取响应失败: {}", e))?;
+    let body = resp
+        .text()
+        .await
+        .map_err(|e| format!("读取响应失败: {}", e))?;
 
     Ok(NetworkFetchResponse {
         status,
@@ -527,7 +523,9 @@ pub fn read_script_content(file_name: String) -> Result<String, String> {
     let dir = persistence::get_scripts_dir();
     let path = dir.join(&file_name);
     // 路径沙箱：确保文件在 scripts 目录内
-    let canonical = path.canonicalize().map_err(|e| format!("路径解析失败: {}", e))?;
+    let canonical = path
+        .canonicalize()
+        .map_err(|e| format!("路径解析失败: {}", e))?;
     let dir_canonical = dir.canonicalize().unwrap_or(dir);
     if !canonical.starts_with(&dir_canonical) {
         return Err("路径穿越检测".to_string());

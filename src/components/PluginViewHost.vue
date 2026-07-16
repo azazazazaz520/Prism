@@ -33,7 +33,7 @@ watch(
   views,
   (newViews) => {
     for (const v of newViews) {
-      if (v.domMount && !v.domUnmount) {
+      if (v.domMount) {
         // 需要等 DOM 渲染后才能 mount，用 nextTick
         const container = domContainers.value.get(v.id);
         if (container) {

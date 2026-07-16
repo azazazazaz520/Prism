@@ -193,9 +193,9 @@ const dueLabel = computed(() => {
 // 插件菜单项（task-context 位置）
 const pluginMenuItems = computed(() => getMenuRegistrations('task-context'));
 
-function handlePluginMenuAction(action: () => void | Promise<void>) {
+async function handlePluginMenuAction(action: () => void | Promise<void>) {
   try {
-    action();
+    await action();
   } catch (e) {
     console.error('[TaskItem] 插件菜单回调异常:', e);
   }

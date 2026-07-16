@@ -150,4 +150,44 @@ describe('Menus API', () => {
     const remaining = getMenuRegistrations('task-context').filter((m) => m.pluginId === pluginId);
     expect(remaining.length).toBe(0);
   });
+
+  it('editor-context action 接收 EditorSelection 参数', async () => {
+    const api = createMenusAPI(pluginId, track);
+    let capturedSelection: any = null;
+
+    api.register('editor-context', [
+      {
+        id: prefix + 'withSelection',
+        label: '带选区操作',
+        action: (sel) => {
+          capturedSelection = sel;
+        },
+      },
+    ]);
+
+    const items = getMenuRegistrations('editor-context');
+    const selection = { text: 'hello', from: 0, to: 5, replace: () => {} };
+    await items[0].item.action(selection);
+
+    expect(capturedSelection).toBe(selection);
+  });
+
+  it('editor-context action 不传参数向后兼容', async () => {
+    const api = createMenusAPI(pluginId, track);
+    let called = false;
+
+    api.register('editor-context', [
+      {
+        id: prefix + 'noParam',
+        label: '无参操作',
+        action: () => {
+          called = true;
+        },
+      },
+    ]);
+
+    const items = getMenuRegistrations('editor-context');
+    await items[0].item.action();
+    expect(called).toBe(true);
+  });
 });

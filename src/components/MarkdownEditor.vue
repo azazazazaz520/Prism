@@ -231,6 +231,12 @@ function getSelection(): string {
   return view.state.doc.sliceString(from, to);
 }
 
+function replaceSelection(text: string) {
+  if (!view) return;
+  view.dispatch(view.state.replaceSelection(text));
+  view.focus();
+}
+
 /** 在当前行首插入文本（用于标题/列表/引用等行级操作） */
 function prependToLine(text: string) {
   if (!view) return;
@@ -247,6 +253,7 @@ defineExpose({
   wrapSelection,
   focus,
   getSelection,
+  replaceSelection,
   prependToLine,
 });
 </script>

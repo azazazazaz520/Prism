@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rewriteImports, createBlobUrl } from '../plugin-api/module-resolver';
+import { rewriteImports, createModuleUrl } from '../plugin-api/module-resolver';
 
 describe('rewriteImports', () => {
   const pluginId = 'com.example.test';
@@ -64,15 +64,14 @@ describe('rewriteImports', () => {
   });
 });
 
-describe('createBlobUrl', () => {
-  it('返回 blob: 开头的 URL', () => {
-    const url = createBlobUrl('export default {};', 'com.example.test');
-    expect(url).toMatch(/^blob:/);
+describe('createModuleUrl', () => {
+  it('返回 data: 开头的 URL', () => {
+    const url = createModuleUrl('export default {};');
+    expect(url).toMatch(/^data:application\/javascript/);
   });
 
-  it('返回的 URL 可用于创建 import 语句', () => {
-    // 仅验证 URL 格式合法性
-    const url = createBlobUrl('export const x = 1;', 'test');
-    expect(() => new URL(url)).not.toThrow();
+  it('对源码进行 UTF-8 编码', () => {
+    const url = createModuleUrl('export const x = 1;');
+    expect(url).toContain('export%20const%20x%20%3D%201%3B');
   });
 });

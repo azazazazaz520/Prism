@@ -28,13 +28,6 @@ export function rewriteImports(source: string, pluginId: string, sessionToken: s
   });
 }
 
-/**
- * 将改写后的源码包装为 Blob URL，可通过动态 import() 加载。
- */
-export function createBlobUrl(source: string, pluginId: string): string {
-  const blob = new Blob([source], {
-    type: 'application/javascript',
-  });
-  const url = URL.createObjectURL(blob);
-  return url;
+export function createModuleUrl(source: string): string {
+  return 'data:application/javascript;charset=utf-8,' + encodeURIComponent(source);
 }

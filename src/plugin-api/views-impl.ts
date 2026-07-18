@@ -55,10 +55,11 @@ export function activatePluginPage(pluginId: string) {
 
 /** 获取当前激活的插件页面注册信息 */
 export function getActivePageRegistrations(): ViewRegistration[] {
-  if (!activePagePluginId.value) return [];
-  return registry.value.filter(
-    (v) => v.location === 'page' && v.pluginId === activePagePluginId.value,
-  );
+  return !activePagePluginId.value
+    ? []
+    : registry.value.filter(
+        (v) => v.location === 'page' && v.pluginId === activePagePluginId.value,
+      );
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -82,7 +83,7 @@ export function createViewsAPI(pluginId: string, track: (d: Disposable) => Dispo
     id: string,
     location: ViewLocation,
     component?: Component | null,
-    dom?: { mount: (container: HTMLElement) => void; unmount: () => void },
+    dom?: { mount: (container: HTMLElement) => void; unmount?: () => void },
     onActivate?: () => void,
   ): Disposable {
     checkId(id);
@@ -91,7 +92,7 @@ export function createViewsAPI(pluginId: string, track: (d: Disposable) => Dispo
       id,
       pluginId,
       location,
-      component: component ?? null,
+      component: component || null,
       domMount: dom?.mount,
       domUnmount: dom?.unmount,
       onActivate,

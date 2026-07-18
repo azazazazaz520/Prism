@@ -1,33 +1,52 @@
 /**
- * prism:* 词法改写和 Module Resolver。
+ * 插件模块解析器。
  *
- * 安全约束：正则仅匹配标准单行字面量 `from 'prism:xxx'` / `from "prism:xxx"`。
- * 多行 import、模板字符串、动态 import() 均不匹配 → 浏览器自然报错 → 激活中止。
- * CLI check 阶段静态扫描拒绝非标准换行的 prism:* 导入，从工具链层面确保 100% 可匹配。
+ * 将 ES module 源码转换为可通过 new Function() 执行的纯脚本：
+ * - import { x } from 'vue'           → const { x } = __vue__
+ * - import { x } from 'prism:api'     → const { x } = __prism_api__
+ * - export async function activate    → var activate = async function
+ *
+ * 这避免了 import() — Tauri 生产环境 WebView2 不支持 blob:/data:/prism-api: 等
+ * 非标准 scheme 的动态导入。
  */
 
-// ── 正则：严格匹配单行字面量 ──────────────────────
-// 匹配: from 'prism:api' 或 from "prism:commands"
-// 不匹配: 跨行（from 与字符串之间有换行）、模板字符串、动态 import()
-// [ \t] 严格限定空格/Tab，禁用 \s 防止跨行匹配
-const PRISM_IMPORT_RE = /from[ \t]+['"](prism:[a-z:]+)['"]/g;
-
-/** API 端点：Tauri custom protocol scheme */
-const API_PREFIX = 'prism-api://localhost';
-
-/**
- * 将源码中的 `prism:*` 裸模块替换为携带插件身份和 token 的绝对 URL。
- * 仅匹配标准单行字面量，多行/模板字符串/动态 import 不处理。
- */
-export function rewriteImports(source: string, pluginId: string, sessionToken: string): string {
-  return source.replace(PRISM_IMPORT_RE, (_match, specifier: string) => {
-    // specifier 格式: "prism:api" → 取冒号后的部分作为模块名
-    const moduleName = specifier.slice(6); // "prism:" 之后的部分
-    const url = `${API_PREFIX}/${moduleName}.js?pluginId=${encodeURIComponent(pluginId)}&token=${encodeURIComponent(sessionToken)}`;
-    return `from '${url}'`;
-  });
+interface ParsedModule {
+  /** 去除所有 import/export 后的可执行代码 */
+  body: string;
+  /** 所需的外部依赖标识 */
+  deps: string[];
 }
 
-export function createModuleUrl(source: string): string {
-  return 'data:application/javascript;charset=utf-8,' + encodeURIComponent(source);
+const IMPORT_RE = /import\s*\{([^}]+)\}\s*from\s*['"]([^'"]+)['"]\s*;?\s*/g;
+
+export function parseModule(source: string): ParsedModule {
+  const deps: string[] = [];
+  let body = source;
+
+  // 替换所有 import 声明
+  // 同时处理 import { foo as bar } 别名语法：将 as 替换为 :
+  body = body.replace(IMPORT_RE, (_match, names: string, from: string) => {
+    const varName = importToVar(from);
+    if (varName) deps.push(varName);
+    // 将 ES import 别名语法转换为 JS 解构语法：foo as bar → foo: bar
+    const normalized = names.replace(/\b as \b/g, ': ');
+    return varName ? `const {${normalized}} = ${varName};` : _match;
+  });
+
+  // export async function activate → var activate = async function
+  body = body.replace(/export\s+async\s+function\s+activate\b/g, 'var activate = async function');
+  // export function deactivate → var deactivate = function
+  body = body.replace(/export\s+function\s+deactivate\b/g, 'var deactivate = function');
+
+  return { body, deps };
+}
+
+/** 将 import 来源映射到注入变量名 */
+function importToVar(from: string): string | null {
+  if (from === 'vue') return '__vue__';
+  if (from === 'prism:api') return '__prism_api__';
+  if (from === 'prism:commands' || from === 'prism:menus') return '__prism_commands__';
+  if (from === 'prism:tasks') return '__prism_tasks__';
+  if (from === 'prism:network') return '__prism_network__';
+  return null; // 未知导入保留原样，让 Function 构造器报错
 }

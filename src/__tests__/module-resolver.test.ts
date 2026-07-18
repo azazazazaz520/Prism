@@ -1,77 +1,96 @@
 import { describe, it, expect } from 'vitest';
-import { rewriteImports, createModuleUrl } from '../plugin-api/module-resolver';
+import { parseModule } from '../plugin-api/module-resolver';
 
-describe('rewriteImports', () => {
-  const pluginId = 'com.example.test';
-  const token = 'abc123';
-
-  it('替换单行单引号 prism:* import', () => {
-    const src = `import { commands } from 'prism:api';`;
-    const result = rewriteImports(src, pluginId, token);
-    expect(result).toContain('prism-api://localhost/api.js?pluginId=com.example.test&token=abc123');
-    expect(result).not.toContain("'prism:api'");
+describe('parseModule', () => {
+  it('将 vue import 重写为 __vue__ 解构', () => {
+    const src = `import { ref, computed } from 'vue';`;
+    const { body, deps } = parseModule(src);
+    expect(body).toContain('const { ref, computed } = __vue__');
+    expect(deps).toContain('__vue__');
   });
 
-  it('替换单行双引号 prism:* import', () => {
-    const src = `import { ref } from "prism:commands";`;
-    const result = rewriteImports(src, pluginId, token);
-    expect(result).toContain('prism-api://localhost/commands.js?');
-    expect(result).not.toContain('"prism:commands"');
+  it('将 prism:api import 重写为 __prism_api__ 解构', () => {
+    const src = `import { api } from 'prism:api';`;
+    const { body, deps } = parseModule(src);
+    expect(body).toContain('const { api } = __prism_api__');
+    expect(deps).toContain('__prism_api__');
   });
 
-  it('同时替换多个 prism:* import', () => {
-    const src = `import { ui } from 'prism:api';\nimport { commands } from 'prism:commands';`;
-    const result = rewriteImports(src, pluginId, token);
-    expect(result).toContain('prism-api://localhost/api.js?');
-    expect(result).toContain('prism-api://localhost/commands.js?');
-    expect(result).not.toContain('prism:');
+  it('将 prism:commands import 重写为 __prism_commands__ 解构', () => {
+    const src = `import { commands } from 'prism:commands';`;
+    const { body, deps } = parseModule(src);
+    expect(body).toContain('const { commands } = __prism_commands__');
   });
 
-  it('不替换非 prism 开头的 import', () => {
-    const src = `import { ref } from 'vue';`;
-    const result = rewriteImports(src, pluginId, token);
-    expect(result).toBe(src);
+  it('将 prism:tasks import 重写为 __prism_tasks__ 解构', () => {
+    const src = `import { tasks } from 'prism:tasks';`;
+    const { body, deps } = parseModule(src);
+    expect(body).toContain('const { tasks } = __prism_tasks__');
   });
 
-  it('不处理模板字符串', () => {
-    const src = 'import { x } from `prism:api`;';
-    const result = rewriteImports(src, pluginId, token);
-    expect(result).toBe(src);
+  it('将 prism:network import 重写为 __prism_network__ 解构', () => {
+    const src = `import { network } from 'prism:network';`;
+    const { body, deps } = parseModule(src);
+    expect(body).toContain('const { network } = __prism_network__');
   });
 
-  it('不处理多行 import（from 与字符串跨行）', () => {
-    const src = `import {\n  commands\n} from\n'prism:api';`;
-    const result = rewriteImports(src, pluginId, token);
-    // 多行 import 不被正则匹配 → 不替换 → 浏览器自然报错
-    expect(result).toBe(src);
+  it('同时替换多个 import', () => {
+    const src = `import { ref } from 'vue';\nimport { tasks } from 'prism:tasks';`;
+    const { body, deps } = parseModule(src);
+    expect(deps).toContain('__vue__');
+    expect(deps).toContain('__prism_tasks__');
+    expect(body).not.toContain('import {');
+  });
+
+  it('将 export async function activate 重写为 var activate = async function', () => {
+    const src = `export async function activate(ctx) {\n  console.log('hi');\n}`;
+    const { body } = parseModule(src);
+    expect(body).toContain('var activate = async function');
+    expect(body).not.toContain('export async function activate');
+  });
+
+  it('将 export function deactivate 重写为 var deactivate = function', () => {
+    const src = `export function deactivate() {}`;
+    const { body } = parseModule(src);
+    expect(body).toContain('var deactivate = function');
+    expect(body).not.toContain('export function deactivate');
+  });
+
+  it('不处理未知来源的 import', () => {
+    const src = `import { z } from 'zod';`;
+    const { body, deps } = parseModule(src);
+    expect(body).toBe(src); // 保留原样
+    expect(deps).toEqual([]);
   });
 
   it('不处理动态 import()', () => {
-    const src = `const m = await import('prism:api');`;
-    const result = rewriteImports(src, pluginId, token);
-    expect(result).toBe(src);
-  });
-
-  it('无匹配时返回原字符串（引用不变时）', () => {
-    const src = `console.log('hello');`;
-    const result = rewriteImports(src, pluginId, token);
-    expect(result).toBe(src);
+    const src = `const m = await import('vue');`;
+    const { body } = parseModule(src);
+    expect(body).toBe(src);
   });
 
   it('空字符串通过', () => {
-    const result = rewriteImports('', pluginId, token);
-    expect(result).toBe('');
-  });
-});
-
-describe('createModuleUrl', () => {
-  it('返回 data: 开头的 URL', () => {
-    const url = createModuleUrl('export default {};');
-    expect(url).toMatch(/^data:application\/javascript/);
+    const { body, deps } = parseModule('');
+    expect(body).toBe('');
+    expect(deps).toEqual([]);
   });
 
-  it('对源码进行 UTF-8 编码', () => {
-    const url = createModuleUrl('export const x = 1;');
-    expect(url).toContain('export%20const%20x%20%3D%201%3B');
+  it('无 import 的代码保持不变', () => {
+    const src = `console.log('hello');`;
+    const { body } = parseModule(src);
+    expect(body).toBe(src);
+  });
+
+  it('将 import { foo as bar } 别名转换为 const { foo: bar } 解构', () => {
+    const src = `import { ref as myRef, computed as myComputed } from 'vue';`;
+    const { body, deps } = parseModule(src);
+    expect(body).toContain('const { ref: myRef, computed: myComputed } = __vue__');
+    expect(deps).toContain('__vue__');
+  });
+
+  it('混合普通导入和别名导入', () => {
+    const src = `import { ref, computed as c } from 'vue';`;
+    const { body } = parseModule(src);
+    expect(body).toContain('const { ref, computed: c } = __vue__');
   });
 });

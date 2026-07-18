@@ -361,7 +361,10 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
 
     <!-- 主内容区 -->
     <main class="main-area">
-      <Transition v-if="!isPluginPageActive" name="module-fade" mode="out-in">
+      <div
+        v-show="!isPluginPageActive"
+        style="flex: 1; display: flex; flex-direction: column; overflow: hidden"
+      >
         <div v-if="activeModule === 'tasks' && isEnabled('tasks')" key="tasks" class="module-tasks">
           <div v-if="isLoading" class="loading-overlay">
             <span class="loading-spinner"></span>
@@ -428,10 +431,10 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
         <div v-else key="settings" class="module-settings">
           <SettingsPanel :initial-sub="settingsInitialSub" />
         </div>
-      </Transition>
+      </div>
 
-      <!-- 插件全屏页面（Transition 外，不受模块 fade 动画影响） -->
-      <div v-if="isPluginPageActive" class="module-plugin-page">
+      <!-- 插件全屏页面 -->
+      <div v-show="isPluginPageActive" class="module-plugin-page">
         <div class="plugin-page-topbar">
           <button class="plugin-page-back" @click="activatePluginPage('')">
             <svg

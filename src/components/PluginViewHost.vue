@@ -1,103 +1,133 @@
-<script setup lang="ts">
-import { computed, shallowRef, watch, onBeforeUnmount, type Component } from 'vue';
+<script lang="ts">
+import { defineComponent, h, ref, computed, shallowRef, watch, onBeforeUnmount } from 'vue';
 import {
   getViewRegistrations,
   getActivePageRegistrations,
-  type ViewRegistration,
   type ViewLocation,
 } from '../plugin-api/views-impl';
 import PluginErrorBoundary from './PluginErrorBoundary.vue';
 
-const props = defineProps<{
-  location: ViewLocation;
-}>();
+/**
+ * 插件视图宿主组件。
+ *
+ * 使用 h() 渲染函数而非 <component :is> 来渲染插件组件。
+ * 后者在 Vue 3 生产构建中，对通过 new Function() 创建的组件
+ * 可能触发内部 refs 访问异常。
+ * h() 直出 VNode 避免了模板编译器对组件对象的代理包装。
+ */
 
-// 响应式视图列表
-const views = computed(() =>
-  props.location === 'page' ? getActivePageRegistrations() : getViewRegistrations(props.location),
-);
+export default defineComponent({
+  props: {
+    location: { type: String as () => ViewLocation, required: true },
+  },
 
-// DomView 容器引用
-const domContainers = shallowRef<Map<string, HTMLElement>>(new Map());
+  setup(props) {
+    const views = computed(() =>
+      props.location === 'page'
+        ? getActivePageRegistrations()
+        : getViewRegistrations(props.location),
+    );
 
-function setDomRef(id: string, el: HTMLElement | null) {
-  if (el) {
-    domContainers.value.set(id, el);
-  } else {
-    domContainers.value.delete(id);
-  }
-}
+    const domContainers = shallowRef<Map<string, HTMLElement>>(new Map());
 
-// 监听新注册的 DomView，触发 mount
-watch(
-  views,
-  (newViews) => {
-    for (const v of newViews) {
-      if (v.domMount) {
-        // 需要等 DOM 渲染后才能 mount，用 nextTick
-        const container = domContainers.value.get(v.id);
-        if (container) {
-          v.domMount(container);
+    function setDomRef(id: string, el: HTMLElement | null) {
+      if (el) domContainers.value.set(id, el);
+      else domContainers.value.delete(id);
+    }
+
+    watch(
+      views,
+      (newViews) => {
+        for (const v of newViews) {
+          if (v.domMount) {
+            const container = domContainers.value.get(v.id);
+            if (container) v.domMount(container);
+          }
+        }
+      },
+      { flush: 'post' },
+    );
+
+    onBeforeUnmount(() => domContainers.value.clear());
+
+    return () => {
+      const list = views.value;
+      const loc = props.location;
+
+      // ── rail ──
+      if (loc === 'rail') {
+        return list.map((v) =>
+          h(
+            'button',
+            {
+              key: v.id,
+              class: 'rail-btn plugin-rail-btn',
+              'data-plugin': v.pluginId,
+              'data-tooltip': v.id,
+              onClick: () => v.onActivate?.(),
+            },
+            [h(PluginErrorBoundary, null, () => (v.component ? h(v.component) : null))],
+          ),
+        );
+      }
+
+      // ── page ──
+      if (loc === 'page' && list.length > 0) {
+        const v = list[0];
+        const comp = v.component;
+        if (comp) {
+          return h('div', { class: 'plugin-page-host' }, [
+            h(
+              'div',
+              {
+                key: v.id,
+                class: 'plugin-page-view',
+                'data-plugin': v.pluginId,
+              },
+              [h(PluginErrorBoundary, null, () => h(comp))],
+            ),
+          ]);
         }
       }
-    }
-  },
-  { flush: 'post' },
-);
 
-onBeforeUnmount(() => {
-  domContainers.value.clear();
+      // ── panel / sidebar / settings ──
+      if (list.length > 0) {
+        return h(
+          'div',
+          { class: 'plugin-view-host', 'data-location': loc },
+          list.map((v) => {
+            if (v.component) {
+              return h(
+                'div',
+                {
+                  key: v.id,
+                  class: 'plugin-vue-view',
+                  'data-plugin': v.pluginId,
+                },
+                [h(PluginErrorBoundary, null, () => h(v.component!))],
+              );
+            }
+            if (v.domMount) {
+              return h('div', {
+                key: v.id,
+                class: 'plugin-dom-view',
+                'data-plugin': v.pluginId,
+                ref: (el: unknown) => setDomRef(v.id, el as HTMLElement | null),
+              });
+            }
+            return null;
+          }),
+        );
+      }
+
+      return null;
+    };
+  },
 });
 </script>
 
-<template>
-  <!-- icon-rail 按钮：独立渲染每个组件并绑定点击 -->
-  <template v-if="location === 'rail'">
-    <button
-      v-for="v in views"
-      :key="v.id"
-      class="rail-btn plugin-rail-btn"
-      :data-plugin="v.pluginId"
-      :data-tooltip="v.id"
-      @click="v.onActivate?.()"
-    >
-      <PluginErrorBoundary>
-        <component :is="v.component as Component" />
-      </PluginErrorBoundary>
-    </button>
-  </template>
-
-  <!-- 页面视图：全屏渲染 -->
-  <div v-else-if="location === 'page' && views.length > 0" class="plugin-page-host">
-    <template v-for="v in views" :key="v.id">
-      <div v-if="v.component" class="plugin-page-view" :data-plugin="v.pluginId">
-        <PluginErrorBoundary>
-          <component :is="v.component as Component" />
-        </PluginErrorBoundary>
-      </div>
-    </template>
-  </div>
-
-  <!-- 其他位置：panel / sidebar / settings -->
-  <div v-else-if="views.length > 0" class="plugin-view-host" :data-location="location">
-    <template v-for="v in views" :key="v.id">
-      <div v-if="v.component" class="plugin-vue-view" :data-plugin="v.pluginId">
-        <PluginErrorBoundary>
-          <component :is="v.component as Component" />
-        </PluginErrorBoundary>
-      </div>
-      <div
-        v-else-if="v.domMount"
-        :ref="(el: unknown) => setDomRef(v.id, el as HTMLElement | null)"
-        class="plugin-dom-view"
-        :data-plugin="v.pluginId"
-      ></div>
-    </template>
-  </div>
-</template>
-
 <style>
-/* ── 插件 rail 按钮：继承宿主 .rail-btn 样式 ── */
+/* ── 插件 rail 按钮 ── */
 .plugin-rail-btn {
   width: 40px;
   height: 40px;
@@ -141,25 +171,6 @@ onBeforeUnmount(() => {
   display: contents;
 }
 
-.plugin-vue-view,
-.plugin-dom-view {
-  /* 插件视图容器由宿主提供边界 */
-}
-
-/* ── 插件图标轨按钮 ────────────────────── */
-.plugin-rail-btn {
-  /* 继承 .rail-btn 样式，额外保证 SVG 不溢出 */
-}
-
-.plugin-rail-btn :deep(svg) {
-  width: 18px;
-  height: 18px;
-  stroke: currentColor;
-  fill: none;
-  stroke-width: 1.5;
-}
-
-/* ── 插件全屏页面 ──────────────────────── */
 .plugin-page-host {
   flex: 1;
   display: flex;
@@ -172,11 +183,5 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-}
-
-[data-theme='hud'] .plugin-vue-view,
-[data-theme='hud'] .plugin-dom-view,
-[data-theme='hud'] .plugin-page-view {
-  /* HUD 主题下插件视图继承切角风格 */
 }
 </style>

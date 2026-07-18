@@ -264,6 +264,8 @@ export interface PluginContext {
       computed: (...args: any[]) => any;
       h: (...args: any[]) => any;
       defineComponent: (...args: any[]) => any;
+      createApp: (...args: any[]) => any;
+      onUnmounted: (hook: () => void) => void;
     };
   };
   tasks: {

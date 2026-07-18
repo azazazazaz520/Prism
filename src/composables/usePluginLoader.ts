@@ -3,6 +3,7 @@ import {
   computed,
   h,
   defineComponent,
+  createApp,
   onMounted,
   onUnmounted,
   watch,
@@ -250,7 +251,14 @@ export function usePluginLoader() {
 
       const { body, deps } = parseModule(source);
       const permissions = entry.manifest.permissions ?? [];
-      const ctx = createPluginContext(pluginId, permissions);
+      const ctx = createPluginContext(pluginId, permissions, {
+        ref,
+        computed,
+        h,
+        defineComponent,
+        createApp,
+        onUnmounted,
+      });
 
       // 构建作用域对象，注入插件依赖
       const scope = buildScope(pluginId, ctx, deps);

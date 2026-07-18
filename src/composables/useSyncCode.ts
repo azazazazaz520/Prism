@@ -181,8 +181,7 @@ export function useSyncCode() {
    * 匿名登录 session 过期/重建后 auth.uid() 会变化，
    * 若 restoreProfile 只恢复 profile_id 而不重新关联用户，
    * RLS 会拒绝后续 push 操作。
-   * 此函数 fire-and-forget：成功则消除 RLS 拒绝，
-   * 失败（离线等）由 pushTask 的离线队列兜底。
+   * 失败时静默忽略，由离线队列兜底。
    */
   async function ensureProfileMembership(profileId: string): Promise<void> {
     if (!user.value) return;

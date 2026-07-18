@@ -70,7 +70,7 @@ pub fn daily_completions(data: &store::DataStore, date: &str) -> Vec<String> {
 }
 
 /// 跨天重置每日任务的 completed 状态
-/// 返回被修改过的任务快照列表，供前端 push 到 Supabase
+/// 返回被修改过的任务快照列表，供前端推送到远端同步后端
 /// - 今日有完成记录 → completed = true
 /// - 今日无完成记录 → completed = false（昨日完成的自动清零）
 pub fn reset_daily_tasks(data: &mut store::DataStore, today: &str) -> Vec<store::Task> {
@@ -139,7 +139,7 @@ pub fn toggle(data: &mut store::DataStore, id: &str) -> Option<store::Task> {
 }
 
 /// 切换每日任务的完成状态（按日期记录，支持跨天追踪）
-/// 同时同步更新 task.completed，确保 Supabase 的 tasks 表能感知完成状态变更
+/// 同时同步更新 task.completed，确保远端同步后端能感知完成状态变更
 pub fn toggle_daily(data: &mut store::DataStore, id: &str, date: &str) {
     let now = chrono::Utc::now().to_rfc3339();
     if let Some(pos) = data
@@ -168,7 +168,7 @@ pub fn toggle_daily(data: &mut store::DataStore, id: &str, date: &str) {
             date: date.to_string(),
             profile_id: None,
         });
-        // 同步更新 task.completed，使 Supabase tasks 表反映完成状态
+        // 同步更新 task.completed，使远端同步后端反映完成状态
         if let Some(task) = data.tasks.iter_mut().find(|t| t.id == id) {
             if !task.completed {
                 task.completed = true;

@@ -1,4 +1,13 @@
 <script setup lang="ts">
+/**
+ * Markdown 编辑器组件，基于 CodeMirror 6 封装。
+ *
+ * 双向同步机制：父组件通过 v-model（:modelValue + @update:modelValue）
+ * 传入初始内容并接收编辑变更。组件内部通过 suppressExternal 标记位防止
+ * 「外部写入 → 内容同步 → 触发 update 事件 → 再次写入」的无限循环。
+ * 支持动态明暗主题切换、Ctrl+S 手动保存、光标行列位置上报，并通过
+ * defineExpose 暴露文本操作 API（插入、包裹选中、行首插入等）。
+ */
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { EditorState, Compartment } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers, drawSelection, dropCursor } from '@codemirror/view';
@@ -203,12 +212,17 @@ onUnmounted(() => {
 
 // ── 公开方法（方向二工具栏使用） ────────────
 
+/** 在光标位置插入文本，替换当前选区（若有选中内容）。
+ *  插入后自动聚焦编辑器。 */
 function insertText(text: string) {
   if (!view) return;
   view.dispatch(view.state.replaceSelection(text));
   view.focus();
 }
 
+/** 用指定的 before/after 文本包裹当前选区。
+ *  若无选区（光标仅闪烁），则在光标位置插入 before + after。
+ *  包裹后重新选中 between 之间的内容，方便连续操作（如加粗后继续输入）。 */
 function wrapSelection(before: string, after: string) {
   if (!view) return;
   const { from, to } = view.state.selection.main;
@@ -237,7 +251,8 @@ function replaceSelection(text: string) {
   view.focus();
 }
 
-/** 在当前行首插入文本（用于标题/列表/引用等行级操作） */
+/** 在当前行首插入文本，用于标题（#）、列表（-）、引用（>）等行级
+ *  Markdown 标记操作。插入后自动聚焦编辑器。 */
 function prependToLine(text: string) {
   if (!view) return;
   const pos = view.state.selection.main.head;

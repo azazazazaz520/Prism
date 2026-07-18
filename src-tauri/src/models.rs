@@ -5,6 +5,8 @@ use std::path::PathBuf;
 //  核心数据模型
 // ═══════════════════════════════════════════════════════════════
 
+/// 任务条目，支持软删除、标签、每日重复、父子拆解。
+/// updated_at 用于跨设备 LWW 合并，is_deleted 保留用于同步传播。
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Task {
     pub id: String,
@@ -35,6 +37,7 @@ pub struct Task {
     pub profile_id: Option<String>,
 }
 
+/// 每日任务完成记录，按 (task_id, date) 追踪每日重复任务的完成状态。
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DailyCompletion {
     pub task_id: String,
@@ -94,7 +97,7 @@ pub struct SyncStore {
     pub last_sync_at: Option<String>,
 }
 
-/// 插件持久化配置
+/// 插件持久化配置，包含启用状态和权限列表。
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PluginConfig {
     pub enabled: bool,
@@ -102,7 +105,8 @@ pub struct PluginConfig {
     pub permissions: Vec<String>,
 }
 
-/// 应用配置（存储于 config.json）
+/// 应用配置（存储于 config.json），包含供应商、主题、提醒、模块开关、
+/// 笔记目录、仪表盘布局、插件配置等全部用户偏好。
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ConfigStore {
     #[serde(default)]
@@ -133,14 +137,17 @@ pub struct ConfigStore {
 //  默认值
 // ═══════════════════════════════════════════════════════════════
 
+/// 默认提醒提前时间（30 分钟）
 pub fn default_reminder_minutes() -> u32 {
     30
 }
 
+/// 默认主题模式（跟随系统）
 pub fn default_theme() -> String {
     "auto".to_string()
 }
 
+/// 构造空的默认任务数据
 pub fn default_data_store() -> DataStore {
     DataStore {
         version: 1,
@@ -149,6 +156,7 @@ pub fn default_data_store() -> DataStore {
     }
 }
 
+/// 构造默认应用配置
 pub fn default_config_store() -> ConfigStore {
     ConfigStore {
         vendors: vec![],
@@ -162,6 +170,7 @@ pub fn default_config_store() -> ConfigStore {
     }
 }
 
+/// 构造空的默认同步状态
 pub fn default_sync_store() -> SyncStore {
     SyncStore {
         sync_code: None,

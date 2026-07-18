@@ -452,6 +452,7 @@ pub async fn execute(
 //  功能 6：JSON 结构解释
 // ═══════════════════════════════════════════════════════════════
 
+/// 调用 AI 解释 JSON 结构，返回可读的字段说明
 pub async fn json_explain(settings: &AiSettings, json_text: &str) -> Result<String, String> {
     let system_prompt = prompt::load(prompt::JSON_EXPLAIN, &[]);
     chat_completion(settings, &system_prompt, json_text).await
@@ -461,6 +462,7 @@ pub async fn json_explain(settings: &AiSettings, json_text: &str) -> Result<Stri
 //  功能 7：正则表达式 AI 生成
 // ═══════════════════════════════════════════════════════════════
 
+/// 调用 AI 根据自然语言描述生成正则表达式
 pub async fn regex_generate(settings: &AiSettings, description: &str) -> Result<String, String> {
     let system_prompt = prompt::load(prompt::REGEX_GENERATE, &[]);
     chat_completion(settings, &system_prompt, description).await

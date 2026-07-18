@@ -219,8 +219,7 @@ export function usePluginLoader() {
   // ── 激活 ────────────────────────────────────────
 
   async function activatePlugin(pluginId: string): Promise<void> {
-    // ⚠️ 每次 bumpReactivity() 都会创建新 Map + 新对象，
-    //    因此必须重新获取 entry，否则后续写入会落到旧对象上（stale reference）。
+    // 重新获取避免 stale ref
     const initial = pluginEntries.value.get(pluginId);
     if (!initial) throw new Error(`插件 "${pluginId}" 未找到`);
     if (initial.state === 'active' || initial.state === 'activating') return;
@@ -239,7 +238,7 @@ export function usePluginLoader() {
 
     initial.state = 'activating';
     bumpReactivity();
-    // ▲ 重新获取，避免 stale reference
+    // 重新获取避免 stale ref
     let entry = pluginEntries.value.get(pluginId)!;
 
     try {
@@ -279,7 +278,7 @@ export function usePluginLoader() {
         throw new Error(`[${pluginId}] 未导出 activate 函数`);
       }
 
-      // ▲ bumpReactivity 后 entry 可能已变 stale，重新获取
+      // 重新获取避免 stale ref
       entry = pluginEntries.value.get(pluginId)!;
       entry.ctx = ctx;
       entry.state = 'active';
@@ -287,7 +286,7 @@ export function usePluginLoader() {
       entry.lastError = undefined;
       bumpReactivity();
     } catch (e: any) {
-      // ▲ 重新获取后再写入错误状态
+      // 重新获取后写入错误状态
       entry = pluginEntries.value.get(pluginId)!;
       entry.state = 'disabled';
       entry.lastError = e?.message || String(e);
@@ -309,7 +308,7 @@ export function usePluginLoader() {
 
     initial.state = 'deactivating';
     bumpReactivity();
-    // ▲ 重新获取，避免 stale reference
+    // 重新获取避免 stale ref
     let entry = pluginEntries.value.get(pluginId)!;
 
     try {
@@ -321,7 +320,7 @@ export function usePluginLoader() {
       entry.state = 'disabled';
       bumpReactivity();
     } catch (e: any) {
-      // ▲ 重新获取后再写入错误状态
+      // 重新获取后写入错误状态
       entry = pluginEntries.value.get(pluginId)!;
       entry.state = 'disabled';
       entry.lastError = e?.message || String(e);

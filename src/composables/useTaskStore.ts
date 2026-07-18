@@ -90,7 +90,7 @@ export function useTaskStore() {
     }
   }
 
-  // ── 通用 CRUD 错误包裹（ponytail: 一个闭包替代 8 个重复函数） ──
+  // ── 通用 CRUD 错误包裹（一个闭包替代 8 个重复函数） ──
 
   function wrap<A extends any[], R>(
     fn: (...args: A) => Promise<R>,

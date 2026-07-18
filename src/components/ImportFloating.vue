@@ -6,6 +6,11 @@ import { listen } from '@tauri-apps/api/event';
 import { initTheme } from '../composables/useTheme';
 import type { ParsedTask } from '../types';
 
+/**
+ * 导入悬浮窗 — 从剪贴板截图或聊天记录文本中批量提取任务。
+ * 管线：粘贴内容 → AI 解析 → 任务列表预览 → 确认导入。
+ */
+
 // ── 扩展 ParsedTask：加入前端选择状态 ──────────────
 interface CandidateTask extends ParsedTask {
   selected: boolean;
@@ -76,6 +81,7 @@ onUnmounted(() => {
 });
 
 // ── AI 解析 ──────────────────────────────
+/** 将输入文本发送至 AI 解析（ai_parse_wechat 模式），返回候选任务列表 */
 async function handleParse() {
   const trimmed = chatText.value.trim();
   if (!trimmed) return;
@@ -110,6 +116,7 @@ function toggleAll() {
 }
 
 // ── 添加任务 ──────────────────────────────
+/** 将勾选的候选任务逐条通过 add_task 命令写入主任务列表 */
 async function addSelectedTasks() {
   const selected = candidates.value.filter((c) => c.selected);
   if (selected.length === 0) return;

@@ -1,5 +1,14 @@
-import { ref, computed, h, defineComponent, type Component } from 'vue';
 import type { PluginContext, PluginPermission, Disposable } from '../types';
+
+/** Vue 运行时注入接口 — 由调用方传入，避免模块拆分导致多实例 */
+export interface VueRuntime {
+  ref: <T>(value: T) => any;
+  computed: <T>(getter: () => T) => any;
+  h: (...args: any[]) => any;
+  defineComponent: (options: any) => any;
+  createApp: (...args: any[]) => any;
+  onUnmounted: (hook: () => void) => void;
+}
 import { DisposableStore } from './disposable';
 import { createViewsAPI } from './views-impl';
 import { createMenusAPI } from './menus-impl';
@@ -13,7 +22,10 @@ import { createNetworkAPI } from './network-impl';
 export function createPluginContext(
   pluginId: string,
   permissions: PluginPermission[],
+  vueApi: VueRuntime,
 ): PluginContext {
+  const { ref, computed, h, defineComponent, createApp, onUnmounted } = vueApi;
+
   const runtimeId = `plugin:${pluginId}`;
   const store = new DisposableStore();
   const perms = new Set(permissions) as ReadonlySet<PluginPermission>;
@@ -108,7 +120,7 @@ export function createPluginContext(
       },
       locale: 'zh-CN',
       // 注入宿主 Vue 运行时，确保插件和宿主共享同一响应式系统
-      vue: { ref, computed, h, defineComponent },
+      vue: { ref, computed, h, defineComponent, createApp, onUnmounted },
     },
   };
 

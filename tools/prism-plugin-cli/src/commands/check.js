@@ -79,6 +79,38 @@ function checkPrismImports(filePath, errors) {
 }
 
 /**
+ * 检测 h() 调用中空字符串作为第二参数的错误写法。
+ * h('span', '', text) 会创建 props: '' 的 VNode，
+ * 在 Vue 3.5 生产模式下，若父元素为 display:flex 且兄弟节点有正常 props 对象，
+ * 会触发 patch 阶段的崩溃。
+ */
+function checkHEmptyProps(filePath, errors) {
+  let content;
+  try {
+    content = readFileSync(filePath, 'utf-8');
+  } catch {
+    return;
+  }
+
+  const violations = [];
+  const lines = content.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (/\bh\s*\([^)]*,\s*['"]["']\s*,/.test(lines[i])) {
+      violations.push(i + 1);
+    }
+  }
+
+  if (violations.length > 0) {
+    const locs = violations.map((l) => `  ${filePath}:${l}`).join('\n');
+    errors.push(
+      `h() 第二参数为空字符串（共 ${violations.length} 处）：\n${locs}\n` +
+        `  修复: h(type, children) 或 h(type, { style: '...' }, children)\n` +
+        `  原因: 空字符串第二参数会创建 props: '' 的 VNode，Vue 3.5 生产模式下父元素为 display:flex 且兄弟节点有正常 props 时触发崩溃。`,
+    );
+  }
+}
+
+/**
  * 校验扩展点 ID 前缀（commands/views/menus 的 id 必须以 "{plugin.id}." 开头）
  */
 function checkExtensionPointIds(manifest, errors) {
@@ -149,6 +181,7 @@ export function check({ cwd }) {
           scanDir(full);
         } else if (entry.endsWith('.js')) {
           checkPrismImports(full, errors);
+          checkHEmptyProps(full, errors);
         }
       } catch {
         // skip inaccessible

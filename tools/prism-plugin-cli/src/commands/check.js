@@ -83,6 +83,8 @@ function checkPrismImports(filePath, errors) {
  * h('span', '', text) 会创建 props: '' 的 VNode，
  * 在 Vue 3.5 生产模式下，若父元素为 display:flex 且兄弟节点有正常 props 对象，
  * 会触发 patch 阶段的崩溃。
+ *
+ * 使用全文正则匹配以兼容多行写法，例如 h(\n  'span',\n  '',\n  text\n)。
  */
 function checkHEmptyProps(filePath, errors) {
   let content;
@@ -93,11 +95,11 @@ function checkHEmptyProps(filePath, errors) {
   }
 
   const violations = [];
-  const lines = content.split('\n');
-  for (let i = 0; i < lines.length; i++) {
-    if (/\bh\s*\([^)]*,\s*['"]["']\s*,/.test(lines[i])) {
-      violations.push(i + 1);
-    }
+  const hEmptyRe = /h\s*\(\s*['"][^'"]*['"]\s*,\s*['"]["']\s*,/gm;
+  let match;
+  while ((match = hEmptyRe.exec(content)) !== null) {
+    const line = content.slice(0, match.index).split('\n').length;
+    violations.push(line);
   }
 
   if (violations.length > 0) {

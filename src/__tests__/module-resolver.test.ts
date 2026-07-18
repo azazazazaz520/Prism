@@ -20,18 +20,21 @@ describe('parseModule', () => {
     const src = `import { commands } from 'prism:commands';`;
     const { body, deps } = parseModule(src);
     expect(body).toContain('const { commands } = __prism_commands__');
+    expect(deps).toContain('__prism_commands__');
   });
 
   it('将 prism:tasks import 重写为 __prism_tasks__ 解构', () => {
     const src = `import { tasks } from 'prism:tasks';`;
     const { body, deps } = parseModule(src);
     expect(body).toContain('const { tasks } = __prism_tasks__');
+    expect(deps).toContain('__prism_tasks__');
   });
 
   it('将 prism:network import 重写为 __prism_network__ 解构', () => {
     const src = `import { network } from 'prism:network';`;
     const { body, deps } = parseModule(src);
     expect(body).toContain('const { network } = __prism_network__');
+    expect(deps).toContain('__prism_network__');
   });
 
   it('同时替换多个 import', () => {
@@ -65,8 +68,9 @@ describe('parseModule', () => {
 
   it('不处理动态 import()', () => {
     const src = `const m = await import('vue');`;
-    const { body } = parseModule(src);
+    const { body, deps } = parseModule(src);
     expect(body).toBe(src);
+    expect(deps).toEqual([]);
   });
 
   it('空字符串通过', () => {
@@ -81,11 +85,24 @@ describe('parseModule', () => {
     expect(body).toBe(src);
   });
 
+  it('将 prism:* 别名导入转换为 JS 解构', () => {
+    const src = `import { api as myApi, highlight as myHighlight } from 'prism:api';`;
+    const { body, deps } = parseModule(src);
+    expect(body).toContain('const { api: myApi, highlight: myHighlight } = __prism_api__');
+    expect(deps).toContain('__prism_api__');
+  });
+
   it('将 import { foo as bar } 别名转换为 const { foo: bar } 解构', () => {
     const src = `import { ref as myRef, computed as myComputed } from 'vue';`;
     const { body, deps } = parseModule(src);
     expect(body).toContain('const { ref: myRef, computed: myComputed } = __vue__');
     expect(deps).toContain('__vue__');
+  });
+
+  it('正确处理 as 周围的任意空白', () => {
+    const src = `import { ref   as   myRef, computed as  myComputed } from 'vue';`;
+    const { body } = parseModule(src);
+    expect(body).toContain('const { ref: myRef, computed: myComputed } = __vue__');
   });
 
   it('混合普通导入和别名导入', () => {

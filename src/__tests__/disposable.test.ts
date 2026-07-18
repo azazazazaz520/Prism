@@ -182,4 +182,15 @@ describe('createPluginContext', () => {
 
     document.documentElement.removeAttribute('data-theme');
   });
+
+  it('env.vue 通过 vueApi 注入的运行时函数正确暴露', () => {
+    const ctx = makeCtx('com.example.test', []);
+    const v = ctx.env.vue;
+    expect(typeof v.ref).toBe('function');
+    expect(typeof v.computed).toBe('function');
+    expect(typeof v.h).toBe('function');
+    expect(typeof v.defineComponent).toBe('function');
+    expect(typeof v.createApp).toBe('function');
+    expect(typeof v.onUnmounted).toBe('function');
+  });
 });

@@ -28,8 +28,8 @@ export function parseModule(source: string): ParsedModule {
   body = body.replace(IMPORT_RE, (_match, names: string, from: string) => {
     const varName = importToVar(from);
     if (varName) deps.push(varName);
-    // 将 ES import 别名语法转换为 JS 解构语法：foo as bar → foo: bar
-    const normalized = names.replace(/\b as \b/g, ': ');
+    // 将 ES import 别名语法转换为 JS 解构语法：foo as bar → foo: bar，允许任意空白
+    const normalized = names.replace(/\s+as\s+/g, ': ');
     return varName ? `const {${normalized}} = ${varName};` : _match;
   });
 

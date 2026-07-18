@@ -1,8 +1,20 @@
-import { ref, computed } from 'vue';
+import {
+  ref,
+  computed,
+  h,
+  defineComponent,
+  onMounted,
+  onUnmounted,
+  watch,
+  nextTick,
+  shallowRef,
+  createApp,
+} from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { PluginManifest, PluginDiagnostics, PluginContext } from '../types';
 import { validateManifest, checkEngines, PRISM_VERSION } from './usePluginManifest';
-import { rewriteImports, createModuleUrl } from '../plugin-api/module-resolver';
+import { parseModule } from '../plugin-api/module-resolver';
+import { createPluginContext } from '../plugin-api/plugin-context';
 import { buildCapability } from '../plugin-api/capability-builder';
 import { createPluginContext } from '../plugin-api/plugin-context';
 
@@ -26,10 +38,6 @@ interface PluginConfig {
   enabled: boolean;
   permissions: string[];
 }
-
-// ═══════════════════════════════════════════════════════════════
-//  全局单例
-// ═══════════════════════════════════════════════════════════════
 
 const pluginEntries = ref<Map<string, PluginEntry>>(new Map());
 let loaded = false;
@@ -153,17 +161,36 @@ export function usePluginLoader() {
         filePath: mainPath,
       });
 
-      const rewritten = rewriteImports(source, pluginId, token);
-      const moduleUrl = createModuleUrl(rewritten);
-      const module = await import(/* @vite-ignore */ moduleUrl);
-
       const permissions = entry.manifest.permissions ?? [];
-      const ctx = createPluginContext(pluginId, permissions);
+      const ctx = createPluginContext(pluginId, permissions, {
+        ref,
+        computed,
+        h,
+        defineComponent,
+        createApp,
+        onUnmounted,
+      });
 
+      const { body, deps } = parseModule(source);
+
+      // 构建作用域对象，注入插件依赖
+      const scope = buildScope(pluginId, ctx, deps);
+      const scopeKeys = Object.keys(scope);
+      const scopeValues = Object.values(scope);
+
+      // 通过 new Function 执行插件代码，获取 activate/deactivate
+      const fnBody = `${body}\nreturn { activate: typeof activate !== 'undefined' ? activate : undefined, deactivate: typeof deactivate !== 'undefined' ? deactivate : undefined };`;
+      const fn = new Function(...scopeKeys, fnBody);
+      const module = fn(...scopeValues) as {
+        activate?: Function;
+        deactivate?: Function;
+      };
       if (typeof module.activate === 'function') {
         await module.activate(ctx);
-      } else if (typeof module.default?.activate === 'function') {
-        await module.default.activate(ctx);
+      } else if (typeof module.deactivate === 'function') {
+        throw new Error(`[${pluginId}] 未导出 activate 函数`);
+      } else {
+        throw new Error(`[${pluginId}] 未导出 activate 函数`);
       }
 
       // ▲ bumpReactivity 后 entry 可能已变 stale，重新获取

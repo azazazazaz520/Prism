@@ -558,6 +558,7 @@ export function useTaskStore() {
     refreshTasks,
     initSync,
     pullAndMerge,
+    pushTask,
     // CRUD
     addTask,
     toggleTask,

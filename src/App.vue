@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { getActivePageRegistrations, activatePluginPage } from './plugin-api/views-impl';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { AppModule, SettingsSubModule } from './types';
@@ -15,10 +16,13 @@ import AiAssistant from './components/AiAssistant.vue';
 import NoteEditor from './components/NoteEditor.vue';
 import Toolbox from './components/Toolbox.vue';
 import Dashboard from './components/Dashboard.vue';
+import PluginViewHost from './components/PluginViewHost.vue';
+import ContextMenu, { type ContextMenuItem } from './components/ContextMenu.vue';
 import { useModuleRegistry } from './composables/useModuleRegistry';
 import { useTaskStore } from './composables/useTaskStore';
 import { useAiStatus } from './composables/useAiStatus';
 import { useDashboard } from './composables/useDashboard';
+import { usePluginLoader } from './composables/usePluginLoader';
 
 // ── 模块注册表 ──────────────────────────────
 
@@ -38,6 +42,7 @@ const {
   isLoading,
   loadAll,
   refreshTasks,
+  pushTask,
   initSync,
   pullAndMerge,
   addTask,
@@ -61,9 +66,12 @@ const { aiEnabled, load: loadAiSettings } = useAiStatus();
 /** 当前侧边栏选中的功能模块 */
 const activeModule = ref<AppModule>('tasks');
 
-/** 非 tasks 模块时 grid 只保留 icon-rail + 主内容区 */
+/** 是否有插件页面正在激活 */
+const isPluginPageActive = computed(() => getActivePageRegistrations().length > 0);
+
+/** 非 tasks 模块或插件页激活时 grid 只保留 icon-rail + 主内容区 */
 const gridColumns = computed(() =>
-  activeModule.value === 'tasks' ? '56px 280px 1fr 300px' : '56px 1fr',
+  activeModule.value === 'tasks' && !isPluginPageActive.value ? '56px 280px 1fr 300px' : '56px 1fr',
 );
 
 // ── 生命周期 ──────────────────────────────
@@ -71,18 +79,100 @@ const gridColumns = computed(() =>
 // 在 setup 顶层注册清理，避免 async onMounted 中 await 后丢失组件上下文
 let _unlistenFocus: (() => void) | null = null;
 let _pollInterval: ReturnType<typeof setInterval> | null = null;
-const _handleForceSync = () => refreshTasks();
+const _handleForceSync = async () => {
+  await refreshTasks();
+  // 推送插件创建/修改的任务到 Supabase
+  for (const t of tasks.value) {
+    if (t.profile_id) {
+      pushTask(t).catch(() => {});
+    }
+  }
+};
+
+// ── 全局右键菜单 ──────────────────────────
+const globalMenuVisible = ref(false);
+const globalMenuX = ref(0);
+const globalMenuY = ref(0);
+const globalMenuItems = ref<ContextMenuItem[]>([]);
+
+function buildClipboardItems(target: HTMLElement): ContextMenuItem[] {
+  const isEditable =
+    target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+
+  if (!isEditable) return [];
+
+  const hasSelection = !!window.getSelection()?.toString();
+
+  const items: ContextMenuItem[] = [];
+  if (hasSelection) {
+    items.push({
+      id: 'copy',
+      label: '复制',
+      action: () => {
+        document.execCommand('copy');
+      },
+    });
+    items.push({
+      id: 'cut',
+      label: '剪切',
+      action: () => {
+        document.execCommand('cut');
+      },
+    });
+  }
+  items.push({
+    id: 'paste',
+    label: '粘贴',
+    action: () => {
+      document.execCommand('paste');
+    },
+  });
+  items.push({
+    id: 'selectAll',
+    label: '全选',
+    action: () => {
+      document.execCommand('selectAll');
+    },
+  });
+  return items;
+}
+
+function onGlobalContextMenu(event: MouseEvent) {
+  const target = event.target as HTMLElement;
+  const items = buildClipboardItems(target);
+  if (items.length === 0) return;
+
+  event.preventDefault();
+
+  const menuHeight = Math.min(items.length * 36 + 8, 300);
+  const y =
+    event.clientY + menuHeight > window.innerHeight ? event.clientY - menuHeight : event.clientY;
+
+  globalMenuX.value = event.clientX;
+  globalMenuY.value = y;
+  globalMenuItems.value = items;
+  globalMenuVisible.value = true;
+}
+
+function hideGlobalMenu() {
+  globalMenuVisible.value = false;
+}
 
 onUnmounted(() => {
   _unlistenFocus?.();
   window.removeEventListener('prism:force-sync', _handleForceSync);
   if (_pollInterval) clearInterval(_pollInterval);
+  document.removeEventListener('contextmenu', onGlobalContextMenu);
 });
 
 onMounted(async () => {
+  document.addEventListener('contextmenu', onGlobalContextMenu);
   await Promise.all([loadAll(), loadAiSettings(), loadModules()]);
   const { loadLayout } = useDashboard();
   loadLayout();
+  // 初始化插件系统（扫描 + 加载配置）
+  const { loadPlugins } = usePluginLoader();
+  loadPlugins();
 
   const syncReady = await initSync();
   const appWindow = getCurrentWindow();
@@ -233,6 +323,8 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
         </svg>
       </button>
       <div class="rail-spacer"></div>
+      <!-- 插件图标轨按钮 -->
+      <PluginViewHost location="rail" />
       <button
         :class="['rail-btn', { active: activeModule === 'settings' }]"
         data-tooltip="Settings"
@@ -248,7 +340,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
     </nav>
 
     <!-- Sidebar: 280px 分组任务列表 + 内联输入 -->
-    <aside v-if="activeModule === 'tasks'" class="task-sidebar">
+    <aside v-if="activeModule === 'tasks' && !isPluginPageActive" class="task-sidebar">
       <div class="sidebar-header">
         <span class="sidebar-label">Operations</span>
         <span class="sidebar-count">{{ tasks.length }}</span>
@@ -269,7 +361,10 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
 
     <!-- 主内容区 -->
     <main class="main-area">
-      <Transition name="module-fade" mode="out-in">
+      <div
+        v-show="!isPluginPageActive"
+        style="flex: 1; display: flex; flex-direction: column; overflow: hidden"
+      >
         <div v-if="activeModule === 'tasks' && isEnabled('tasks')" key="tasks" class="module-tasks">
           <div v-if="isLoading" class="loading-overlay">
             <span class="loading-spinner"></span>
@@ -294,6 +389,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
             <!-- 中部可滚区：仪表盘 -->
             <div class="tasks-scroll">
               <Dashboard />
+              <PluginViewHost location="panel" />
             </div>
 
             <!-- 底部固定区：统计 + Sync -->
@@ -335,11 +431,33 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
         <div v-else key="settings" class="module-settings">
           <SettingsPanel :initial-sub="settingsInitialSub" />
         </div>
-      </Transition>
+      </div>
+
+      <!-- 插件全屏页面 -->
+      <div v-show="isPluginPageActive" class="module-plugin-page">
+        <div class="plugin-page-topbar">
+          <button class="plugin-page-back" @click="activatePluginPage('')">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+            返回
+          </button>
+        </div>
+        <PluginViewHost location="page" />
+      </div>
     </main>
 
     <!-- 右侧面板 (仅任务模块) -->
-    <aside v-if="activeModule === 'tasks'" class="right-panel">
+    <aside v-if="activeModule === 'tasks' && !isPluginPageActive" class="right-panel">
       <div class="right-panel-header">
         <span class="right-panel-label"><span class="rp-dot"></span>Cal & Tags</span>
       </div>
@@ -358,6 +476,14 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
       </div>
     </aside>
   </div>
+
+  <ContextMenu
+    :visible="globalMenuVisible"
+    :x="globalMenuX"
+    :y="globalMenuY"
+    :items="globalMenuItems"
+    @close="hideGlobalMenu"
+  />
 </template>
 
 <style scoped>
@@ -617,6 +743,70 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.module-plugin-page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── 三段式任务布局 ────────────────────── */
+.tasks-top {
+  flex-shrink: 0;
+}
+
+.tasks-scroll {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.tasks-bottom {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-subtle);
+  padding: var(--space-sm) var(--space-xl);
+  background: var(--bg-primary);
+}
+
+.plugin-page-topbar {
+  display: flex;
+  align-items: center;
+  padding: var(--space-sm) var(--space-xl);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.plugin-page-back {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.plugin-page-back:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+
+[data-theme='hud'] .plugin-page-back {
+  border-radius: 0;
+  clip-path: polygon(
+    4px 0%,
+    100% 0%,
+    100% calc(100% - 4px),
+    calc(100% - 4px) 100%,
+    0% 100%,
+    0% 4px
+  );
 }
 
 /* ── 三段式任务布局 ────────────────────── */

@@ -15,6 +15,9 @@ import { useModuleRegistry } from '../composables/useModuleRegistry';
 import VendorList from './VendorList.vue';
 import SyncSetup from './SyncSetup.vue';
 import PromptEditor from './PromptEditor.vue';
+import PluginManager from './PluginManager.vue';
+import PluginViewHost from './PluginViewHost.vue';
+import ScriptManager from './ScriptManager.vue';
 
 const { theme, setTheme } = useTheme();
 const { allModules, isEnabled, toggle: toggleModule } = useModuleRegistry();
@@ -111,6 +114,8 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
   { key: 'vendors', label: '供应商' },
   { key: 'prompts', label: 'Prompt' },
   { key: 'sync', label: '跨设备同步' },
+  { key: 'plugins', label: '插件' },
+  { key: 'scripts', label: '脚本' },
 ];
 </script>
 
@@ -160,6 +165,16 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
               <polyline points="21 16 21 21 16 21" />
               <line x1="15" y1="15" x2="21" y2="21" />
               <line x1="4" y1="4" x2="9" y2="9" />
+            </template>
+            <template v-else-if="m.key === 'plugins'">
+              <rect x="3" y="3" width="7" height="7" rx="1" />
+              <rect x="14" y="3" width="7" height="7" rx="1" />
+              <rect x="3" y="14" width="7" height="7" rx="1" />
+              <rect x="14" y="14" width="7" height="7" rx="1" />
+            </template>
+            <template v-else-if="m.key === 'scripts'">
+              <polyline points="16 18 22 12 16 6" />
+              <polyline points="8 6 2 12 8 18" />
             </template>
             <template v-else>
               <path d="M12 2a4 4 0 0 1 4 4v1h4v14H4V7h4V6a4 4 0 0 1 4-4z" />
@@ -266,6 +281,15 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
         <!-- Prompt 管理 -->
         <div v-else-if="activeSub === 'prompts'" class="sub-page sub-page-full">
           <PromptEditor />
+        </div>
+
+        <div v-else-if="activeSub === 'plugins'" class="sub-page sub-page-full">
+          <PluginManager />
+          <PluginViewHost location="settings" />
+        </div>
+
+        <div v-else-if="activeSub === 'scripts'" class="sub-page sub-page-full">
+          <ScriptManager />
         </div>
       </div>
     </div>

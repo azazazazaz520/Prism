@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { ref, watch, computed, nextTick } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { marked } from 'marked';
 import type { FileEntry } from '../types';
+import { getMenuRegistrations, type EditorSelection } from '../plugin-api/menus-impl';
 import InputDialog from './InputDialog.vue';
 import ConfirmDialog from './ConfirmDialog.vue';
 import TreeNode from './TreeNode.vue';
 import MarkdownEditor from './MarkdownEditor.vue';
 import MarkdownToolbar from './MarkdownToolbar.vue';
+import ContextMenu, { type ContextMenuItem } from './ContextMenu.vue';
 
 // ── 状态 ──────────────────────────────
 
@@ -22,6 +24,12 @@ const cursorLine = ref(1);
 const cursorCol = ref(1);
 
 const textareaRef = ref<InstanceType<typeof MarkdownEditor> | null>(null);
+
+// ── 自定义右键菜单 ──────────────────────────
+const contextMenuVisible = ref(false);
+const contextMenuX = ref(0);
+const contextMenuY = ref(0);
+const contextMenuItems = ref<ContextMenuItem[]>([]);
 
 /** 操作结果提示（临时显示） */
 const statusMsg = ref('');
@@ -66,6 +74,48 @@ const wordCount = computed(() => {
 function handleCursorChange(line: number, col: number) {
   cursorLine.value = line;
   cursorCol.value = col;
+}
+
+// ── 右键菜单 ──────────────────────────────
+
+function showContextMenu(event: MouseEvent) {
+  event.preventDefault();
+  event.stopPropagation();
+
+  const editor = textareaRef.value;
+  if (!editor) return;
+
+  const registrations = getMenuRegistrations('editor-context');
+  const text = editor.getSelection();
+
+  if (registrations.length === 0 && !text) return;
+
+  contextMenuItems.value = registrations.map((r) => ({
+    id: r.id,
+    label: r.item.label,
+    icon: r.item.icon,
+    action: () => {
+      const sel: EditorSelection = text
+        ? {
+            text,
+            from: -1,
+            to: -1,
+            replace: (newText: string) => editor.replaceSelection(newText),
+          }
+        : (undefined as unknown as EditorSelection);
+      r.item.action(sel);
+    },
+  }));
+
+  const menuHeight = Math.min(contextMenuItems.value.length * 36 + 8, 300);
+  contextMenuX.value = event.clientX;
+  contextMenuY.value =
+    event.clientY + menuHeight > window.innerHeight ? event.clientY - menuHeight : event.clientY;
+  contextMenuVisible.value = true;
+}
+
+function hideContextMenu() {
+  contextMenuVisible.value = false;
 }
 
 /** Ctrl+S 手动保存 */
@@ -470,7 +520,7 @@ async function deleteEntry(path: string) {
         </div>
 
         <!-- 编辑区 -->
-        <div class="editor-panes">
+        <div class="editor-panes" @contextmenu="showContextMenu">
           <MarkdownEditor
             ref="textareaRef"
             v-show="viewMode !== 'preview'"
@@ -568,6 +618,14 @@ async function deleteEntry(path: string) {
     <Transition name="status-fade">
       <div v-if="statusMsg" class="status-toast">{{ statusMsg }}</div>
     </Transition>
+
+    <ContextMenu
+      :visible="contextMenuVisible"
+      :x="contextMenuX"
+      :y="contextMenuY"
+      :items="contextMenuItems"
+      @close="hideContextMenu"
+    />
   </div>
 </template>
 

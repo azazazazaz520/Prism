@@ -44,6 +44,7 @@ mod tests {
         assert!(config.active_vendor_id.is_none());
         assert_eq!(config.theme, "auto");
         assert_eq!(config.reminder_minutes, 30);
+        assert!(config.plugins.is_empty());
     }
 
     #[test]
@@ -125,6 +126,7 @@ mod tests {
             module_enabled: std::collections::HashMap::new(),
             notes_dir: None,
             dashboard_layout: None,
+            plugins: std::collections::HashMap::new(),
         };
         let json = serde_json::to_string(&config).unwrap();
         let parsed: ConfigStore = serde_json::from_str(&json).unwrap();
@@ -151,5 +153,6 @@ mod tests {
         assert!(config.active_vendor_id.is_none());
         assert_eq!(config.theme, "auto");
         assert_eq!(config.reminder_minutes, 30);
+        assert!(config.plugins.is_empty());
     }
 }

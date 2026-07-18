@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, nextTick, computed, onMounted, onUnmounted } from 'vue';
 import type { Task } from '../types';
+import { getMenuRegistrations } from '../plugin-api/menus-impl';
 
 const props = defineProps<{
   task: Task;
@@ -188,6 +189,18 @@ const dueLabel = computed(() => {
   if (dueStatus.value === 'overdue') return '已过期';
   return props.task.due_date;
 });
+
+// 插件菜单项（task-context 位置）
+const pluginMenuItems = computed(() => getMenuRegistrations('task-context'));
+
+async function handlePluginMenuAction(action: () => void | Promise<void>) {
+  try {
+    await action();
+  } catch (e) {
+    console.error('[TaskItem] 插件菜单回调异常:', e);
+  }
+  showMenu.value = false;
+}
 </script>
 
 <template>
@@ -357,6 +370,24 @@ const dueLabel = computed(() => {
                 <button class="menu-tag-add" @click="addMenuTag">+</button>
               </div>
             </div>
+            <!-- 插件菜单项（task-context） -->
+            <template v-if="pluginMenuItems.length > 0">
+              <div class="menu-divider"></div>
+              <div
+                v-for="reg in pluginMenuItems"
+                :key="reg.id"
+                class="menu-item plugin-menu-item"
+                :title="reg.pluginId"
+                @click="handlePluginMenuAction(reg.item.action)"
+              >
+                <span class="plugin-menu-label">
+                  <!-- 插件提供的 SVG 图标 -->
+                  <span v-if="reg.item.icon" class="plugin-menu-icon" v-html="reg.item.icon"></span>
+                  {{ reg.item.label }}
+                </span>
+                <span class="plugin-menu-badge">{{ reg.pluginId }}</span>
+              </div>
+            </template>
           </div>
         </Teleport>
       </div>
@@ -855,5 +886,38 @@ const dueLabel = computed(() => {
     0% 100%,
     0% 3px
   );
+}
+
+/* ── 插件菜单项 ────────────────────────── */
+.plugin-menu-item {
+  position: relative;
+}
+
+.plugin-menu-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.plugin-menu-icon {
+  display: inline-flex;
+  align-items: center;
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.plugin-menu-icon :deep(svg) {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  fill: none;
+}
+
+.plugin-menu-badge {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--text-disabled);
+  letter-spacing: 0.5px;
 }
 </style>

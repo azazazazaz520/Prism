@@ -4,6 +4,7 @@
     windows_subsystem = "windows"
 )]
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
@@ -34,6 +35,8 @@ pub struct AppState {
     pub(crate) data: Mutex<store::DataStore>,
     pub(crate) config: Mutex<store::ConfigStore>,
     pub(crate) sync: Mutex<store::SyncStore>,
+    /// 插件模块源码临时存储，key = token，激活后立即消费
+    pub(crate) plugin_modules: Mutex<HashMap<String, String>>,
 }
 
 impl AppState {
@@ -172,11 +175,14 @@ pub fn run() {
             data: Mutex::new(data),
             config: Mutex::new(config),
             sync: Mutex::new(sync),
+            plugin_modules: Mutex::new(HashMap::new()),
         })
         .manage(token_registry)
-        .register_asynchronous_uri_scheme_protocol("prism-api", move |_ctx, request, responder| {
+        .register_asynchronous_uri_scheme_protocol("prism-api", move |ctx, request, responder| {
             let registry = token_registry_clone.clone();
+            let app_handle = ctx.app_handle().clone();
             tauri::async_runtime::spawn(async move {
+                let state = app_handle.state::<AppState>();
                 let uri = request.uri().to_string();
                 // 解析 prism-api://localhost/api.js?pluginId=X&token=Y
                 // 提取模块名（路径部分）和查询参数
@@ -195,6 +201,32 @@ pub fn run() {
 
                 let plugin_id = params.get("pluginId").cloned().unwrap_or_default();
                 let token = params.get("token").cloned().unwrap_or_default();
+
+                // 插件主模块端点：从内存中取出存储的源码并返回
+                if module_name == "module" {
+                    let modules = state.plugin_modules.lock().unwrap();
+                    let source = modules.get(&token).cloned();
+                    drop(modules);
+                    match source {
+                        Some(body) => {
+                            // 一次性消费：取出后立即删除
+                            state.plugin_modules.lock().unwrap().remove(&token);
+                            let response = tauri::http::Response::builder()
+                                .header("Content-Type", "application/javascript")
+                                .body(body.as_bytes().to_vec())
+                                .unwrap();
+                            responder.respond(response);
+                        }
+                        None => {
+                            let response = tauri::http::Response::builder()
+                                .status(404)
+                                .body(b"// Error: module not found or token expired".to_vec())
+                                .unwrap();
+                            responder.respond(response);
+                        }
+                    }
+                    return;
+                }
 
                 let result =
                     plugin_protocol::handle_api_request(&registry, module_name, &plugin_id, &token);
@@ -295,6 +327,7 @@ pub fn run() {
             commands::plugins::plugin_network_fetch,
             commands::plugins::scan_scripts,
             commands::plugins::read_script_content,
+            commands::plugins::register_plugin_module,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

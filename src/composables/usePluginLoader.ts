@@ -3,19 +3,17 @@ import {
   computed,
   h,
   defineComponent,
+  createApp,
   onMounted,
   onUnmounted,
   watch,
   nextTick,
   shallowRef,
-  createApp,
 } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { PluginManifest, PluginDiagnostics, PluginContext } from '../types';
 import { validateManifest, checkEngines, PRISM_VERSION } from './usePluginManifest';
 import { parseModule } from '../plugin-api/module-resolver';
-import { createPluginContext } from '../plugin-api/plugin-context';
-import { buildCapability } from '../plugin-api/capability-builder';
 import { createPluginContext } from '../plugin-api/plugin-context';
 
 // ═══════════════════════════════════════════════════════════════
@@ -39,6 +37,10 @@ interface PluginConfig {
   permissions: string[];
 }
 
+// ═══════════════════════════════════════════════════════════════
+//  全局单例
+// ═══════════════════════════════════════════════════════════════
+
 const pluginEntries = ref<Map<string, PluginEntry>>(new Map());
 let loaded = false;
 
@@ -52,6 +54,94 @@ function bumpReactivity() {
     newMap.set(id, { ...entry });
   }
   pluginEntries.value = newMap;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  模块作用域构建
+// ═══════════════════════════════════════════════════════════════
+
+/** 为 new Function() 执行构建注入变量 */
+function buildScope(pluginId: string, ctx: PluginContext, deps: string[]): Record<string, any> {
+  const scope: Record<string, any> = {};
+
+  for (const dep of deps) {
+    switch (dep) {
+      case '__vue__':
+        scope.__vue__ = {
+          ref,
+          computed,
+          h,
+          defineComponent,
+          onMounted,
+          onUnmounted,
+          watch,
+          nextTick,
+          shallowRef,
+        };
+        break;
+      case '__prism_api__':
+        scope.__prism_api__ = { api: buildApiStub(pluginId) };
+        break;
+      case '__prism_commands__':
+        scope.__prism_commands__ = { commands: ctx.commands };
+        break;
+      case '__prism_tasks__':
+        scope.__prism_tasks__ = { tasks: ctx.tasks };
+        break;
+      case '__prism_network__':
+        scope.__prism_network__ = { network: ctx.network };
+        break;
+    }
+  }
+
+  return scope;
+}
+
+function buildApiStub(pluginId: string) {
+  return {
+    ui: {
+      notice(message: string, level: string = 'info') {
+        const prefix = `[${pluginId}]`;
+        (console as any)[level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log'](
+          prefix,
+          message,
+        );
+      },
+    },
+    storage: {
+      async get<T = unknown>(key: string): Promise<T | null> {
+        try {
+          return JSON.parse(localStorage.getItem(`plugin:${pluginId}:${key}`) || 'null') as T;
+        } catch {
+          return null;
+        }
+      },
+      async set(key: string, value: unknown): Promise<void> {
+        localStorage.setItem(`plugin:${pluginId}:${key}`, JSON.stringify(value));
+      },
+      async delete(key: string): Promise<void> {
+        localStorage.removeItem(`plugin:${pluginId}:${key}`);
+      },
+      async keys(): Promise<string[]> {
+        const prefix = `plugin:${pluginId}:`;
+        const result: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k?.startsWith(prefix)) result.push(k.slice(prefix.length));
+        }
+        return result;
+      },
+    },
+    diagnostics: {
+      log(level: string, msg: string) {
+        const prefix = `[diag:${pluginId}]`;
+        (console as any)[level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log'](
+          prefix,
+          msg,
+        );
+      },
+    },
+  };
 }
 
 export function usePluginLoader() {
@@ -153,14 +243,13 @@ export function usePluginLoader() {
     let entry = pluginEntries.value.get(pluginId)!;
 
     try {
-      const token = crypto.randomUUID();
-
       const mainPath = entry.manifest.main;
       const source = await invoke<string>('read_plugin_file', {
         pluginId,
         filePath: mainPath,
       });
 
+      const { body, deps } = parseModule(source);
       const permissions = entry.manifest.permissions ?? [];
       const ctx = createPluginContext(pluginId, permissions, {
         ref,
@@ -171,8 +260,6 @@ export function usePluginLoader() {
         onUnmounted,
       });
 
-      const { body, deps } = parseModule(source);
-
       // 构建作用域对象，注入插件依赖
       const scope = buildScope(pluginId, ctx, deps);
       const scopeKeys = Object.keys(scope);
@@ -181,13 +268,12 @@ export function usePluginLoader() {
       // 通过 new Function 执行插件代码，获取 activate/deactivate
       const fnBody = `${body}\nreturn { activate: typeof activate !== 'undefined' ? activate : undefined, deactivate: typeof deactivate !== 'undefined' ? deactivate : undefined };`;
       const fn = new Function(...scopeKeys, fnBody);
-      const module = fn(...scopeValues) as {
-        activate?: Function;
-        deactivate?: Function;
-      };
+      const module = fn(...scopeValues) as { activate?: Function; deactivate?: Function };
+
       if (typeof module.activate === 'function') {
         await module.activate(ctx);
       } else if (typeof module.deactivate === 'function') {
+        // 仅有 deactivate 无 activate → 视为异常
         throw new Error(`[${pluginId}] 未导出 activate 函数`);
       } else {
         throw new Error(`[${pluginId}] 未导出 activate 函数`);

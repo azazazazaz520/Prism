@@ -570,3 +570,34 @@ fn parse_script_header(content: &str) -> ScriptMeta {
         permissions,
     }
 }
+
+// ═══════════════════════════════════════════════════════════════
+//  prism-api 模块加载
+// ═══════════════════════════════════════════════════════════════
+
+/// 将插件主模块源码注册到内存中，返回 URL 供 import() 加载。
+/// token 用于一次性安全校验，protocol handler 响应后即销。
+#[tauri::command]
+pub fn register_plugin_module(
+    state: tauri::State<AppState>,
+    plugin_id: String,
+    token: String,
+    source: String,
+) -> Result<String, String> {
+    let mut modules = state.plugin_modules.lock().unwrap();
+    modules.insert(token.clone(), source);
+    Ok(format!(
+        "prism-api://localhost/module.js?pluginId={}&token={}",
+        urlencoding(&plugin_id),
+        urlencoding(&token)
+    ))
+}
+
+fn urlencoding(s: &str) -> String {
+    // 简单的手动 URL 编码，避免引入额外依赖
+    s.replace('%', "%25")
+        .replace(' ', "%20")
+        .replace('&', "%26")
+        .replace('=', "%3D")
+        .replace('?', "%3F")
+}

@@ -84,6 +84,15 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
+      - name: Inject version from tag
+        shell: pwsh
+        run: |
+          $ver = "${{ env.VERSION }}"
+          (Get-Content src-tauri/Cargo.toml) -replace '^version = ".*"', "version = `"$ver`"" | Set-Content src-tauri/Cargo.toml
+          (Get-Content src-tauri/tauri.conf.json) -replace '"version": ".*"', "`"version`": `"$ver`"" | Set-Content src-tauri/tauri.conf.json
+          (Get-Content package.json) -replace '"version": ".*"', "`"version`": `"$ver`"" | Set-Content package.json
+          Write-Host "Version injected: $ver"
+
       - name: Build Tauri app (NSIS installer)
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}

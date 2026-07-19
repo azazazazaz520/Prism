@@ -272,7 +272,6 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
           <VendorList />
         </div>
 
-        <!-- TODO: 默认模型选择器——当前仅展示占位文本 -->
         <!-- 同步 -->
         <div v-else-if="activeSub === 'sync'" class="sub-page">
           <SyncSetup />

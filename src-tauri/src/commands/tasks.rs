@@ -32,7 +32,7 @@ pub fn get_daily_completions(state: tauri::State<AppState>, date: String) -> Vec
     state.read_data(|d| task_service::daily_completions(d, &date))
 }
 
-/// 跨天重置每日任务的 completed 状态，返回被修改的任务快照供前端同步到 Supabase
+/// 跨天重置每日任务的 completed 状态，返回被修改的任务快照供前端推送到远端同步后端
 #[tauri::command]
 pub fn reset_daily_tasks(
     state: tauri::State<AppState>,
@@ -120,8 +120,9 @@ pub fn sync_remote_daily_completions(
     })
 }
 
-/// 将远端拉回的任务合并到本地 data.json（LWW），防止离线重启后僵尸任务复活。
-/// 仅覆盖 updated_at 不低于本地的远端任务；本地未同步的新任务不受影响。
+/// 将远端拉回的任务合并到本地 data.json（LWW 策略）。
+/// 仅覆盖 updated_at 不低于本地的远端任务，防止离线重启后已同步删除的远端任务意外恢复。
+/// 本地未同步的新任务不受影响。
 #[tauri::command]
 pub fn sync_local_tasks(
     state: tauri::State<AppState>,

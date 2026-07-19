@@ -5,6 +5,7 @@ use std::sync::Mutex;
 //  Token 注册表（一次性，3s TTL）
 // ═══════════════════════════════════════════════════════════════
 
+/// 一次性安全令牌条目，3 秒 TTL，用于插件身份验证。
 pub(crate) struct TokenEntry {
     pub plugin_id: String,
     #[allow(dead_code)]
@@ -12,6 +13,7 @@ pub(crate) struct TokenEntry {
     pub created_at: std::time::Instant,
 }
 
+/// 一次性令牌注册表，线程安全，支持注册、消费、主动注销。
 pub struct TokenRegistry {
     tokens: Mutex<HashMap<String, TokenEntry>>,
 }
@@ -24,6 +26,7 @@ impl TokenRegistry {
     }
 
     /// 注册一个一次性 token（3s TTL），返回 token 字符串
+    /// 注册一次性令牌（3s TTL），当前预留供未来 API 使用。
     #[allow(dead_code)]
     pub fn register(&self, plugin_id: &str, permissions: &[String]) -> String {
         let token = uuid::Uuid::new_v4().to_string();
@@ -57,6 +60,7 @@ impl TokenRegistry {
     }
 
     /// 主动注销 token
+    /// 主动注销令牌，当前预留供未来 API 使用。
     #[allow(dead_code)]
     pub fn revoke(&self, token: &str) {
         let mut map = self.tokens.lock().unwrap();

@@ -14,14 +14,17 @@ pub fn get_workspace_dir() -> PathBuf {
     path
 }
 
+/// 获取任务数据文件路径（data.json）
 pub fn get_data_path() -> PathBuf {
     get_workspace_dir().join("data.json")
 }
 
+/// 获取同步状态文件路径（sync.json）
 pub fn get_sync_path() -> PathBuf {
     get_workspace_dir().join("sync.json")
 }
 
+/// 获取应用配置文件路径（config.json）
 pub fn get_config_path() -> PathBuf {
     get_workspace_dir().join("config.json")
 }
@@ -81,6 +84,7 @@ pub fn ensure_workspace() {
 //  JSON 持久化
 // ═══════════════════════════════════════════════════════════════
 
+/// 从磁盘加载任务数据，文件不存在或解析失败时返回默认空数据
 pub fn load_data() -> DataStore {
     let path = get_data_path();
     match fs::read_to_string(&path) {
@@ -89,12 +93,14 @@ pub fn load_data() -> DataStore {
     }
 }
 
+/// 将任务数据序列化写入磁盘
 pub fn save_data(store: &DataStore) -> Result<(), String> {
     let path = get_data_path();
     let content = serde_json::to_string_pretty(store).map_err(|e| e.to_string())?;
     fs::write(&path, content).map_err(|e| e.to_string())
 }
 
+/// 从磁盘加载应用配置，文件不存在或解析失败时返回默认配置
 pub fn load_config() -> ConfigStore {
     let path = get_config_path();
     match fs::read_to_string(&path) {
@@ -103,12 +109,14 @@ pub fn load_config() -> ConfigStore {
     }
 }
 
+/// 将应用配置序列化写入磁盘
 pub fn save_config(store: &ConfigStore) -> Result<(), String> {
     let path = get_config_path();
     let content = serde_json::to_string_pretty(store).map_err(|e| e.to_string())?;
     fs::write(&path, content).map_err(|e| e.to_string())
 }
 
+/// 从磁盘加载同步状态，文件不存在或解析失败时返回默认空状态
 pub fn load_sync() -> SyncStore {
     let path = get_sync_path();
     match fs::read_to_string(&path) {
@@ -117,6 +125,7 @@ pub fn load_sync() -> SyncStore {
     }
 }
 
+/// 将同步状态序列化写入磁盘
 pub fn save_sync(store: &SyncStore) -> Result<(), String> {
     let path = get_sync_path();
     let content = serde_json::to_string_pretty(store).map_err(|e| e.to_string())?;

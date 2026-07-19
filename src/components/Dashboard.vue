@@ -1,4 +1,12 @@
 <script setup lang="ts">
+/**
+ * Dashboard 仪表盘组件。
+ *
+ * 提供可拖拽重排的 Widget 网格布局。用户可通过拖拽 Widget 标题栏
+ * 调整各模块在网格中的位置，放置后自动持久化布局。支持添加/移除
+ * Widget、双列自适应网格、拖拽时实时重排（SpringBoard 算法）以及
+ * 惯性滑动落点。
+ */
 import { ref, computed, provide, onUnmounted } from 'vue';
 import { useDashboard } from '../composables/useDashboard';
 import { useTaskStore } from '../composables/useTaskStore';
@@ -92,6 +100,10 @@ function linearIdx(x: number, y: number): number {
   return y * cols.value + x;
 }
 
+/** SpringBoard 重排算法：计算当前帧所有 Widget 在网格中的渲染位置。
+ *  拖拽进行中时，被拖拽 Widget 不参与排列，其目标位置留空；
+ *  其余 Widget 按线性索引顺序（从上到下、从左到右）逐格填充。
+ *  全宽 Widget（w=2）仅当第 0 列未被占用时放入。 */
 const renderSlots = computed<RenderSlot[]>(() => {
   const widgets = enabledWidgets();
   if (widgets.length === 0) return [];
@@ -155,6 +167,9 @@ const renderSlots = computed<RenderSlot[]>(() => {
 //  拖拽事件
 // ══════════════════════════════════════════════════════
 
+/** 开始拖拽 Widget。
+ *  记录拖拽起始偏移、Widget 尺寸与当前位置，清除惯性动画状态，
+ *  并播放拾起放大弹跳动画。通过 pointer capture 捕获后续指针事件。 */
 function onDragStart(e: PointerEvent, widgetId: string) {
   if ((e.target as HTMLElement).closest('.w-close')) return;
 
@@ -190,6 +205,9 @@ function onDragStart(e: PointerEvent, widgetId: string) {
   e.preventDefault();
 }
 
+/** 拖拽移动处理。
+ *  追踪指针速度（供惯性计算用），将指针相对网格的位置映射为网格坐标，
+ *  超出边界时施加阻尼系数实现弹性阻力效果，实时更新落点指示器。 */
 function onDragMove(e: PointerEvent) {
   if (!dragWidgetId.value || !gridRef.value) return;
 
@@ -219,7 +237,9 @@ function onDragMove(e: PointerEvent) {
   dragTarget.value = { x: targetX, y: targetY };
 }
 
-/** 提交布局：被拖 widget 放入 target，其余从 renderSlots 取位置 */
+/** 提交拖拽布局。
+ *  将被拖拽 Widget 放入目标位置，其余 Widget 从 renderSlots
+ *  当前计算的位置取得，逐一比对后更新，最终持久化到本地布局存储。 */
 function finalizeDrag() {
   if (!dragWidgetId.value || !dragWidget.value) return;
 
@@ -236,6 +256,9 @@ function finalizeDrag() {
   dragWidgetId.value = null;
 }
 
+/** 结束拖拽。
+ *  根据拖拽结束时的指针速度决定行为：速度超过阈值时触发惯性滑动
+ *  （逐步减速直至停止后提交布局），否则直接提交当前落点。 */
 function onDragEnd() {
   if (!dragWidgetId.value || !dragWidget.value) {
     dragWidgetId.value = null;
@@ -258,6 +281,8 @@ function onDragEnd() {
     let curVy = vy;
     const DECEL = 0.88;
 
+    /** 惯性滑动单步：按衰减系数逐步降低速度，更新虚拟像素坐标并映射
+     *  为网格位置。当速度降至阈值以下时四舍五入到最近网格并提交布局。 */
     function inertiaStep() {
       curVx *= DECEL;
       curVy *= DECEL;

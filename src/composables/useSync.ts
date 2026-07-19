@@ -133,9 +133,7 @@ export function useSync() {
       if (error) throw error;
       lastSyncAt.value = new Date().toISOString();
       syncStatus.value = 'idle';
-      // 成功推送后消费离线队列，确保离线期间积累的操作被同步。
-      // 这同时修复了 Tauri webview 中 navigator.onLine 不可靠、
-      // online 事件不触发导致队列永远卡住的问题。
+      // 推送成功后消费离线队列
       flushOfflineQueue();
     } catch (e) {
       console.error('同步任务失败:', e);
@@ -150,7 +148,7 @@ export function useSync() {
         },
       });
       persistOfflineQueue(offlineQueue);
-      // 延迟重试：Tauri webview 中 online 事件可能不触发，定期自愈
+      // 延迟重试，定期自愈
       scheduleRetry(() => flushOfflineQueue());
     }
   }
@@ -379,7 +377,7 @@ export function useSync() {
   /**
    * 刷新离线队列：网络恢复后将暂存的操作批量推送到 Supabase。
    * 采用「先清空再逐条推送」策略：清空后若某条失败则重新入队。
-   * 若队列未清空，自动调度重试，覆盖 Tauri webview 中 online 事件不可靠的场景。
+   * 若队列未清空，自动调度重试。
    */
   async function flushOfflineQueue(): Promise<void> {
     if (offlineQueue.length === 0) return;

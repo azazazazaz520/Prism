@@ -2,7 +2,9 @@ use crate::store;
 use crate::AppState;
 use tauri::{Emitter, LogicalSize, Manager};
 
-// ── 窗口管理 ──────────────────────────────
+// ═══════════════════════════════════════════
+//  窗口管理
+// ═══════════════════════════════════════════
 
 /// 切换到悬浮小窗模式（隐藏主窗口）
 #[tauri::command]
@@ -75,7 +77,9 @@ pub fn hide_selector_window(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-// ── 提醒设置 ──────────────────────────────
+// ═══════════════════════════════════════════
+//  提醒设置
+// ═══════════════════════════════════════════
 
 /// 设置任务到期提醒的提前分钟数（0 表示关闭提醒）
 #[tauri::command]
@@ -90,7 +94,9 @@ pub fn get_reminder_minutes(state: tauri::State<AppState>) -> u32 {
     state.with_config(|config| config.reminder_minutes)
 }
 
-// ── AI 设置查询 ──────────────────────────────
+// ═══════════════════════════════════════════
+//  AI 设置查询
+// ═══════════════════════════════════════════
 
 /// 获取 AI 配置状态：激活供应商 ID + 是否有启用的供应商
 #[tauri::command]
@@ -103,7 +109,9 @@ pub fn get_ai_settings_all(state: tauri::State<AppState>) -> serde_json::Value {
     })
 }
 
-// ── 供应商 CRUD ──────────────────────────────
+// ═══════════════════════════════════════════
+//  供应商 CRUD
+// ═══════════════════════════════════════════
 
 #[tauri::command]
 pub fn get_vendors(state: tauri::State<AppState>) -> Vec<store::Vendor> {
@@ -148,7 +156,9 @@ pub fn set_active_vendor(state: tauri::State<AppState>, id: Option<String>) -> R
     })
 }
 
-// ── 主题 ──────────────────────────────
+// ═══════════════════════════════════════════
+//  主题
+// ═══════════════════════════════════════════
 
 #[tauri::command]
 pub fn get_theme(state: tauri::State<AppState>) -> String {
@@ -170,7 +180,9 @@ pub fn set_theme(
     Ok(())
 }
 
-// ── 模块配置 ──────────────────────────────
+// ═══════════════════════════════════════════
+//  模块配置
+// ═══════════════════════════════════════════
 
 #[tauri::command]
 pub fn get_module_enabled(

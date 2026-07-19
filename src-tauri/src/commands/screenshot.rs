@@ -23,6 +23,8 @@ pub async fn crop_screenshot(
     Ok(())
 }
 
+/// Windows 区域截图：截取指定矩形区域的屏幕像素，返回 PNG 字节。
+/// 使用 GDI BitBlt 捕获屏幕，再通过 GDI+ 编码为 PNG。
 #[cfg(windows)]
 fn capture_screen_region(x: i32, y: i32, w: i32, h: i32) -> Result<Vec<u8>, String> {
     use windows::Win32::Graphics::Gdi::*;
@@ -54,6 +56,8 @@ fn capture_screen_region(x: i32, y: i32, w: i32, h: i32) -> Result<Vec<u8>, Stri
     }
 }
 
+/// 将 GDI 位图（HBITMAP）编码为 PNG 字节流。
+/// 通过 GDI+ Bitmap::FromHBITMAP 转换 → CLSID PNG encoder 编码。
 #[cfg(windows)]
 fn bitmap_to_png(
     hbitmap: windows::Win32::Graphics::Gdi::HBITMAP,

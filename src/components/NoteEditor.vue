@@ -1,4 +1,12 @@
 <script setup lang="ts">
+/**
+ * 笔记编辑器组件。
+ *
+ * 提供文件树浏览与 Markdown 文档编辑功能。左侧为可展开/折叠的文件树
+ * （支持新建、重命名、删除文件及文件夹），右侧为基于 CodeMirror 6 的
+ * Markdown 编辑器，支持编辑/并排/预览三种视图模式。编辑内容通过 500ms
+ * 防抖自动保存至本地文件系统，同时支持 Ctrl+S 手动保存。
+ */
 import { ref, watch, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -148,6 +156,9 @@ const confirmTitle = ref('');
 const confirmMessage = ref('');
 let confirmCallback: (() => void) | null = null;
 
+/** 显示确认对话框（如删除确认），返回 Promise 表示用户选择。
+ *  点击「确认」时 resolve(true)；取消或关闭时 resolve(false)
+ *  通过 handleConfirmCancel 的 confirmCallback 置空实现。 */
 function showConfirm(title: string, message: string): Promise<boolean> {
   return new Promise((resolve) => {
     confirmTitle.value = title;
@@ -231,6 +242,9 @@ async function openFile(path: string) {
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
+/** 监听内容变更，500ms 防抖后自动保存到本地文件系统。
+ *  每次变更重置定时器，避免高频写入；保存期间设置 saving 标记
+ *  以在底部状态栏显示「保存中...」提示。 */
 watch(content, (val) => {
   isDirty.value = true;
   if (!selectedPath.value) return;
@@ -306,7 +320,8 @@ function toggleExpand(dirPath: string) {
   expanded.value = next;
 }
 
-/** 校验文件/文件夹名称 */
+/** 校验文件/文件夹名称是否合法。
+ *  @returns 合法的名称返回 null，否则返回错误提示字符串。 */
 const INVALID_NAME_CHARS = /[<>:"/\\|?*]/;
 
 function validateName(name: string): string | null {
@@ -322,6 +337,9 @@ function validateName(name: string): string | null {
   return null;
 }
 
+/** 在指定目录下创建新的 Markdown 文件（.md）。
+ *  弹出输入对话框让用户输入文件名（不含扩展名），自动补全 .md 后缀，
+ *  校验名称合法性后通过后端写入空文件，刷新文件树并自动打开新文件。 */
 async function createFile(parentDir: string) {
   const name = await showDialog('新建文件', '文件名称（不含扩展名）：', '例如：我的笔记', '');
   if (!name) return;
@@ -342,6 +360,9 @@ async function createFile(parentDir: string) {
   }
 }
 
+/** 在指定目录下创建新文件夹。
+ *  弹出输入对话框获取文件夹名称，校验合法性后通过后端创建，
+ *  刷新文件树并自动展开新建的文件夹。 */
 async function createFolder(parentDir: string) {
   const name = await showDialog('新建文件夹', '文件夹名称：', '例如：工作文档', '');
   if (!name) return;
@@ -363,6 +384,9 @@ async function createFolder(parentDir: string) {
   }
 }
 
+/** 重命名文件或文件夹。
+ *  弹出输入对话框获取新名称，校验合法后调用后端重命名。
+ *  若当前选中的正是被重命名的条目，则清除选中状态与编辑内容。 */
 async function renameEntry(path: string, isDir: boolean) {
   const oldName = path.split('/').pop() || '';
   const newName = await showDialog('重命名', '新名称：', '', oldName);
@@ -385,6 +409,9 @@ async function renameEntry(path: string, isDir: boolean) {
   }
 }
 
+/** 删除文件或文件夹（移入系统回收站）。
+ *  从文件树中查找条目以区分文件/文件夹类型，弹窗确认后调用后端删除。
+ *  若删除的是当前选中的条目则清除编辑状态，完成后显示状态提示。 */
 async function deleteEntry(path: string) {
   const name = path.split('/').pop() || '';
   // 判断是否为文件夹（从 tree 中查找）

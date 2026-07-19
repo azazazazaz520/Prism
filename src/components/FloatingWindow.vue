@@ -6,6 +6,11 @@ import { listen } from '@tauri-apps/api/event';
 import { useTaskStore } from '../composables/useTaskStore';
 import { initTheme } from '../composables/useTheme';
 
+/**
+ * 悬浮窗组件 — 无装饰透明窗口，置顶显示任务卡片轮播。
+ * 支持拖拽移动、透明度调节、展开/收起双态切换。
+ */
+
 const { tasks, loadAll, refreshTasks } = useTaskStore();
 
 const currentIndex = ref(0);
@@ -71,6 +76,7 @@ async function loadData() {
 
 // ── 轮播 ──────────────────────────────
 
+/** 切换到下一张任务卡片 */
 function nextCard() {
   const list = incompleteTasks.value;
   if (list.length === 0) return;
@@ -78,6 +84,7 @@ function nextCard() {
   resetTimer();
 }
 
+/** 切换到上一张任务卡片 */
 function prevCard() {
   const list = incompleteTasks.value;
   if (list.length === 0) return;
@@ -85,11 +92,13 @@ function prevCard() {
   resetTimer();
 }
 
+/** 跳转到指定索引的任务卡片 */
 function goToCard(i: number) {
   currentIndex.value = i;
   resetTimer();
 }
 
+/** 调节悬浮窗透明度，参数为 0-100 的百分比值 */
 function setOpacity(val: number) {
   opacity.value = val / 100;
 }
@@ -168,6 +177,7 @@ const isDragging = ref(false);
 let dragStartY = 0;
 let scrollStartY = 0;
 
+/** 指针按下时记录起始位置与滚动偏移，开始拖拽手势 */
 function onPointerDown(e: PointerEvent) {
   const target = e.target as HTMLElement;
   if (target.closest('button, input, select, .topbar, .panel')) return;
@@ -178,6 +188,7 @@ function onPointerDown(e: PointerEvent) {
   }
 }
 
+/** 指针移动时根据拖拽偏移量同步滚动内容区域 */
 function onPointerMove(e: PointerEvent) {
   if (!isDragging.value) return;
   const deltaY = dragStartY - e.clientY;
@@ -186,6 +197,7 @@ function onPointerMove(e: PointerEvent) {
   }
 }
 
+/** 指针释放时结束拖拽状态 */
 function onPointerUp() {
   isDragging.value = false;
 }

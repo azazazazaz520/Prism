@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import { watch, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { marked } from 'marked';
 import type { ReleaseInfo } from '../types';
 
-defineProps<{
+const props = defineProps<{
   visible: boolean;
   release: ReleaseInfo | null;
 }>();
@@ -12,12 +13,27 @@ const emit = defineEmits<{
   close: [];
 }>();
 
-function handleKeydown(e: KeyboardEvent) {
+function onKeyDown(e: KeyboardEvent) {
   if (e.key === 'Escape') {
     e.preventDefault();
     emit('close');
   }
 }
+
+watch(
+  () => props.visible,
+  (v) => {
+    if (v) {
+      document.addEventListener('keydown', onKeyDown);
+    } else {
+      document.removeEventListener('keydown', onKeyDown);
+    }
+  },
+);
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', onKeyDown);
+});
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -27,17 +43,17 @@ function formatDate(iso: string): string {
 function openDownload(url: string) {
   invoke('open_url', { url });
 }
+
+/** 剥离原始 HTML 标签，防止 XSS */
+function sanitizeMarkdown(text: string): string {
+  return text.replace(/<[^>]*>/g, '');
+}
 </script>
 
 <template>
   <Teleport to="body">
     <Transition name="dialog-fade">
-      <div
-        v-if="visible && release"
-        class="dialog-overlay"
-        @click.self="emit('close')"
-        @keydown="handleKeydown"
-      >
+      <div v-if="visible && release" class="dialog-overlay" @click.self="emit('close')">
         <div class="dialog-container">
           <div class="dialog-header">
             <h3 class="dialog-title">发现新版本</h3>
@@ -45,7 +61,7 @@ function openDownload(url: string) {
           <div class="dialog-body">
             <p class="update-version">{{ release.name || release.tag_name }}</p>
             <p class="update-date">{{ formatDate(release.published_at) }}</p>
-            <div class="update-body" v-html="marked.parse(release.body)"></div>
+            <div class="update-body" v-html="marked.parse(sanitizeMarkdown(release.body))"></div>
           </div>
           <div class="dialog-footer">
             <button class="dialog-btn dialog-btn-cancel" @click="emit('close')">以后再说</button>

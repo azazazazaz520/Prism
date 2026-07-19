@@ -89,8 +89,8 @@ jobs:
         run: |
           $ver = "${{ env.VERSION }}"
           (Get-Content src-tauri/Cargo.toml) -replace '^version = ".*"', "version = `"$ver`"" | Set-Content src-tauri/Cargo.toml
-          (Get-Content src-tauri/tauri.conf.json) -replace '"version": ".*"', "`"version`": `"$ver`"" | Set-Content src-tauri/tauri.conf.json
-          (Get-Content package.json) -replace '"version": ".*"', "`"version`": `"$ver`"" | Set-Content package.json
+          (Get-Content src-tauri/tauri.conf.json) -replace '^  "version": ".*"', "  `"version`": `"$ver`"" | Set-Content src-tauri/tauri.conf.json
+          (Get-Content package.json) -replace '^  "version": ".*"', "  `"version`": `"$ver`"" | Set-Content package.json
           Write-Host "Version injected: $ver"
 
       - name: Build Tauri app (NSIS installer)

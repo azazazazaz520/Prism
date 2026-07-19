@@ -141,6 +141,13 @@ function openUrl(url: string) {
 
 async function checkUpdate() {
   if (isCheckingUpdate.value) return;
+  if (!appVersion.value) {
+    updateTip.value = '版本信息未就绪';
+    _updateTipTimer = setTimeout(() => {
+      updateTip.value = '';
+    }, 2000);
+    return;
+  }
 
   if (_updateTipTimer) clearTimeout(_updateTipTimer);
   updateTip.value = '';

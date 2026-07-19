@@ -18,6 +18,10 @@ import PromptEditor from './PromptEditor.vue';
 import PluginManager from './PluginManager.vue';
 import PluginViewHost from './PluginViewHost.vue';
 import ScriptManager from './ScriptManager.vue';
+import UpdateDialog from './UpdateDialog.vue';
+import type { ReleaseInfo } from '../types';
+import { getVersion } from '@tauri-apps/api/app';
+import { compareVersions } from 'compare-versions';
 
 const { theme, setTheme } = useTheme();
 const { allModules, isEnabled, toggle: toggleModule } = useModuleRegistry();
@@ -109,6 +113,91 @@ async function saveReminder() {
   }
 }
 
+// ── 更新检测 ──────────────────────────────
+
+const appVersion = ref('');
+const showUpdateDialog = ref(false);
+const latestRelease = ref<ReleaseInfo | null>(null);
+const isCheckingUpdate = ref(false);
+const updateTip = ref('');
+let _updateTipTimer: ReturnType<typeof setTimeout> | null = null;
+
+let _lastCheckResult: 'latest' | 'error' | null = null;
+let _lastCheckTime = 0;
+const CHECK_CACHE_MS = 5 * 60 * 1000;
+
+onMounted(async () => {
+  try {
+    appVersion.value = await getVersion();
+  } catch {
+    appVersion.value = '0.1.0';
+  }
+});
+
+/** 用系统浏览器打开外部链接 */
+function openUrl(url: string) {
+  invoke('open_url', { url });
+}
+
+async function checkUpdate() {
+  if (isCheckingUpdate.value) return;
+  if (!appVersion.value) {
+    updateTip.value = '版本信息未就绪';
+    _updateTipTimer = setTimeout(() => {
+      updateTip.value = '';
+    }, 2000);
+    return;
+  }
+
+  if (_updateTipTimer) clearTimeout(_updateTipTimer);
+  updateTip.value = '';
+
+  const now = Date.now();
+  if (_lastCheckResult && now - _lastCheckTime < CHECK_CACHE_MS) {
+    if (_lastCheckResult === 'latest') {
+      updateTip.value = '已是最新版本';
+      _updateTipTimer = setTimeout(() => {
+        updateTip.value = '';
+      }, 2000);
+    }
+    return;
+  }
+
+  isCheckingUpdate.value = true;
+
+  try {
+    const resp = await fetch('https://api.github.com/repos/azazazazaz520/Prism/releases/latest');
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+    const release: ReleaseInfo = await resp.json();
+    const remoteVersion = release.tag_name.replace(/^v/, '');
+
+    if (compareVersions(remoteVersion, appVersion.value) > 0) {
+      latestRelease.value = release;
+      showUpdateDialog.value = true;
+      _lastCheckResult = null;
+    } else {
+      updateTip.value = '已是最新版本';
+      _updateTipTimer = setTimeout(() => {
+        updateTip.value = '';
+      }, 2000);
+      _lastCheckResult = 'latest';
+      _lastCheckTime = now;
+    }
+  } catch {
+    updateTip.value = '检查更新失败';
+    _updateTipTimer = setTimeout(() => {
+      updateTip.value = '';
+    }, 2000);
+  } finally {
+    isCheckingUpdate.value = false;
+  }
+}
+
+onUnmounted(() => {
+  if (_updateTipTimer) clearTimeout(_updateTipTimer);
+});
+
 const subModules: { key: SettingsSubModule; label: string }[] = [
   { key: 'preferences', label: '偏好设置' },
   { key: 'vendors', label: '供应商' },
@@ -116,6 +205,7 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
   { key: 'sync', label: '跨设备同步' },
   { key: 'plugins', label: '插件' },
   { key: 'scripts', label: '脚本' },
+  { key: 'about', label: '关于' },
 ];
 </script>
 
@@ -175,6 +265,11 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
             <template v-else-if="m.key === 'scripts'">
               <polyline points="16 18 22 12 16 6" />
               <polyline points="8 6 2 12 8 18" />
+            </template>
+            <template v-else-if="m.key === 'about'">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="16" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12.01" y2="8" />
             </template>
             <template v-else>
               <path d="M12 2a4 4 0 0 1 4 4v1h4v14H4V7h4V6a4 4 0 0 1 4-4z" />
@@ -290,8 +385,62 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
         <div v-else-if="activeSub === 'scripts'" class="sub-page sub-page-full">
           <ScriptManager />
         </div>
+
+        <!-- 关于 -->
+        <div v-else-if="activeSub === 'about'" class="sub-page">
+          <div class="settings-group">
+            <div class="group-title">Prism</div>
+            <div class="about-row">
+              <span class="about-label">版本</span>
+              <span class="about-value">{{ appVersion }}</span>
+            </div>
+          </div>
+
+          <div class="settings-group">
+            <div class="group-title">链接</div>
+            <div class="about-row">
+              <span class="about-label">GitHub</span>
+              <button class="about-link" @click="openUrl('https://github.com/azazazazaz520/Prism')">
+                github.com/azazazazaz520/Prism
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  <polyline points="15 3 21 3 21 9" />
+                  <line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="settings-group">
+            <div class="group-title">更新</div>
+            <div class="about-row">
+              <span class="about-label">检查更新</span>
+              <button class="about-btn" :disabled="isCheckingUpdate" @click="checkUpdate">
+                {{ isCheckingUpdate ? '检查中…' : '检查' }}
+              </button>
+            </div>
+            <Transition name="tip-fade">
+              <p v-if="updateTip" class="update-tip">{{ updateTip }}</p>
+            </Transition>
+          </div>
+        </div>
       </div>
     </div>
+
+    <UpdateDialog
+      :visible="showUpdateDialog"
+      :release="latestRelease"
+      @close="showUpdateDialog = false"
+    />
   </div>
 </template>
 
@@ -665,5 +814,107 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
 [data-theme='hud'] .toggle-btn.on,
 [data-theme='hud'] .toggle-btn.on {
   background: var(--accent);
+}
+
+/* ── 关于页 ──────────────────────────── */
+
+.about-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--bg-hover);
+}
+.about-row:last-of-type {
+  border-bottom: none;
+}
+
+.about-label {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+}
+
+.about-value {
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.about-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--text-sm);
+  color: var(--accent);
+  text-decoration: none;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+  transition: opacity var(--transition-fast);
+}
+.about-link:hover {
+  opacity: 0.8;
+}
+
+.about-btn {
+  padding: 4px 14px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.about-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.about-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.update-tip {
+  margin: var(--space-sm) 0 0 0;
+  font-size: var(--text-xs);
+  color: var(--accent);
+  text-align: right;
+}
+
+.tip-fade-enter-active,
+.tip-fade-leave-active {
+  transition: opacity 0.3s;
+}
+.tip-fade-enter-from,
+.tip-fade-leave-to {
+  opacity: 0;
+}
+
+/* HUD 主题适配 */
+[data-theme='hud'] .about-link,
+[data-theme='hud'] .about-link {
+  color: var(--accent-dim);
+}
+
+[data-theme='hud'] .about-btn,
+[data-theme='hud'] .about-btn {
+  border-radius: 0;
+  clip-path: polygon(
+    4px 0%,
+    100% 0%,
+    100% calc(100% - 4px),
+    calc(100% - 4px) 100%,
+    0% 100%,
+    0% 4px
+  );
+  background: var(--bg-secondary);
+  border-color: var(--border-line);
+}
+
+[data-theme='hud'] .update-tip,
+[data-theme='hud'] .update-tip {
+  color: var(--accent-dim);
 }
 </style>

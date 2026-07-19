@@ -270,6 +270,7 @@ pub fn run() {
             // 同步命令
             commands::get_sync_config,
             commands::set_sync_config,
+            commands::open_url,
             // 配置命令 (commands::config)
             commands::config::show_floating_window,
             commands::config::show_main_window,

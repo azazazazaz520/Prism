@@ -85,11 +85,11 @@ export interface VendorPreset {
 export type SettingsSubModule =
   | 'preferences'
   | 'vendors'
-  | 'models'
   | 'sync'
   | 'prompts'
   | 'plugins'
-  | 'scripts';
+  | 'scripts'
+  | 'about';
 
 /** AI 自然语言解析后的结构化任务 */
 export interface ParsedTask {
@@ -311,4 +311,15 @@ export class PluginSessionExpiredError extends Error {
     this.name = 'PluginSessionExpiredError';
     this.pluginId = pluginId;
   }
+}
+
+// ── 更新相关类型 ──────────────────────────────
+
+/** GitHub Release 信息（GET /repos/:owner/:repo/releases/latest 响应子集） */
+export interface ReleaseInfo {
+  tag_name: string;
+  name: string;
+  body: string;
+  html_url: string;
+  published_at: string;
 }

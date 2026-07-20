@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { watch, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import { marked } from 'marked';
 import type { ReleaseInfo } from '../types';
+import { renderMarkdown } from '../composables/useMarkdown';
 
 const props = defineProps<{
   visible: boolean;
@@ -41,12 +41,17 @@ function formatDate(iso: string): string {
 }
 
 function openDownload(url: string) {
+  // 防御性校验：仅允许 http / https 协议
+  if (!/^https?:\/\//i.test(url)) {
+    console.warn('[UpdateDialog] 拒绝打开非 http/https URL:', url);
+    return;
+  }
   invoke('open_url', { url });
 }
 
-/** 剥离原始 HTML 标签，防止 XSS */
-function sanitizeMarkdown(text: string): string {
-  return text.replace(/<[^>]*>/g, '');
+/** 安全渲染 Markdown 发布说明 */
+function formatReleaseBody(body: string): string {
+  return renderMarkdown(body);
 }
 </script>
 
@@ -61,7 +66,7 @@ function sanitizeMarkdown(text: string): string {
           <div class="dialog-body">
             <p class="update-version">{{ release.name || release.tag_name }}</p>
             <p class="update-date">{{ formatDate(release.published_at) }}</p>
-            <div class="update-body" v-html="marked.parse(sanitizeMarkdown(release.body))"></div>
+            <div class="update-body" v-html="formatReleaseBody(release.body)"></div>
           </div>
           <div class="dialog-footer">
             <button class="dialog-btn dialog-btn-cancel" @click="emit('close')">以后再说</button>

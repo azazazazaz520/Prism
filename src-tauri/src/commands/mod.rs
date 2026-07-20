@@ -49,8 +49,13 @@ pub fn set_sync_config(
     })
 }
 
-/// 用系统默认浏览器打开 URL
+/// 用系统默认浏览器打开 URL（仅允许 http / https 协议，防止命令注入）
 #[tauri::command]
 pub fn open_url(url: String) -> Result<(), String> {
-    open::that(&url).map_err(|e| e.to_string())
+    let trimmed = url.trim();
+    let lower = trimmed.to_lowercase();
+    if !lower.starts_with("http://") && !lower.starts_with("https://") {
+        return Err("仅允许 http:// 和 https:// 协议的 URL".into());
+    }
+    open::that(trimmed).map_err(|e| e.to_string())
 }

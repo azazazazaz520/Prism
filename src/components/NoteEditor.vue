@@ -10,7 +10,7 @@
 import { ref, watch, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
-import { marked } from 'marked';
+import { renderMarkdown } from '../composables/useMarkdown';
 import type { FileEntry } from '../types';
 import { getMenuRegistrations, type EditorSelection } from '../plugin-api/menus-impl';
 import InputDialog from './InputDialog.vue';
@@ -63,10 +63,10 @@ const selectedName = computed(() => {
   return selectedPath.value.split('/').pop() || '';
 });
 
-/** 渲染后的 Markdown HTML */
+/** 渲染后的 Markdown HTML（经 DOMPurify 净化，可安全用于 v-html） */
 const renderedHtml = computed(() => {
   if (!content.value) return '';
-  return marked.parse(content.value, { breaks: true }) as string;
+  return renderMarkdown(content.value, { breaks: true });
 });
 
 /** 字数统计（中文字 + 英文单词） */

@@ -1,21 +1,17 @@
 /**
  * 安全的 Markdown → HTML 渲染工具。
  *
- * 对 marked 输出做 DOMPurify 深度净化，防御 XSS 攻击（javascript: 链接、
- * 事件处理器、嵌入脚本等）。调用方可通过 v-html 安全渲染结果。
+ * 先由 marked 解析 Markdown 原始文本，再由 DOMPurify 按标签白名单深度净化
+ * 输出，防御 XSS 攻击（script 标签、事件处理器、javascript: 链接等）。
+ * 净化放在 marked 之后而非之前，避免破坏 Markdown 语法（如自动链接
+ * `<url>`、代码块中的 HTML 示例等）。
  */
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 
-/** 剥离原始 HTML 标签，防止 HTML 注入混入 Markdown */
-export function stripHtml(text: string): string {
-  return text.replace(/<[^>]*>/g, '');
-}
-
 /** 安全渲染 Markdown 文本为净化后的 HTML */
 export function renderMarkdown(text: string, options?: { breaks?: boolean }): string {
-  const withoutTags = stripHtml(text);
-  const raw = marked.parse(withoutTags, options) as string;
+  const raw = marked.parse(text, options) as string;
   return DOMPurify.sanitize(raw, {
     ALLOWED_TAGS: [
       'h1',

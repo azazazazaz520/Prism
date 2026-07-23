@@ -87,3 +87,18 @@ export function mergeLWW(local: Task[], remote: Task[]): Task[] {
 
   return [...merged.values()].filter((t) => !t.is_deleted);
 }
+
+export interface MergeTasksResult {
+  tasks: Task[];
+  changed: boolean;
+}
+
+/** LWW 合并并判断任务列表是否发生实际变化，避免重复同步触发列表重建。 */
+export function mergeTasksLWW(local: Task[], remote: Task[]): MergeTasksResult {
+  const merged = mergeLWW(local, remote);
+  const changed =
+    merged.length !== local.length ||
+    merged.some((task, index) => JSON.stringify(task) !== JSON.stringify(local[index]));
+
+  return { tasks: changed ? merged : local, changed };
+}

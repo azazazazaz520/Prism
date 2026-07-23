@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue';
 import { createClient, type SupabaseClient, type Session, type User } from '@supabase/supabase-js';
+import { withTimeout } from './syncUtils';
 
 /** 全局单例 Supabase 客户端，所有 composable 共享 */
 let supabase: SupabaseClient | null = null;
@@ -9,6 +10,8 @@ const session = ref<Session | null>(null);
 const user = ref<User | null>(null);
 const isLoading = ref(false);
 const error = ref<string | null>(null);
+let authPromise: Promise<void> | null = null;
+let onlineListenerRegistered = false;
 
 /** 获取共享的 Supabase 客户端（懒初始化） */
 export function getSupabaseClient(): SupabaseClient {
@@ -45,14 +48,32 @@ export function useAuth() {
    * 在应用启动时调用一次
    */
   async function initAuth(): Promise<void> {
+    if (authPromise) return authPromise;
+
+    authPromise = initAuthInternal().finally(() => {
+      authPromise = null;
+    });
+    return authPromise;
+  }
+
+  async function initAuthInternal(): Promise<void> {
     isLoading.value = true;
     error.value = null;
 
     try {
       const client = getSupabaseClient();
 
+      if (!onlineListenerRegistered) {
+        window.addEventListener('online', () => {
+          if (!session.value && !isLoading.value) {
+            initAuth();
+          }
+        });
+        onlineListenerRegistered = true;
+      }
+
       // 尝试恢复已有会话
-      const { data: sessionData } = await client.auth.getSession();
+      const { data: sessionData } = await withTimeout(client.auth.getSession());
       if (sessionData.session) {
         session.value = sessionData.session;
         user.value = sessionData.session.user;
@@ -64,7 +85,7 @@ export function useAuth() {
         return;
       }
 
-      const { data, error: signInError } = await client.auth.signInAnonymously();
+      const { data, error: signInError } = await withTimeout(client.auth.signInAnonymously());
       if (signInError) throw signInError;
 
       session.value = data.session;
@@ -74,13 +95,6 @@ export function useAuth() {
       client.auth.onAuthStateChange((_event, newSession) => {
         session.value = newSession;
         user.value = newSession?.user ?? null;
-      });
-
-      // 网络恢复后重试认证（处理离线启动时跳过了匿名登录的情况）
-      window.addEventListener('online', () => {
-        if (!session.value && !isLoading.value) {
-          initAuth();
-        }
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : '匿名登录失败';

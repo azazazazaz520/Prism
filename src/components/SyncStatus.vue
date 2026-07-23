@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { useAuth } from '../composables/useAuth';
 import { useTaskStore } from '../composables/useTaskStore';
 
 const { isLoggedIn } = useAuth();
-const { syncStatus } = useTaskStore();
+const { syncStatus, isSyncing, syncError } = useTaskStore();
 
 const statusLabel: Record<string, string> = {
   idle: '已同步',
@@ -17,12 +18,18 @@ function forceSync() {
   // trigger reload which includes pullAndMerge
   window.dispatchEvent(new CustomEvent('prism:force-sync'));
 }
+
+const displayStatus = computed(() => (isSyncing.value ? 'syncing' : syncStatus.value));
+const displayLabel = computed(() => {
+  if (syncError.value) return '同步失败';
+  return statusLabel[displayStatus.value] || displayStatus.value;
+});
 </script>
 
 <template>
   <div v-if="isLoggedIn" class="sync-status" @click="forceSync">
-    <span class="sync-indicator" :class="syncStatus"></span>
-    <span class="sync-label">{{ statusLabel[syncStatus] || syncStatus }}</span>
+    <span class="sync-indicator" :class="displayStatus"></span>
+    <span class="sync-label">{{ displayLabel }}</span>
   </div>
 </template>
 

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import type { DailyCompletion } from '../types';
 import {
   mergeLWW,
+  mergeTasksLWW,
   dailyCompletionsMap,
   filterByDate,
   filterByTags,
@@ -56,6 +57,33 @@ describe('mergeLWW', () => {
     ];
     const result = mergeLWW(local, remote);
     expect(result).toHaveLength(2);
+  });
+});
+
+describe('mergeTasksLWW', () => {
+  it('识别较新的远程任务变化', () => {
+    const local = [
+      { id: '1', title: '本地', updated_at: '2026-01-01T00:00:00Z', is_deleted: false } as any,
+    ];
+    const remote = [
+      { id: '1', title: '远程', updated_at: '2026-01-01T00:00:01Z', is_deleted: false } as any,
+    ];
+
+    const result = mergeTasksLWW(local, remote);
+
+    expect(result.changed).toBe(true);
+    expect(result.tasks[0].title).toBe('远程');
+  });
+
+  it('重复收到相同远程任务时标记为未变化', () => {
+    const local = [
+      { id: '1', title: '本地', updated_at: '2026-01-01T00:00:00Z', is_deleted: false } as any,
+    ];
+
+    const result = mergeTasksLWW(local, [local[0]]);
+
+    expect(result.changed).toBe(false);
+    expect(result.tasks).toBe(local);
   });
 });
 

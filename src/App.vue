@@ -39,11 +39,10 @@ const {
   dailyCompletionsMap,
   overdueCount,
   pendingCount,
-  isLoading,
+  isLocalReady,
   loadAll,
   refreshTasks,
   pushTask,
-  initSync,
   pullAndMerge,
   addTask,
   toggleTask,
@@ -174,14 +173,13 @@ onMounted(async () => {
   const { loadPlugins } = usePluginLoader();
   loadPlugins();
 
-  const syncReady = await initSync();
   const appWindow = getCurrentWindow();
   let lastRefresh = 0;
   _unlistenFocus = await appWindow.listen('tauri://focus', () => {
     const now = Date.now();
-    if (now - lastRefresh < 5000) return;
+    if (now - lastRefresh < 60_000) return;
     lastRefresh = now;
-    refreshTasks(true);
+    pullAndMerge().catch(() => {});
     loadAiSettings();
   });
   window.addEventListener('prism:force-sync', _handleForceSync);
@@ -190,11 +188,9 @@ onMounted(async () => {
     activeModule.value = 'settings';
   }) as EventListener);
   // 仅在同步已配置时启动 30 秒轮询，作为 Realtime WebSocket 的兜底
-  if (syncReady) {
-    _pollInterval = setInterval(() => {
-      pullAndMerge().catch(() => {});
-    }, 30_000);
-  }
+  _pollInterval = setInterval(() => {
+    pullAndMerge().catch(() => {});
+  }, 5 * 60_000);
 });
 
 // ── 模块切换 ──────────────────────────────
@@ -346,7 +342,12 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
         <span class="sidebar-count">{{ tasks.length }}</span>
       </div>
       <div class="sidebar-list">
+        <div v-if="!isLocalReady" class="sidebar-loading">
+          <span class="loading-spinner"></span>
+          <span class="loading-text">加载本地任务…</span>
+        </div>
         <TaskList
+          v-else
           :tasks="filteredTasks"
           :daily-completions-map="dailyCompletionsMap"
           :ai-enabled="aiEnabled"
@@ -366,42 +367,36 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
         style="flex: 1; display: flex; flex-direction: column; overflow: hidden"
       >
         <div v-if="activeModule === 'tasks' && isEnabled('tasks')" key="tasks" class="module-tasks">
-          <div v-if="isLoading" class="loading-overlay">
-            <span class="loading-spinner"></span>
-            <span class="loading-text">加载任务数据…</span>
-          </div>
-          <template v-else>
-            <!-- 顶部固定区：标题 + TaskInput -->
-            <div class="tasks-top">
-              <div class="main-header">
-                <div>
-                  <h1 class="main-title">任务看板</h1>
-                  <div class="main-subtitle">
-                    {{ pendingCount }} 待完成 · {{ overdueCount }} 已过期
-                  </div>
+          <!-- 顶部固定区：标题 + TaskInput -->
+          <div class="tasks-top">
+            <div class="main-header">
+              <div>
+                <h1 class="main-title">任务看板</h1>
+                <div class="main-subtitle">
+                  {{ pendingCount }} 待完成 · {{ overdueCount }} 已过期
                 </div>
               </div>
-              <div class="main-input">
-                <TaskInput :ai-enabled="aiEnabled" @add="addTask" />
-              </div>
             </div>
+            <div class="main-input">
+              <TaskInput :ai-enabled="aiEnabled" @add="addTask" />
+            </div>
+          </div>
 
-            <!-- 中部可滚区：仪表盘 -->
-            <div class="tasks-scroll">
-              <Dashboard />
-              <PluginViewHost location="panel" />
-            </div>
+          <!-- 中部可滚区：仪表盘 -->
+          <div class="tasks-scroll">
+            <Dashboard />
+            <PluginViewHost location="panel" />
+          </div>
 
-            <!-- 底部固定区：统计 + Sync -->
-            <div class="tasks-bottom">
-              <div class="bottom-stats-row">
-                <TaskStats :tasks="tasks" @clear-completed="clearCompleted" />
-              </div>
-              <div class="bottom-sync-row">
-                <SyncStatus />
-              </div>
+          <!-- 底部固定区：统计 + Sync -->
+          <div class="tasks-bottom">
+            <div class="bottom-stats-row">
+              <TaskStats :tasks="tasks" @clear-completed="clearCompleted" />
             </div>
-          </template>
+            <div class="bottom-sync-row">
+              <SyncStatus />
+            </div>
+          </div>
         </div>
 
         <div
@@ -689,6 +684,17 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   flex: 1;
   overflow-y: auto;
   padding: 0 var(--space-sm);
+}
+
+.sidebar-loading {
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
 }
 
 .sidebar-list::-webkit-scrollbar {
@@ -1042,18 +1048,6 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
 }
 
 /* ── 加载遮罩 ─────────────────────────── */
-.loading-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-md);
-  background: var(--bg-primary);
-  z-index: 10;
-}
-
 .loading-spinner {
   width: 20px;
   height: 20px;

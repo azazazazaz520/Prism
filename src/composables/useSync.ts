@@ -273,6 +273,7 @@ export function useSync() {
       return allDCs;
     } catch (e) {
       console.error('拉取远程每日完成记录失败:', e);
+      syncStatus.value = 'error';
       return [];
     }
   }
@@ -317,6 +318,7 @@ export function useSync() {
       return allTasks;
     } catch (e) {
       console.error('拉取远程任务失败:', e);
+      syncStatus.value = 'error';
       return allTasks.length > 0 ? allTasks : [];
     }
   }

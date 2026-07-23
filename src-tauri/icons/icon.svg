@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <title>Prism application icon — diamond P</title>
+  <desc>青绿色圆角方形底板上的浅色切角菱形，内部以负形构成大写字母 P。</desc>
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="#0d9488"/>
+  <path d="M50 18h28l30 30v32l-30 30H50L20 80V48l30-30Z" fill="#d8f5ee"/>
+  <path
+    d="M44 93V34h26c14 0 22 8 22 21s-8 21-22 21H56v17H44Zm12-28h13c8 0 12-3 12-10s-4-10-12-10H56v20Z"
+    fill="#0d9488"
+    fill-rule="evenodd"
+  />
+</svg>

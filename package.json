@@ -11,6 +11,7 @@
     "port-info": "node scripts/port-info.js",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "check": "npm run format:check && vue-tsc --noEmit && npm test",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "prepare": "husky"

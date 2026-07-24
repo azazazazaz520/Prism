@@ -11,11 +11,11 @@
 use crate::store::{UpdateNetworkConfig, UpdateNetworkMode, WindowsUpdateManifest};
 use crate::AppState;
 
-/// 更新清单主地址（CDN 部署后替换为此地址）
+/// 更新清单主地址（GitHub Release 静态资源，始终与最新 Release 同步）
 const UPDATE_MANIFEST_PRIMARY: &str =
-    "https://raw.githubusercontent.com/azazazazaz520/Prism/master/update/windows.json";
+    "https://github.com/azazazazaz520/Prism/releases/latest/download/windows.json";
 
-/// 更新清单备用地址（当主地址不可达时使用）
+/// 更新清单备用地址（当主地址不可达时使用，回退到仓库原始文件）
 const UPDATE_MANIFEST_FALLBACK: &str =
     "https://raw.githubusercontent.com/azazazazaz520/Prism/master/update/windows.json";
 
@@ -130,6 +130,11 @@ fn build_client(config: &UpdateNetworkConfig) -> Result<reqwest::Client, String>
                     error_response("proxy_failed", &format!("代理地址格式无效：{}", e))
                 })?;
                 builder = builder.proxy(proxy);
+            } else {
+                return Err(error_response(
+                    "proxy_failed",
+                    "自定义代理模式下必须提供代理地址",
+                ));
             }
         }
         UpdateNetworkMode::System => {
@@ -200,7 +205,30 @@ fn validate_manifest(manifest: &WindowsUpdateManifest) -> Result<(), String> {
         ));
     }
 
+    if let Some(hash) = &manifest.sha256 {
+        let is_valid_sha256 = hash.len() == 64 && hash.chars().all(|c| c.is_ascii_hexdigit());
+        if !is_valid_sha256 {
+            return Err(error_response(
+                "bad_response",
+                "更新清单中的 SHA-256 校验值格式无效",
+            ));
+        }
+    }
+
     Ok(())
+}
+
+/// 判断错误响应是否属于可以切换备用地址的网络错误
+fn should_fallback(error: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(error)
+        .ok()
+        .and_then(|value| value.get("error_code")?.as_str().map(str::to_owned))
+        .is_some_and(|code| {
+            matches!(
+                code.as_str(),
+                "network_unreachable" | "timeout" | "tls_failed"
+            )
+        })
 }
 
 // ═══════════════════════════════════════════
@@ -255,11 +283,7 @@ pub async fn check_update(
         Err(primary_err) => {
             // 主地址不可达时尝试备用地址（仅网络层错误才切换）
             // 403/404/清单校验失败不应盲目切换，直接返回主地址的错误
-            let should_fallback = primary_err.contains("network_unreachable")
-                || primary_err.contains("timeout")
-                || primary_err.contains("tls_failed")
-                || primary_err.contains("服务暂时不可用");
-            if !should_fallback {
+            if !should_fallback(&primary_err) {
                 return Err(primary_err);
             }
             fetch_manifest(&client, UPDATE_MANIFEST_FALLBACK).await
@@ -406,7 +430,7 @@ mod tests {
             release_notes: "测试更新".into(),
             download_url: "https://github.com/azazazazaz520/Prism/releases/download/v0.3.0/Prism_0.3.0_x64-setup.exe".into(),
             release_url: "https://github.com/azazazazaz520/Prism/releases/tag/v0.3.0".into(),
-            sha256: Some("abc123".into()),
+            sha256: Some("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".into()),
         }
     }
 
@@ -485,12 +509,15 @@ mod tests {
             "release_notes": "修复问题",
             "download_url": "https://github.com/azazazazaz520/Prism/releases/download/v0.3.0/setup.exe",
             "release_url": "https://github.com/azazazazaz520/Prism/releases/tag/v0.3.0",
-            "sha256": "abc123"
+            "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
         }"#;
         let manifest: WindowsUpdateManifest = serde_json::from_str(json).unwrap();
         assert_eq!(manifest.version, "0.3.0");
         assert_eq!(manifest.release_notes, "修复问题");
-        assert_eq!(manifest.sha256, Some("abc123".into()));
+        assert_eq!(
+            manifest.sha256,
+            Some("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".into())
+        );
     }
 
     #[test]
@@ -554,6 +581,41 @@ mod tests {
         let result = build_client(&config);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("proxy_failed"));
+    }
+
+    #[test]
+    fn test_build_client_custom_mode_missing_proxy() {
+        let config = UpdateNetworkConfig {
+            mode: UpdateNetworkMode::Custom,
+            proxy_url: None,
+        };
+        let result = build_client(&config);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("proxy_failed"));
+    }
+
+    #[test]
+    fn test_should_fallback_uses_error_code() {
+        assert!(should_fallback(
+            r#"{"error_code":"network_unreachable","message":"failed"}"#
+        ));
+        assert!(should_fallback(
+            r#"{"error_code":"timeout","message":"failed"}"#
+        ));
+        assert!(!should_fallback(
+            r#"{"error_code":"bad_response","message":"network_unreachable"}"#
+        ));
+        assert!(!should_fallback("not json"));
+    }
+
+    #[test]
+    fn test_validate_manifest_rejects_invalid_sha256() {
+        let m = WindowsUpdateManifest {
+            sha256: Some("abc123".into()),
+            ..make_manifest()
+        };
+        let err = validate_manifest(&m).unwrap_err();
+        assert!(err.contains("SHA-256"));
     }
 
     // ── UpdateNetworkConfig 序列化兼容性 ──

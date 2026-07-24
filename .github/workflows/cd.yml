@@ -104,6 +104,33 @@ jobs:
         run: |
           Get-ChildItem -Recurse -Path "src-tauri\target\release\bundle" -File
 
+      - name: Generate update manifest
+        shell: pwsh
+        env:
+          RELEASE_BODY: ${{ needs.version.outputs.release_body }}
+        run: |
+          $ver = "${{ env.VERSION }}"
+          $installer = Get-ChildItem "src-tauri\target\release\bundle\nsis" -Filter "*setup.exe" | Select-Object -First 1
+          if (-not $installer) { throw "找不到 NSIS 安装包" }
+
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLower()
+          $downloadUrl = "https://github.com/azazazazaz520/Prism/releases/download/v$ver/$($installer.Name)"
+          $releaseUrl = "https://github.com/azazazazaz520/Prism/releases/tag/v$ver"
+          $releaseBody = $env:RELEASE_BODY
+
+          $manifest = @{
+            version      = $ver
+            release_date = (Get-Date).ToUniversalTime().ToString("o")
+            release_notes = $releaseBody
+            download_url = $downloadUrl
+            release_url  = $releaseUrl
+            sha256       = $hash
+          } | ConvertTo-Json -Depth 3
+
+          $manifest | Set-Content "windows.json" -Encoding UTF8
+          Write-Host "Generated windows.json:"
+          Get-Content "windows.json"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -113,5 +140,24 @@ jobs:
           files: |
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/nsis/*.zip
+            windows.json
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
+
+      - name: Synchronize stable update manifest fallback
+        if: ${{ !contains(github.ref_name, '-') }}
+        shell: pwsh
+        run: |
+          git fetch origin master
+          git checkout -B manifest-sync origin/master
+          Copy-Item "windows.json" "update/windows.json" -Force
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update/windows.json
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "chore: 同步稳定版更新清单"
+            git push origin HEAD:master
+          } else {
+            Write-Host "更新清单没有变化"
+          }

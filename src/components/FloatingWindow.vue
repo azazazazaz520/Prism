@@ -490,8 +490,8 @@ function onPointerUp() {
   --float-opacity: 0.92;
   width: 260px;
   min-height: 100vh;
-  /* 始终维持暗色玻璃质感，仅透明度可变 */
-  background: rgba(28, 28, 34, var(--float-opacity));
+  /* 跟随当前主题保持半透明玻璃质感 */
+  background: color-mix(in srgb, var(--bg-primary) calc(var(--float-opacity) * 100%), transparent);
   clip-path: inset(0 round var(--radius-xl));
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);

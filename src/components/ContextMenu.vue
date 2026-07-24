@@ -1,12 +1,8 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted } from 'vue';
+import type { ContextMenuItem } from '../composables/useContextMenu';
 
-export interface ContextMenuItem {
-  id: string;
-  label: string;
-  icon?: string;
-  action: () => void | Promise<void>;
-}
+export type { ContextMenuItem } from '../composables/useContextMenu';
 
 const props = withDefaults(
   defineProps<{
@@ -48,6 +44,7 @@ onUnmounted(() => {
 });
 
 function handleItemClick(item: ContextMenuItem) {
+  if (item.disabled) return;
   item.action();
   emit('close');
 }
@@ -59,9 +56,11 @@ function handleItemClick(item: ContextMenuItem) {
       <button
         v-for="item in items"
         :key="item.id"
-        class="context-menu-item"
+        :class="['context-menu-item', { disabled: item.disabled }]"
+        :disabled="item.disabled"
         @click="handleItemClick(item)"
       >
+        <span v-if="item.separatorBefore" class="context-menu-separator" aria-hidden="true"></span>
         <span v-if="item.icon" class="context-menu-icon" v-html="item.icon"></span>
         <span class="context-menu-label">{{ item.label }}</span>
       </button>
@@ -87,6 +86,7 @@ function handleItemClick(item: ContextMenuItem) {
 
 .context-menu-item {
   display: flex;
+  position: relative;
   align-items: center;
   gap: var(--space-sm);
   width: 100%;
@@ -99,6 +99,24 @@ function handleItemClick(item: ContextMenuItem) {
   cursor: pointer;
   text-align: left;
   transition: background var(--transition-fast);
+}
+
+.context-menu-item.disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.context-menu-separator {
+  position: absolute;
+  top: -5px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+.context-menu-item:has(.context-menu-separator) {
+  margin-top: 5px;
 }
 
 .context-menu-item:hover {

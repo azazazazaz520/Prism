@@ -2,26 +2,45 @@
 /**
  * 笔记编辑器组件。
  *
- * 提供文件树浏览与 Markdown 文档编辑功能。左侧为可展开/折叠的文件树
- * （支持新建、重命名、删除文件及文件夹），右侧为基于 CodeMirror 6 的
- * Markdown 编辑器，支持编辑/并排/预览三种视图模式。编辑内容通过 500ms
- * 防抖自动保存至本地文件系统，同时支持 Ctrl+S 手动保存。
+ * 提供可拖动宽度的文件树浏览与 Markdown 文档编辑功能。左侧文件树支持
+ * 新建、重命名、删除文件及文件夹，右侧为基于 CodeMirror 6 的 Markdown
+ * 编辑器，支持编辑/并排/预览三种视图模式。编辑内容通过 500ms 防抖自动
+ * 保存至本地文件系统，同时支持 Ctrl+S 手动保存。
+ *
+ * 侧边栏宽度、目录展开状态通过 localStorage 持久化。
  */
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
 import { invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
 import { diagnosticsLogger } from '../diagnostics/invoke-logged';
 import { open } from '@tauri-apps/plugin-dialog';
 import { renderMarkdown } from '../composables/useMarkdown';
-import type { FileEntry } from '../types';
+import type { FileEntry, FileTreeContextTarget, NotesLayoutState } from '../types';
+import { compactFileTree } from '../utils/note-tree';
 import { getMenuRegistrations, type EditorSelection } from '../plugin-api/menus-impl';
 import InputDialog from './InputDialog.vue';
 import ConfirmDialog from './ConfirmDialog.vue';
 import TreeNode from './TreeNode.vue';
 import MarkdownEditor from './MarkdownEditor.vue';
 import MarkdownToolbar from './MarkdownToolbar.vue';
-import ContextMenu, { type ContextMenuItem } from './ContextMenu.vue';
+import { useContextMenu } from '../composables/useContextMenu';
 
-// ── 状态 ──────────────────────────────
+// ═══ 布局常量 ═══
+
+/** 侧边栏初始宽度 */
+const DEFAULT_SIDEBAR_WIDTH = 260;
+/** 侧边栏最小宽度 */
+const MIN_SIDEBAR_WIDTH = 220;
+/** 侧边栏最大宽度 */
+const MAX_SIDEBAR_WIDTH = 420;
+/** 整体布局最小宽度 */
+/** 编辑区最小宽度 */
+const EDITOR_MIN_WIDTH = 360;
+/** 分隔条宽度 */
+const RESIZER_WIDTH = 4;
+/** localStorage 键名 */
+const LAYOUT_STORAGE_KEY = 'prism-notes-layout';
+
+// ═══ 状态 ═══
 
 const tree = ref<FileEntry[]>([]);
 const selectedPath = ref<string | null>(null);
@@ -34,11 +53,18 @@ const cursorCol = ref(1);
 
 const textareaRef = ref<InstanceType<typeof MarkdownEditor> | null>(null);
 
-// ── 自定义右键菜单 ──────────────────────────
-const contextMenuVisible = ref(false);
-const contextMenuX = ref(0);
-const contextMenuY = ref(0);
-const contextMenuItems = ref<ContextMenuItem[]>([]);
+/** 侧边栏宽度 */
+const treeWidth = ref(DEFAULT_SIDEBAR_WIDTH);
+/** 是否正在拖动分隔条 */
+const isResizing = ref(false);
+/** 侧边栏是否被手动收起 */
+const sidebarCollapsed = ref(false);
+/** 收起前的宽度，用于恢复 */
+const previousWidth = ref(DEFAULT_SIDEBAR_WIDTH);
+
+// ═══ 自定义右键菜单 ═══
+
+const { openContextMenu, createClipboardMenuItems } = useContextMenu();
 
 /** 操作结果提示（临时显示） */
 const statusMsg = ref('');
@@ -64,7 +90,7 @@ const selectedName = computed(() => {
   return selectedPath.value.split('/').pop() || '';
 });
 
-/** 渲染后的 Markdown HTML（经 DOMPurify 净化，可安全用于 v-html） */
+/** 渲染后的 Markdown HTML */
 const renderedHtml = computed(() => {
   if (!content.value) return '';
   return renderMarkdown(content.value, { breaks: true });
@@ -74,18 +100,57 @@ const renderedHtml = computed(() => {
 const wordCount = computed(() => {
   const text = content.value;
   if (!text) return 0;
-  const chineseChars = (text.match(/[\u4e00-\u9fff]/g) || []).length;
+  const chineseChars = (text.match(/[一-鿿]/g) || []).length;
   const englishWords = (text.match(/[a-zA-Z]+/g) || []).length;
   return chineseChars + englishWords;
 });
 
-/** 来自 MarkdownEditor 的光标变更 */
+/** 侧边栏实际显示宽度（收起时为 0） */
+const effectiveTreeWidth = computed(() => {
+  return sidebarCollapsed.value ? 0 : treeWidth.value;
+});
+
+/** 文件树展示数据，保留 tree 中的真实路径用于文件操作 */
+const displayTree = computed(() => compactFileTree(tree.value));
+
+// ═══ 布局持久化 ═══
+
+/** 保存布局状态到 localStorage */
+function saveLayoutState() {
+  try {
+    const state: NotesLayoutState = {
+      sidebarWidth: treeWidth.value,
+      expandedPaths: Array.from(expanded.value),
+    };
+    localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // localStorage 不可用时静默忽略
+  }
+}
+
+/** 从 localStorage 加载布局状态 */
+function loadLayoutState() {
+  try {
+    const raw = localStorage.getItem(LAYOUT_STORAGE_KEY);
+    if (!raw) return;
+    const state = JSON.parse(raw) as NotesLayoutState;
+    if (typeof state.sidebarWidth === 'number' && Number.isFinite(state.sidebarWidth)) {
+      treeWidth.value = clampWidth(state.sidebarWidth);
+    }
+    if (state.expandedPaths && Array.isArray(state.expandedPaths)) {
+      expanded.value = new Set(state.expandedPaths);
+    }
+  } catch {
+    // 解析失败时使用默认值
+  }
+}
+
+// ═══ 光标与右键菜单 ═══
+
 function handleCursorChange(line: number, col: number) {
   cursorLine.value = line;
   cursorCol.value = col;
 }
-
-// ── 右键菜单 ──────────────────────────────
 
 function showContextMenu(event: MouseEvent) {
   event.preventDefault();
@@ -97,9 +162,7 @@ function showContextMenu(event: MouseEvent) {
   const registrations = getMenuRegistrations('editor-context');
   const text = editor.getSelection();
 
-  if (registrations.length === 0 && !text) return;
-
-  contextMenuItems.value = registrations.map((r) => ({
+  const pluginItems = registrations.map((r) => ({
     id: r.id,
     label: r.item.label,
     icon: r.item.icon,
@@ -116,15 +179,8 @@ function showContextMenu(event: MouseEvent) {
     },
   }));
 
-  const menuHeight = Math.min(contextMenuItems.value.length * 36 + 8, 300);
-  contextMenuX.value = event.clientX;
-  contextMenuY.value =
-    event.clientY + menuHeight > window.innerHeight ? event.clientY - menuHeight : event.clientY;
-  contextMenuVisible.value = true;
-}
-
-function hideContextMenu() {
-  contextMenuVisible.value = false;
+  const clipboardItems = createClipboardMenuItems(event.target as HTMLElement, !!text);
+  openContextMenu(event, [...clipboardItems, ...pluginItems]);
 }
 
 /** Ctrl+S 手动保存 */
@@ -143,7 +199,7 @@ async function handleManualSave() {
   }
 }
 
-// ── 自定义对话框状态 ──────────────────────────────
+// ═══ 自定义对话框状态 ═══
 
 const dialogVisible = ref(false);
 const dialogTitle = ref('');
@@ -152,16 +208,13 @@ const dialogPlaceholder = ref('');
 const dialogDefault = ref('');
 let dialogCallback: ((value: string | null) => void) | null = null;
 
-// ── 确认对话框 ──────────────────────────────
+// ═══ 确认对话框 ═══
 
 const confirmVisible = ref(false);
 const confirmTitle = ref('');
 const confirmMessage = ref('');
 let confirmCallback: (() => void) | null = null;
 
-/** 显示确认对话框（如删除确认），返回 Promise 表示用户选择。
- *  点击「确认」时 resolve(true)；取消或关闭时 resolve(false)
- *  通过 handleConfirmCancel 的 confirmCallback 置空实现。 */
 function showConfirm(title: string, message: string): Promise<boolean> {
   return new Promise((resolve) => {
     confirmTitle.value = title;
@@ -183,6 +236,8 @@ function handleConfirmCancel() {
   confirmVisible.value = false;
   confirmCallback = null;
 }
+
+// ═══ 笔记目录 ═══
 
 async function loadNotesDir() {
   try {
@@ -209,17 +264,15 @@ async function changeNotesDir() {
   }
 }
 
-/** 截断路径显示 */
 const notesDirShort = computed(() => {
   const dir = notesDir.value;
   if (!dir) return '';
-  // 只显示最后两段路径
   const parts = dir.replace(/\\/g, '/').split('/');
   if (parts.length <= 2) return dir;
   return '...' + '/' + parts.slice(-2).join('/');
 });
 
-// ── 加载 ──────────────────────────────
+// ═══ 文件树加载与导航 ═══
 
 async function loadTree() {
   try {
@@ -229,6 +282,29 @@ async function loadTree() {
   }
 }
 
+/** 返回当前窗口下允许的最大侧边栏宽度。 */
+function getMaxSidebarWidth(): number {
+  return Math.max(MIN_SIDEBAR_WIDTH, window.innerWidth - EDITOR_MIN_WIDTH - RESIZER_WIDTH);
+}
+
+/** 将宽度限制在侧边栏和编辑区都可用的范围内。 */
+function getSafeSidebarWidth(width: number): number {
+  return Math.min(clampWidth(width), getMaxSidebarWidth());
+}
+
+/** 展开指定文件路径的所有父级目录 */
+function expandParentDirectories(filePath: string) {
+  const parts = filePath.split('/');
+  const next = new Set(expanded.value);
+
+  for (let i = 1; i < parts.length; i += 1) {
+    next.add(parts.slice(0, i).join('/'));
+  }
+
+  expanded.value = next;
+  saveLayoutState();
+}
+
 async function openFile(path: string) {
   try {
     content.value = await invoke<string>('read_note', { path });
@@ -236,6 +312,8 @@ async function openFile(path: string) {
     isDirty.value = false;
     cursorLine.value = 1;
     cursorCol.value = 1;
+    // 自动展开父级目录
+    expandParentDirectories(path);
   } catch (e) {
     diagnosticsLogger.error('notes', 'notes.read_file_failed', '读取文件失败', e, {
       path: selectedPath.value,
@@ -243,25 +321,31 @@ async function openFile(path: string) {
   }
 }
 
-// ── 自动保存（500ms 防抖） ──────────────────────────────
+// ═══ 自动保存（500ms 防抖） ═══
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** 监听内容变更，500ms 防抖后自动保存到本地文件系统。
- *  每次变更重置定时器，避免高频写入；保存期间设置 saving 标记
- *  以在底部状态栏显示「保存中...」提示。 */
+function clearPendingSave() {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+}
+
 watch(content, (val) => {
   isDirty.value = true;
   if (!selectedPath.value) return;
-  if (saveTimer) clearTimeout(saveTimer);
+  clearPendingSave();
+  const savePath = selectedPath.value;
+  if (!savePath) return;
   saveTimer = setTimeout(async () => {
     saving.value = true;
     try {
-      await invoke('write_note', { path: selectedPath.value, content: val });
-      isDirty.value = false;
+      await invoke('write_note', { path: savePath, content: val });
+      if (selectedPath.value === savePath) isDirty.value = false;
     } catch (e) {
       diagnosticsLogger.error('notes', 'notes.save_failed', '保存笔记失败', e, {
-        path: selectedPath.value,
+        path: savePath,
       });
     } finally {
       saving.value = false;
@@ -269,20 +353,8 @@ watch(content, (val) => {
   }, 500);
 });
 
-// 初始化加载文件树和笔记目录
-loadTree();
-loadNotesDir();
+// ═══ 自定义对话框 ═══
 
-// ── 自定义对话框 ──────────────────────────────
-
-/**
- * 显示输入对话框，替代原生 prompt()
- * @param title 对话框标题
- * @param label 输入框标签
- * @param placeholder 占位符文本
- * @param defaultValue 默认值
- * @returns Promise<string | null>
- */
 function showDialog(
   title: string,
   label: string,
@@ -315,7 +387,7 @@ function handleDialogCancel() {
   }
 }
 
-// ── 文件树操作 ──────────────────────────────
+// ═══ 文件树操作 ═══
 
 function toggleExpand(dirPath: string) {
   const next = new Set(expanded.value);
@@ -325,10 +397,16 @@ function toggleExpand(dirPath: string) {
     next.add(dirPath);
   }
   expanded.value = next;
+  saveLayoutState();
 }
 
-/** 校验文件/文件夹名称是否合法。
- *  @returns 合法的名称返回 null，否则返回错误提示字符串。 */
+/** 全部折叠：清空展开集合并持久化 */
+function collapseAll() {
+  expanded.value = new Set();
+  saveLayoutState();
+}
+
+/** 校验文件/文件夹名称 */
 const INVALID_NAME_CHARS = /[<>:"/\\|?*]/;
 
 function validateName(name: string): string | null {
@@ -344,9 +422,6 @@ function validateName(name: string): string | null {
   return null;
 }
 
-/** 在指定目录下创建新的 Markdown 文件（.md）。
- *  弹出输入对话框让用户输入文件名（不含扩展名），自动补全 .md 后缀，
- *  校验名称合法性后通过后端写入空文件，刷新文件树并自动打开新文件。 */
 async function createFile(parentDir: string) {
   const name = await showDialog('新建文件', '文件名称（不含扩展名）：', '例如：我的笔记', '');
   if (!name) return;
@@ -360,6 +435,12 @@ async function createFile(parentDir: string) {
   try {
     await invoke('write_note', { path, content: '' });
     await loadTree();
+    // 确保父目录展开
+    if (parentDir) {
+      const next = new Set(expanded.value);
+      next.add(parentDir);
+      expanded.value = next;
+    }
     openFile(path);
   } catch (e) {
     showStatus(`创建文件失败: ${e}`);
@@ -367,9 +448,6 @@ async function createFile(parentDir: string) {
   }
 }
 
-/** 在指定目录下创建新文件夹。
- *  弹出输入对话框获取文件夹名称，校验合法性后通过后端创建，
- *  刷新文件树并自动展开新建的文件夹。 */
 async function createFolder(parentDir: string) {
   const name = await showDialog('新建文件夹', '文件夹名称：', '例如：工作文档', '');
   if (!name) return;
@@ -385,15 +463,58 @@ async function createFolder(parentDir: string) {
     const next = new Set(expanded.value);
     next.add(path);
     expanded.value = next;
+    saveLayoutState();
   } catch (e) {
     showStatus(`创建文件夹失败: ${e}`);
     diagnosticsLogger.error('notes', 'notes.create_directory_failed', '创建文件夹失败', e);
   }
 }
 
-/** 重命名文件或文件夹。
- *  弹出输入对话框获取新名称，校验合法后调用后端重命名。
- *  若当前选中的正是被重命名的条目，则清除选中状态与编辑内容。 */
+/** 根据文件树右键目标构造统一菜单 */
+function showFileTreeContextMenu(event: MouseEvent, target: FileTreeContextTarget) {
+  const parentDir =
+    target.kind === 'directory'
+      ? target.path
+      : target.path.includes('/')
+        ? target.path.slice(0, target.path.lastIndexOf('/'))
+        : '';
+  const creationLocation = target.kind === 'directory' ? target.name : parentDir || '根目录';
+  const relativePath = target.path.replace(/\\/g, '/');
+  const items = [
+    {
+      id: 'file-tree.create-file',
+      label: `在 ${creationLocation} 中新建文件`,
+      action: () => createFile(parentDir),
+    },
+    {
+      id: 'file-tree.create-folder',
+      label: `在 ${creationLocation} 中新建文件夹`,
+      action: () => createFolder(parentDir),
+    },
+    {
+      id: 'file-tree.rename',
+      label: '重命名',
+      separatorBefore: true,
+      action: () => renameEntry(target.path, target.kind === 'directory'),
+    },
+    {
+      id: 'file-tree.copy-path',
+      label: '复制相对路径',
+      action: async () => {
+        await navigator.clipboard?.writeText(relativePath);
+        showStatus('相对路径已复制');
+      },
+    },
+    {
+      id: 'file-tree.delete',
+      label: '删除',
+      separatorBefore: true,
+      action: () => deleteEntry(target.path),
+    },
+  ];
+  openContextMenu(event, items);
+}
+
 async function renameEntry(path: string, isDir: boolean) {
   const oldName = path.split('/').pop() || '';
   const newName = await showDialog('重命名', '新名称：', '', oldName);
@@ -405,10 +526,23 @@ async function renameEntry(path: string, isDir: boolean) {
   }
   try {
     await invoke('rename_note_entry', { path, newName });
-    if (selectedPath.value === path) {
-      selectedPath.value = null;
-      content.value = '';
+    const parentPath = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+    const newPath = parentPath ? `${parentPath}/${newName}` : newName;
+
+    if (selectedPath.value && isPathInside(selectedPath.value, path)) {
+      selectedPath.value = replacePathPrefix(selectedPath.value, path, newPath);
     }
+
+    const nextExpanded = new Set<string>();
+    for (const expandedPath of expanded.value) {
+      nextExpanded.add(
+        isPathInside(expandedPath, path)
+          ? replacePathPrefix(expandedPath, path, newPath)
+          : expandedPath,
+      );
+    }
+    expanded.value = nextExpanded;
+    saveLayoutState();
     await loadTree();
   } catch (e) {
     showStatus(`重命名失败: ${e}`);
@@ -416,55 +550,238 @@ async function renameEntry(path: string, isDir: boolean) {
   }
 }
 
+// ═══ 删除辅助函数 ═══
+
+/** 统计文件夹下所有子项数量（不含自身） */
+function countDescendants(entry: FileEntry): number {
+  if (!entry.children) return 0;
+  return entry.children.reduce((count, child) => count + 1 + countDescendants(child), 0);
+}
+
+/** 判断路径是否位于指定目录内 */
+function isPathInside(path: string, directory: string): boolean {
+  return path === directory || path.startsWith(`${directory}/`);
+}
+
+/** 将路径前缀替换为重命名后的路径。 */
+function replacePathPrefix(path: string, oldPrefix: string, newPrefix: string): string {
+  return path === oldPrefix ? newPrefix : `${newPrefix}${path.slice(oldPrefix.length)}`;
+}
+
+/** 从文件树中递归查找条目 */
+function findEntry(entries: FileEntry[], targetPath: string): FileEntry | null {
+  for (const e of entries) {
+    if (e.path === targetPath) return e;
+    if (e.children) {
+      const found = findEntry(e.children, targetPath);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+/** 清理已删除路径及其子路径的展开状态 */
+function cleanExpandedForPath(deletedPath: string) {
+  const next = new Set(expanded.value);
+  for (const p of next) {
+    if (isPathInside(p, deletedPath)) {
+      next.delete(p);
+    }
+  }
+  expanded.value = next;
+  saveLayoutState();
+}
+
 /** 删除文件或文件夹（移入系统回收站）。
- *  从文件树中查找条目以区分文件/文件夹类型，弹窗确认后调用后端删除。
- *  若删除的是当前选中的条目则清除编辑状态，完成后显示状态提示。 */
+ *  文件夹删除时显示子项数量；删除后清理展开状态，
+ *  若当前打开文件位于被删目录内则关闭编辑器。 */
 async function deleteEntry(path: string) {
   const name = path.split('/').pop() || '';
-  // 判断是否为文件夹（从 tree 中查找）
-  const findEntry = (entries: FileEntry[], targetPath: string): FileEntry | null => {
-    for (const e of entries) {
-      if (e.path === targetPath) return e;
-      if (e.children) {
-        const found = findEntry(e.children, targetPath);
-        if (found) return found;
-      }
-    }
-    return null;
-  };
   const entry = findEntry(tree.value, path);
-  const typeLabel = entry?.isDir ? '文件夹' : '文件';
+  const openPathIsAffected = Boolean(selectedPath.value && isPathInside(selectedPath.value, path));
 
-  const confirmed = await showConfirm(
-    '确认删除',
-    `确定删除${typeLabel}「${name}」？删除后将移至系统回收站。`,
-  );
+  let message: string;
+  if (entry?.isDir) {
+    const count = countDescendants(entry);
+    message = `确定将文件夹「${name}」及其中的 ${count} 个项目移入系统回收站吗？`;
+  } else {
+    message = `确定将文件「${name}」移入系统回收站吗？`;
+  }
+  if (openPathIsAffected && isDirty.value) {
+    message += '\n当前笔记有未保存修改，删除后将无法恢复。';
+  }
+
+  const confirmed = await showConfirm('确认删除', message);
   if (!confirmed) return;
+
   try {
+    if (openPathIsAffected) clearPendingSave();
     await invoke('delete_note_entry', { path });
-    if (selectedPath.value === path) {
+
+    // 清理被删除路径及其子路径的展开状态
+    cleanExpandedForPath(path);
+
+    // 若当前打开文件位于被删除目录内，关闭编辑器
+    if (selectedPath.value && isPathInside(selectedPath.value, path)) {
       selectedPath.value = null;
       content.value = '';
     }
-    showStatus(`已删除「${name}」（移至回收站）`);
+
     await loadTree();
+    showStatus(`已将「${name}」移入系统回收站`);
   } catch (e) {
     showStatus(`删除失败: ${e}`);
     diagnosticsLogger.error('notes', 'notes.delete_failed', '删除笔记失败', e);
   }
 }
+
+// ═══ 侧边栏拖动 ═══
+
+/** 约束宽度到有效范围内 */
+function clampWidth(w: number): number {
+  return Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, Math.round(w)));
+}
+
+/** 窗口缩放时重新约束宽度 */
+function constrainOnResize() {
+  const safeWidth = getSafeSidebarWidth(treeWidth.value);
+  if (treeWidth.value !== safeWidth) {
+    treeWidth.value = safeWidth;
+    saveLayoutState();
+  }
+}
+
+function startResize(event: PointerEvent) {
+  event.preventDefault();
+  isResizing.value = true;
+
+  const startX = event.clientX;
+  const startWidth = treeWidth.value;
+
+  // 拖动期间禁止文本选择
+  document.body.style.userSelect = 'none';
+  document.body.style.cursor = 'col-resize';
+
+  function onMove(e: PointerEvent) {
+    if (!isResizing.value) return;
+    const delta = e.clientX - startX;
+    const newWidth = getSafeSidebarWidth(startWidth + delta);
+    // 确保不挤压编辑区
+    treeWidth.value = newWidth;
+  }
+
+  function onUp() {
+    isResizing.value = false;
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+    document.removeEventListener('pointermove', onMove);
+    document.removeEventListener('pointerup', onUp);
+    saveLayoutState();
+  }
+
+  document.addEventListener('pointermove', onMove);
+  document.addEventListener('pointerup', onUp);
+}
+
+/** 分隔条键盘调整 */
+function handleResizerKeydown(event: KeyboardEvent) {
+  if (event.key === 'ArrowLeft') {
+    event.preventDefault();
+    treeWidth.value = clampWidth(treeWidth.value - 20);
+    saveLayoutState();
+  } else if (event.key === 'ArrowRight') {
+    event.preventDefault();
+    treeWidth.value = getSafeSidebarWidth(treeWidth.value + 20);
+    saveLayoutState();
+  } else if (event.key === 'Home') {
+    event.preventDefault();
+    treeWidth.value = MIN_SIDEBAR_WIDTH;
+    saveLayoutState();
+  } else if (event.key === 'End') {
+    event.preventDefault();
+    treeWidth.value = getSafeSidebarWidth(MAX_SIDEBAR_WIDTH);
+    saveLayoutState();
+  }
+}
+
+/** 切换侧边栏收起/展开 */
+function toggleSidebar() {
+  if (sidebarCollapsed.value) {
+    sidebarCollapsed.value = false;
+    treeWidth.value = getSafeSidebarWidth(previousWidth.value);
+  } else {
+    sidebarCollapsed.value = true;
+    previousWidth.value = treeWidth.value;
+  }
+}
+
+// ═══ 生命周期 ═══
+
+onMounted(() => {
+  loadLayoutState();
+  constrainOnResize();
+  loadTree();
+  loadNotesDir();
+  window.addEventListener('resize', constrainOnResize);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('resize', constrainOnResize);
+});
 </script>
 
 <template>
   <div class="note-editor">
-    <!-- 左侧文件树 -->
-    <aside class="file-tree">
+    <!-- ═══ 左侧文件树 ═══ -->
+    <aside
+      class="file-tree"
+      :style="{ width: effectiveTreeWidth > 0 ? `${effectiveTreeWidth}px` : '0px' }"
+      :class="{ collapsed: sidebarCollapsed }"
+    >
       <div class="tree-header">
         <span class="tree-title">笔记</span>
+        <div class="tree-header-actions">
+          <button
+            class="tree-header-btn"
+            title="全部折叠"
+            aria-label="全部折叠"
+            @click="collapseAll"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            >
+              <path d="M7 3l6 6 6-6M7 13l6 6 6-6" />
+            </svg>
+          </button>
+          <button
+            class="tree-header-btn"
+            title="收起文件树"
+            aria-label="收起文件树"
+            @click="toggleSidebar"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            >
+              <path d="M17 4l-8 8 8 8" />
+            </svg>
+          </button>
+        </div>
       </div>
       <div class="tree-list">
         <TreeNode
-          v-for="entry in tree"
+          v-for="entry in displayTree"
           :key="entry.path"
           :entry="entry"
           :expanded="expanded"
@@ -474,6 +791,7 @@ async function deleteEntry(path: string) {
           @select="openFile"
           @create-file="createFile"
           @create-folder="createFolder"
+          @context-menu="showFileTreeContextMenu"
           @rename="renameEntry"
           @delete="deleteEntry"
         />
@@ -491,141 +809,181 @@ async function deleteEntry(path: string) {
       </div>
     </aside>
 
-    <!-- 右侧编辑区 -->
+    <!-- ═══ 拖动分隔条 ═══ -->
+    <div
+      v-if="!sidebarCollapsed"
+      class="tree-resizer"
+      role="separator"
+      aria-orientation="vertical"
+      :aria-valuenow="treeWidth"
+      :aria-valuemin="MIN_SIDEBAR_WIDTH"
+      :aria-valuemax="MAX_SIDEBAR_WIDTH"
+      :tabindex="0"
+      @pointerdown="startResize"
+      @keydown="handleResizerKeydown"
+    />
+
+    <!-- ═══ 右侧编辑区 ═══ -->
     <div class="editor-area">
-      <template v-if="selectedPath">
-        <!-- 顶部工具栏 -->
-        <div class="editor-toolbar">
-          <div class="toolbar-left">
-            <span class="toolbar-filename">{{ selectedName }}</span>
-            <span v-if="isDirty" class="toolbar-dirty" title="未保存的更改">&#9679;</span>
-          </div>
-          <MarkdownToolbar :editor-ref="textareaRef" />
-          <div class="toolbar-right">
-            <div class="editor-modes">
-              <button
-                :class="['mode-btn', { active: viewMode === 'edit' }]"
-                @click="viewMode = 'edit'"
-              >
-                编辑
+      <!-- 文件树收起时的展开按钮条（占据实际布局空间） -->
+      <div v-if="sidebarCollapsed" class="sidebar-toggle-strip">
+        <button
+          class="tree-header-btn"
+          title="展开文件树"
+          aria-label="展开文件树"
+          @click="toggleSidebar"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
+            <path d="M7 4l8 8-8 8" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- 编辑区主内容（保持纵向 flex 布局） -->
+      <div class="editor-main">
+        <template v-if="selectedPath">
+          <!-- 顶部工具栏 -->
+          <div class="editor-toolbar">
+            <div class="toolbar-left">
+              <span class="toolbar-filename">{{ selectedName }}</span>
+              <span v-if="isDirty" class="toolbar-dirty" title="未保存的更改">&#9679;</span>
+            </div>
+            <MarkdownToolbar :editor-ref="textareaRef" />
+            <div class="toolbar-right">
+              <div class="editor-modes">
+                <button
+                  :class="['mode-btn', { active: viewMode === 'edit' }]"
+                  @click="viewMode = 'edit'"
+                >
+                  编辑
+                </button>
+                <button
+                  :class="['mode-btn', { active: viewMode === 'split' }]"
+                  @click="viewMode = 'split'"
+                >
+                  并排
+                </button>
+                <button
+                  :class="['mode-btn', { active: viewMode === 'preview' }]"
+                  @click="viewMode = 'preview'"
+                >
+                  预览
+                </button>
+              </div>
+              <button class="toolbar-action-btn" title="新建笔记" @click="createFile('')">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
               </button>
-              <button
-                :class="['mode-btn', { active: viewMode === 'split' }]"
-                @click="viewMode = 'split'"
-              >
-                并排
-              </button>
-              <button
-                :class="['mode-btn', { active: viewMode === 'preview' }]"
-                @click="viewMode = 'preview'"
-              >
-                预览
+              <button class="toolbar-action-btn" title="新建文件夹" @click="createFolder('')">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
+                  <path
+                    d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2zM12 11v6M9 14h6"
+                  />
+                </svg>
               </button>
             </div>
-            <button class="toolbar-action-btn" title="新建笔记" @click="createFile('')">
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-              >
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-            </button>
-            <button class="toolbar-action-btn" title="新建文件夹" @click="createFolder('')">
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-              >
-                <path
-                  d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2zM12 11v6M9 14h6"
-                />
-              </svg>
-            </button>
           </div>
-        </div>
 
-        <!-- 编辑区 -->
-        <div class="editor-panes" @contextmenu="showContextMenu">
-          <MarkdownEditor
-            ref="textareaRef"
-            v-show="viewMode !== 'preview'"
-            :model-value="content"
-            placeholder="开始编写 Markdown..."
-            @update:model-value="content = $event"
-            @cursor-change="handleCursorChange"
-            @save="handleManualSave"
-          />
-          <div
-            v-show="viewMode !== 'edit'"
-            :class="['editor-preview', { full: viewMode === 'preview' }]"
-            v-html="renderedHtml"
-          />
-        </div>
+          <!-- 编辑区 -->
+          <div class="editor-panes" @contextmenu="showContextMenu">
+            <MarkdownEditor
+              ref="textareaRef"
+              v-show="viewMode !== 'preview'"
+              :model-value="content"
+              placeholder="开始编写 Markdown..."
+              @update:model-value="content = $event"
+              @cursor-change="handleCursorChange"
+              @save="handleManualSave"
+            />
+            <div
+              v-show="viewMode !== 'edit'"
+              :class="['editor-preview', { full: viewMode === 'preview' }]"
+              v-html="renderedHtml"
+            />
+          </div>
 
-        <!-- 底部状态栏 -->
-        <div class="editor-statusbar">
-          <span>UTF-8</span>
-          <span class="statusbar-sep">|</span>
-          <span>Markdown</span>
-          <span class="statusbar-sep">|</span>
-          <span>{{ wordCount }} 字</span>
-          <span class="statusbar-sep">|</span>
-          <span>行 {{ cursorLine }}, 列 {{ cursorCol }}</span>
-          <span v-if="saving" class="statusbar-saving">保存中...</span>
-        </div>
-      </template>
+          <!-- 底部状态栏 -->
+          <div class="editor-statusbar">
+            <span>UTF-8</span>
+            <span class="statusbar-sep">|</span>
+            <span>Markdown</span>
+            <span class="statusbar-sep">|</span>
+            <span>{{ wordCount }} 字</span>
+            <span class="statusbar-sep">|</span>
+            <span>行 {{ cursorLine }}, 列 {{ cursorCol }}</span>
+            <span v-if="saving" class="statusbar-saving">保存中...</span>
+          </div>
+        </template>
 
-      <!-- 空状态欢迎页 -->
-      <div v-else class="editor-welcome">
-        <div class="welcome-content">
-          <h1 class="welcome-title">欢迎使用笔记</h1>
-          <p class="welcome-desc">从左侧文件树选择文件，或快速开始</p>
-          <div class="welcome-actions">
-            <button class="welcome-btn welcome-btn-primary" @click="createFile('')">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-              >
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-              新建笔记
-            </button>
-            <button class="welcome-btn" @click="createFolder('')">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-              >
-                <path
-                  d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2zM12 11v6M9 14h6"
-                />
-              </svg>
-              新建文件夹
-            </button>
+        <!-- 空状态欢迎页 -->
+        <div v-else class="editor-welcome">
+          <div class="welcome-content">
+            <h1 class="welcome-title">欢迎使用笔记</h1>
+            <p class="welcome-desc">从左侧文件树选择文件，或快速开始</p>
+            <div class="welcome-actions">
+              <button class="welcome-btn welcome-btn-primary" @click="createFile('')">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                新建笔记
+              </button>
+              <button class="welcome-btn" @click="createFolder('')">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
+                  <path
+                    d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2zM12 11v6M9 14h6"
+                  />
+                </svg>
+                新建文件夹
+              </button>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 自定义输入对话框 -->
+    <!-- ═══ 对话框与提示 ═══ -->
+
     <InputDialog
       :visible="dialogVisible"
       :title="dialogTitle"
@@ -636,7 +994,6 @@ async function deleteEntry(path: string) {
       @cancel="handleDialogCancel"
     />
 
-    <!-- 删除确认对话框 -->
     <ConfirmDialog
       :visible="confirmVisible"
       :title="confirmTitle"
@@ -648,44 +1005,49 @@ async function deleteEntry(path: string) {
       @cancel="handleConfirmCancel"
     />
 
-    <!-- 操作状态提示 -->
     <Transition name="status-fade">
       <div v-if="statusMsg" class="status-toast">{{ statusMsg }}</div>
     </Transition>
-
-    <ContextMenu
-      :visible="contextMenuVisible"
-      :x="contextMenuX"
-      :y="contextMenuY"
-      :items="contextMenuItems"
-      @close="hideContextMenu"
-    />
   </div>
 </template>
 
 <style scoped>
+/* ═══ 整体布局 ═══ */
+
 .note-editor {
   flex: 1;
   display: flex;
   overflow: hidden;
   background: var(--bg-primary);
+  min-width: 640px;
 }
 
-/* ── 文件树 ────────────────────── */
+/* ═══ 文件树 ═══ */
 
 .file-tree {
-  width: 260px;
   flex-shrink: 0;
   border-right: 1px solid var(--border-light);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   background: var(--bg-secondary);
+  transition: width 0.15s ease;
 }
+
+.file-tree.collapsed {
+  width: 0 !important;
+  border-right: none;
+  overflow: hidden;
+}
+
+/* ═══ 文件树头部 ═══ */
 
 .tree-header {
   padding: var(--space-md) var(--space-md) var(--space-sm);
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .tree-title {
@@ -694,176 +1056,62 @@ async function deleteEntry(path: string) {
   color: var(--text-primary);
 }
 
+.tree-header-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.tree-header-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.tree-header-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* ═══ 文件树列表 ═══ */
+
 .tree-list {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 0 var(--space-xs) var(--space-md);
 }
 
-.tree-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 var(--space-sm);
-  border-radius: var(--radius-full);
-  cursor: pointer;
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  transition: all var(--transition-fast);
-}
+/* ═══ 拖动分隔条 ═══ */
 
-.tree-row-dir {
-  min-height: 40px;
-}
-
-.tree-row-file {
-  min-height: 30px;
-  padding-left: 28px;
-}
-
-.tree-row:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-  transform: translateX(2px);
-}
-
-.tree-row.active {
-  background: var(--accent-bg);
-  color: var(--accent);
-  font-weight: 500;
-}
-
-.tree-icon {
-  width: 16px;
-  height: 16px;
+.tree-resizer {
+  width: 4px;
   flex-shrink: 0;
-  stroke-width: 1.5;
+  cursor: col-resize;
+  background: transparent;
+  transition: background-color 0.15s;
+  position: relative;
+  z-index: 10;
 }
 
-.tree-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.tree-resizer:hover,
+.tree-resizer:focus-visible {
+  background: var(--accent-muted);
 }
 
-.tree-chevron {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-  transition: transform 0.15s;
-  transform: rotate(-90deg);
+.tree-resizer:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
 }
 
-.tree-chevron.open {
-  transform: rotate(0deg);
-}
-
-.tree-add-btn {
-  display: none;
-  background: none;
-  border: none;
-  font-size: 16px;
-  font-weight: 400;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 0 4px;
-  border-radius: var(--radius-sm);
-  line-height: 1;
-  flex-shrink: 0;
-  transition: all var(--transition-fast);
-}
-
-.tree-row:hover .tree-add-btn {
-  display: block;
-}
-
-.tree-add-btn:hover {
-  background: var(--bg-hover);
-  color: var(--accent);
-}
-
-.tree-children {
-  border-left: 1px solid var(--border-subtle);
-  margin-left: 10px;
-  padding-left: 4px;
-}
-
-.tree-node-actions {
-  display: none;
-  gap: 2px;
-}
-
-.tree-row:hover .tree-node-actions {
-  display: flex;
-}
-
-.node-btn {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 2px 3px;
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  transition: all var(--transition-fast);
-}
-
-.node-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.node-btn-danger:hover {
-  color: #e74c3c;
-}
-
-/* ── 暗色适配 ──────────────────────────── */
-[data-theme='hud'] .note-editor,
-[data-theme='hud'] .note-editor {
-  background:
-    linear-gradient(
-      135deg,
-      rgba(245, 197, 24, 0.03) 0%,
-      transparent 35%,
-      transparent 75%,
-      rgba(0, 0, 0, 0.25) 100%
-    ),
-    var(--bg-primary);
-}
-
-[data-theme='hud'] .file-tree,
-[data-theme='hud'] .file-tree {
-  background: var(--bg-tertiary);
-  border-color: var(--border-subtle);
-}
-
-[data-theme='hud'] .tree-title,
-[data-theme='hud'] .tree-title {
-  font-family: var(--font-heading);
-  letter-spacing: 2px;
-  text-transform: uppercase;
-}
-
-[data-theme='hud'] .tree-row:hover,
-[data-theme='hud'] .tree-row:hover {
-  background: var(--bg-panel-hover);
-}
-
-[data-theme='hud'] .tree-row.active,
-[data-theme='hud'] .tree-row.active {
-  background: var(--accent-glow);
-  color: var(--accent);
-}
-
-[data-theme='hud'] .node-btn:hover,
-[data-theme='hud'] .node-btn:hover {
-  background: var(--bg-panel-hover);
-}
-
-/* ── 文件树底部目录设置 ──────────── */
+/* ═══ 文件树底部 ═══ */
 
 .tree-footer {
   border-top: 1px solid var(--border-light);
@@ -913,17 +1161,41 @@ async function deleteEntry(path: string) {
   color: var(--text-primary);
 }
 
-/* ── 编辑区 ────────────────────── */
+/* ═══ 编辑区 ═══ */
 
 .editor-area {
+  position: relative;
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  background: var(--bg-primary);
+  min-width: 360px;
+}
+
+/* ═══ 侧边栏展开按钮条（收起时） ═══ */
+
+.sidebar-toggle-strip {
+  width: 28px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 8px;
+  border-right: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+}
+
+/* ═══ 编辑区主内容 ═══ */
+
+.editor-main {
   flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--bg-primary);
+  min-width: 0;
 }
 
-/* ── 工具栏 ──────────────────────── */
+/* ═══ 工具栏 ═══ */
 
 .editor-toolbar {
   display: flex;
@@ -1008,7 +1280,7 @@ async function deleteEntry(path: string) {
   box-shadow: var(--shadow-sm);
 }
 
-/* ── 编辑区面板 ──────────────────── */
+/* ═══ 编辑面板 ═══ */
 
 .editor-panes {
   flex: 1;
@@ -1069,7 +1341,7 @@ async function deleteEntry(path: string) {
   padding-left: 1.5em;
 }
 
-/* ── 状态栏 ──────────────────────── */
+/* ═══ 状态栏 ═══ */
 
 .editor-statusbar {
   display: flex;
@@ -1094,7 +1366,7 @@ async function deleteEntry(path: string) {
   color: var(--accent);
 }
 
-/* ── 状态提示 Toast ──────────────── */
+/* ═══ 状态提示 Toast ═══ */
 
 .status-toast {
   position: fixed;
@@ -1128,7 +1400,7 @@ async function deleteEntry(path: string) {
   transform: translateX(-50%) translateY(8px);
 }
 
-/* ── 空状态欢迎页 ────────────────── */
+/* ═══ 空状态欢迎页 ═══ */
 
 .editor-welcome {
   flex: 1;
@@ -1194,5 +1466,47 @@ async function deleteEntry(path: string) {
   border-color: var(--accent-hover);
   transform: translateY(-1px);
   box-shadow: var(--shadow-md);
+}
+
+/* ═══ HUD 主题适配 ═══ */
+
+[data-theme='hud'] .note-editor {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(245, 197, 24, 0.03) 0%,
+      transparent 35%,
+      transparent 75%,
+      rgba(0, 0, 0, 0.25) 100%
+    ),
+    var(--bg-primary);
+}
+
+[data-theme='hud'] .file-tree {
+  background: var(--bg-tertiary);
+  border-color: var(--border-subtle);
+}
+
+[data-theme='hud'] .tree-title {
+  font-family: var(--font-heading);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+[data-theme='hud'] .tree-resizer:hover,
+[data-theme='hud'] .tree-resizer:focus-visible {
+  background: var(--accent-glow);
+}
+
+/* ═══ 减少动画 ═══ */
+
+@media (prefers-reduced-motion: reduce) {
+  .file-tree {
+    transition: none;
+  }
+
+  .tree-resizer {
+    transition: none;
+  }
 }
 </style>

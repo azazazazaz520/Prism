@@ -24,9 +24,11 @@ function loadOfflineQueue(): OfflineQueueItem[] {
 
 function persistOfflineQueue(queue: OfflineQueueItem[]) {
   localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+  offlineQueueCount.value = queue.length;
 }
 
 const offlineQueue: OfflineQueueItem[] = loadOfflineQueue();
+const offlineQueueCount = ref(offlineQueue.length);
 /** 同步状态指示器 */
 const isOnline = ref(navigator.onLine);
 /** 同步状态：启动时根据实际网络状态初始化，避免离线启动显示"已同步" */
@@ -454,6 +456,7 @@ export function useSync() {
   return {
     syncStatus,
     lastSyncAt,
+    offlineQueueCount,
     currentProfileId,
     getProfileId,
     setProfileId,

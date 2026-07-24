@@ -16,6 +16,8 @@ import AiAssistant from './components/AiAssistant.vue';
 import NoteEditor from './components/NoteEditor.vue';
 import Toolbox from './components/Toolbox.vue';
 import Dashboard from './components/Dashboard.vue';
+import Toast from './components/Toast.vue';
+import TaskSearch from './components/TaskSearch.vue';
 import PluginViewHost from './components/PluginViewHost.vue';
 import ContextMenu from './components/ContextMenu.vue';
 import { useModuleRegistry } from './composables/useModuleRegistry';
@@ -36,11 +38,14 @@ const {
   allTags,
   filterDate,
   selectedTags,
+  searchQuery,
   filteredTasks,
   dailyCompletionsMap,
   overdueCount,
   pendingCount,
   isLocalReady,
+  isLoading,
+  loadError,
   loadAll,
   refreshTasks,
   pushTask,
@@ -52,6 +57,8 @@ const {
   updateTaskMeta,
   deleteTask,
   clearCompleted,
+  undoMessage,
+  undoLastAction,
   selectDate,
   toggleTag,
   addTag,
@@ -156,6 +163,13 @@ function handleSwitchModule(module: AppModule) {
   activeModule.value = module;
 }
 
+function clearTaskFilters() {
+  selectDate(null);
+  toggleTag('');
+  searchQuery.value = '';
+  void refreshTasks();
+}
+
 const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
 </script>
 
@@ -191,7 +205,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
       <ellipse cx="500" cy="270" rx="60" ry="30" opacity="0.3" />
     </g>
   </svg>
-  <div class="app-layout">
+  <div :class="['app-layout', { 'tasks-layout': activeModule === 'tasks' && !isPluginPageActive }]">
     <!-- 图标轨 - 56px -->
     <nav class="icon-rail">
       <div class="rail-brand">
@@ -210,8 +224,11 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
         </svg>
       </div>
       <button
+        type="button"
         :class="['rail-btn', { active: activeModule === 'tasks' || activeModule === 'settings' }]"
         data-tooltip="Tasks"
+        aria-label="任务"
+        :aria-current="activeModule === 'tasks' ? 'page' : undefined"
         @click="handleSwitchModule('tasks')"
       >
         <svg viewBox="0 0 24 24">
@@ -222,9 +239,12 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
         </svg>
       </button>
       <button
+        type="button"
         v-if="isEnabled('notes')"
         :class="['rail-btn', { active: activeModule === 'notes' }]"
         data-tooltip="Notes"
+        aria-label="笔记"
+        :aria-current="activeModule === 'notes' ? 'page' : undefined"
         @click="handleSwitchModule('notes')"
       >
         <svg viewBox="0 0 24 24">
@@ -235,9 +255,12 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
         </svg>
       </button>
       <button
+        type="button"
         v-if="isEnabled('ai-assistant')"
         :class="['rail-btn', { active: activeModule === 'ai-assistant' }]"
         data-tooltip="AI"
+        aria-label="AI 助手"
+        :aria-current="activeModule === 'ai-assistant' ? 'page' : undefined"
         @click="handleSwitchModule('ai-assistant')"
       >
         <svg viewBox="0 0 24 24">
@@ -245,9 +268,12 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
         </svg>
       </button>
       <button
+        type="button"
         v-if="isEnabled('devtools')"
         :class="['rail-btn', { active: activeModule === 'devtools' }]"
         data-tooltip="Toolbox"
+        aria-label="工具箱"
+        :aria-current="activeModule === 'devtools' ? 'page' : undefined"
         @click="handleSwitchModule('devtools')"
       >
         <svg viewBox="0 0 24 24">
@@ -257,9 +283,11 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
         </svg>
       </button>
       <button
+        type="button"
         v-if="isEnabled('floating')"
         class="rail-btn"
         data-tooltip="Floating"
+        aria-label="打开悬浮窗"
         @click="handleSwitchModule('floating')"
       >
         <svg viewBox="0 0 24 24">
@@ -271,8 +299,11 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
       <!-- 插件图标轨按钮 -->
       <PluginViewHost location="rail" />
       <button
+        type="button"
         :class="['rail-btn', { active: activeModule === 'settings' }]"
         data-tooltip="Settings"
+        aria-label="设置"
+        :aria-current="activeModule === 'settings' ? 'page' : undefined"
         @click="handleSwitchModule('settings')"
       >
         <svg viewBox="0 0 24 24">
@@ -291,7 +322,8 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
         <span class="sidebar-count">{{ tasks.length }}</span>
       </div>
       <div class="sidebar-list">
-        <div v-if="!isLocalReady" class="sidebar-loading">
+        <TaskSearch v-model="searchQuery" />
+        <div v-if="isLoading && !isLocalReady" class="sidebar-loading">
           <span class="loading-spinner"></span>
           <span class="loading-text">加载本地任务…</span>
         </div>
@@ -300,11 +332,14 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
           :tasks="filteredTasks"
           :daily-completions-map="dailyCompletionsMap"
           :ai-enabled="aiEnabled"
+          :load-error="loadError"
+          :has-filters="Boolean(filterDate || selectedTags.length || searchQuery.trim())"
           @toggle="toggleTask"
           @toggle-daily="toggleDailyTask"
           @update="updateTask"
           @delete="deleteTask"
           @update-meta="updateTaskMeta"
+          @clear-filters="clearTaskFilters"
         />
       </div>
     </aside>
@@ -380,7 +415,12 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
       <!-- 插件全屏页面 -->
       <div v-show="isPluginPageActive" class="module-plugin-page">
         <div class="plugin-page-topbar">
-          <button class="plugin-page-back" @click="activatePluginPage('')">
+          <button
+            type="button"
+            class="plugin-page-back"
+            aria-label="返回上一页"
+            @click="activatePluginPage('')"
+          >
             <svg
               width="16"
               height="16"
@@ -406,7 +446,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
         <span class="right-panel-label"><span class="rp-dot"></span>Cal & Tags</span>
       </div>
       <div class="right-panel-content">
-        <MiniCalendar :tasks="tasks" @select-date="selectDate" />
+        <MiniCalendar :tasks="tasks" :selected-date="filterDate" @select-date="selectDate" />
         <div class="detail-section-header" style="margin-top: var(--space-md)">
           <span class="detail-section-label">Filter Tags</span>
           <span class="detail-section-line"></span>
@@ -428,6 +468,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
     :items="globalMenuItems"
     @close="closeContextMenu"
   />
+  <Toast :message="undoMessage || ''" action-label="撤销" @action="undoLastAction" />
 </template>
 
 <style scoped>
@@ -482,8 +523,8 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
 }
 
 .rail-btn {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -960,6 +1001,46 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
 
 .right-panel-content::-webkit-scrollbar {
   width: 3px;
+}
+
+@media (max-width: 1100px) {
+  .app-layout.tasks-layout {
+    grid-template-columns: 56px 280px minmax(0, 1fr);
+  }
+
+  .app-layout:not(.tasks-layout) {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+
+  .right-panel {
+    display: none;
+  }
+
+  .main-header,
+  .tasks-bottom {
+    padding-left: var(--space-lg);
+    padding-right: var(--space-lg);
+  }
+}
+
+@media (max-width: 800px) {
+  .app-layout.tasks-layout {
+    grid-template-columns: 52px 240px minmax(0, 1fr);
+  }
+
+  .app-layout:not(.tasks-layout) {
+    grid-template-columns: 52px minmax(0, 1fr);
+  }
+
+  .main-title {
+    font-size: 22px;
+  }
+
+  .main-header,
+  .tasks-bottom {
+    padding-left: var(--space-md);
+    padding-right: var(--space-md);
+  }
 }
 .right-panel-content::-webkit-scrollbar-track {
   background: transparent;

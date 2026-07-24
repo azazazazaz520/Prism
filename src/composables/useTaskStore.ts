@@ -23,6 +23,7 @@ export { mergeTasksLWW } from './useFilterEngine';
 /** 筛选状态（全局单例，确保跨组件共享） */
 const filterDate = ref<string | null>(null);
 const selectedTags = ref<string[]>([]);
+const searchQuery = ref('');
 
 /**
  * 用户在筛选栏手动添加的标签（尚未附加到任何任务的标签）。
@@ -33,6 +34,7 @@ const customTags = ref<string[]>([]);
 /** 初始加载与同步合并的加载态（全局单例） */
 const isLoading = ref(false);
 const isLocalReady = ref(false);
+const loadError = ref<string | null>(null);
 const isSyncing = ref(false);
 const syncError = ref<string | null>(null);
 
@@ -45,6 +47,15 @@ const allTags = ref<string[]>([]);
 /** 今日已完成任务 ID 列表（全局单例） */
 const dailyCompletedIds = ref<string[]>([]);
 const pendingResetTasks = ref<Task[]>([]);
+
+interface UndoSnapshot {
+  tasks: Task[];
+  message: string;
+}
+
+/** 最近一次可撤销的破坏性操作，仅保留一个撤销窗口。 */
+const undoSnapshot = ref<UndoSnapshot | null>(null);
+let undoTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** 是否已初始化认证和同步 */
 let syncInitialized = false;
@@ -61,6 +72,8 @@ export function useTaskStore() {
     pullDailyCompletions,
     subscribeToChanges,
     syncStatus,
+    lastSyncAt,
+    offlineQueueCount,
     getProfileId,
   } = useSync();
   const syncCode = useSyncCode();
@@ -138,11 +151,45 @@ export function useTaskStore() {
     allTags.value = union;
   }
 
+  function registerUndo(snapshot: Task[], message: string) {
+    if (undoTimer) clearTimeout(undoTimer);
+    undoSnapshot.value = snapshot.length > 0 ? { tasks: snapshot, message } : null;
+    if (snapshot.length > 0) {
+      undoTimer = setTimeout(() => {
+        undoSnapshot.value = null;
+        undoTimer = null;
+      }, 5_000);
+    }
+  }
+
+  async function undoLastAction() {
+    const snapshot = undoSnapshot.value;
+    if (!snapshot) return;
+
+    if (undoTimer) clearTimeout(undoTimer);
+    undoSnapshot.value = null;
+    undoTimer = null;
+
+    const restored: Task[] = [];
+    for (const task of snapshot.tasks) {
+      await invoke('restore_task', { id: task.id });
+      const restoredTask = { ...task, is_deleted: false, updated_at: new Date().toISOString() };
+      restored.push(restoredTask);
+      onTaskChanged(restoredTask);
+    }
+    tasks.value = [...tasks.value, ...restored];
+    syncAllTags();
+  }
+
   // ── 计算属性（委托给 FilterEngine） ────────────
 
-  const filteredTasks = computed(() =>
-    filterTasks(tasks.value, filterDate.value, selectedTags.value),
-  );
+  const filteredTasks = computed(() => {
+    const filtered = filterTasks(tasks.value, filterDate.value, selectedTags.value);
+    const query = searchQuery.value.trim().toLocaleLowerCase();
+    return query
+      ? filtered.filter((task) => task.title.toLocaleLowerCase().includes(query))
+      : filtered;
+  });
 
   const overdueCount = computed(() => countOverdue(tasks.value));
   const pendingCount = computed(() => countPending(tasks.value));
@@ -308,6 +355,7 @@ export function useTaskStore() {
     if (isLocalReady.value && !force) return;
 
     isLoading.value = true;
+    loadError.value = null;
     try {
       pendingResetTasks.value = await invoke<Task[]>('reset_daily_tasks', {
         today: getTodayStr(),
@@ -318,6 +366,9 @@ export function useTaskStore() {
       tasks.value = visibleTasks;
       syncAllTags(visibleTasks);
       isLocalReady.value = true;
+    } catch (e) {
+      loadError.value = e instanceof Error ? e.message : String(e);
+      diagnosticsLogger.error('task', 'task.load_failed', '加载本地任务失败', e);
     } finally {
       isLoading.value = false;
     }
@@ -640,9 +691,11 @@ export function useTaskStore() {
     const now = new Date().toISOString();
     // 标记父任务 + 子任务为已删除
     const deletedIds = new Set<string>();
+    const deletedTasks: Task[] = [];
     tasks.value = tasks.value.map((t) => {
       if (t.id === id || t.parent_id === id) {
         deletedIds.add(t.id);
+        deletedTasks.push({ ...t });
         return { ...t, is_deleted: true, updated_at: now };
       }
       return t;
@@ -653,6 +706,7 @@ export function useTaskStore() {
     }
     tasks.value = tasks.value.filter((t) => !deletedIds.has(t.id));
     syncAllTags();
+    registerUndo(deletedTasks, deletedTasks.length > 1 ? '任务及其子任务已删除' : '任务已删除');
   }, 'deleteTask');
 
   const clearCompleted = wrap(async () => {
@@ -660,6 +714,9 @@ export function useTaskStore() {
     const clearedIds = tasks.value
       .filter((t) => t.completed && !t.is_deleted && !t.is_daily)
       .map((t) => t.id);
+    const clearedTasks = tasks.value
+      .filter((t) => t.completed && !t.is_deleted && !t.is_daily)
+      .map((t) => ({ ...t }));
     await invoke('clear_completed');
     const now = new Date().toISOString();
     tasks.value = tasks.value.map((t) =>
@@ -672,6 +729,7 @@ export function useTaskStore() {
     tasks.value = tasks.value.filter((t) => !t.is_deleted);
     // 清理已清除任务的 daily completion 记录
     dailyCompletedIds.value = dailyCompletedIds.value.filter((tid) => !clearedIds.includes(tid));
+    registerUndo(clearedTasks, `${clearedTasks.length} 个已完成任务已清除`);
   }, 'clearCompleted');
 
   // ── 筛选操作 ──────────────────────────────
@@ -725,11 +783,16 @@ export function useTaskStore() {
     dailyCompletedIds,
     filterDate,
     selectedTags,
+    searchQuery,
     syncStatus,
+    lastSyncAt,
+    offlineQueueCount,
     isLoading,
+    loadError,
     isLocalReady,
     isSyncing,
     syncError,
+    undoMessage: computed(() => undoSnapshot.value?.message ?? null),
     // 计算属性
     filteredTasks,
     dailyCompletionsMap: dailyCompletions,
@@ -749,6 +812,7 @@ export function useTaskStore() {
     updateTaskMeta,
     deleteTask,
     clearCompleted,
+    undoLastAction,
     // 筛选
     selectDate,
     toggleTag,

@@ -2,11 +2,14 @@
 import { computed } from 'vue';
 import type { Task } from '../types';
 import TaskItem from './TaskItem.vue';
+import EmptyState from './EmptyState.vue';
 
 const props = defineProps<{
   tasks: Task[];
   dailyCompletionsMap: Record<string, boolean>;
   aiEnabled?: boolean;
+  loadError?: string | null;
+  hasFilters?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -15,6 +18,7 @@ const emit = defineEmits<{
   update: [id: string, title: string];
   delete: [id: string];
   updateMeta: [id: string, tags: string[], important: boolean, pinned: boolean, isDaily: boolean];
+  clearFilters: [];
 }>();
 
 // 排序规则：置顶优先 → 重要次之 → 未完成在前 → 新建在上
@@ -36,7 +40,25 @@ const normalTasks = computed(() => sortedTasks.value.filter((t) => !t.pinned || 
 
 <template>
   <div class="task-list">
-    <div v-if="tasks.length === 0" class="task-empty">暂无任务，添加一个吧</div>
+    <EmptyState
+      v-if="props.loadError"
+      title="任务加载失败"
+      :description="props.loadError"
+      action-label="重新加载"
+      @action="emit('clearFilters')"
+    />
+    <EmptyState
+      v-else-if="tasks.length === 0 && props.hasFilters"
+      title="没有匹配的任务"
+      description="可以清除筛选条件，或尝试添加新的任务。"
+      action-label="清除筛选"
+      @action="emit('clearFilters')"
+    />
+    <EmptyState
+      v-else-if="tasks.length === 0"
+      title="还没有任务"
+      description="添加一个任务，开始安排今天的工作。"
+    />
     <template v-else>
       <div v-if="pinnedTasks.length > 0" class="pinned-section">
         <div class="pinned-header">

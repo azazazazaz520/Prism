@@ -233,6 +233,7 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
       <!-- 左侧子导航 -->
       <nav class="settings-nav">
         <button
+          type="button"
           v-for="m in subModules"
           :key="m.key"
           :class="['nav-item', { active: activeSub === m.key }]"
@@ -309,6 +310,8 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
                   ref="themeTriggerRef"
                   type="button"
                   class="select-trigger"
+                  :aria-expanded="isThemeOpen"
+                  aria-haspopup="listbox"
                   @click="toggleThemeDropdown"
                 >
                   {{ themeOptions.find((o) => o.value === theme)?.label || '跟随系统' }}
@@ -331,6 +334,8 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
                       v-for="opt in themeOptions"
                       :key="opt.value"
                       type="button"
+                      role="option"
+                      :aria-selected="theme === opt.value"
                       :class="['dropdown-item', { selected: theme === opt.value }]"
                       @click="selectTheme(opt.value)"
                     >
@@ -351,7 +356,11 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
             >
               <label>{{ m.label }}</label>
               <button
+                type="button"
                 :class="['toggle-btn', { on: isEnabled(m.id) }]"
+                role="switch"
+                :aria-checked="isEnabled(m.id)"
+                :aria-label="`${m.label}模块${isEnabled(m.id) ? '已启用' : '已禁用'}`"
                 @click="toggleModule(m.id, !isEnabled(m.id))"
               >
                 <span class="toggle-knob" />

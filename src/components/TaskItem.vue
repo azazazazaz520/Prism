@@ -3,6 +3,7 @@ import { ref, nextTick, computed, onMounted, onUnmounted } from 'vue';
 import type { Task } from '../types';
 import { diagnosticsLogger } from '../diagnostics/invoke-logged';
 import { getMenuRegistrations } from '../plugin-api/menus-impl';
+import { useContextMenu } from '../composables/useContextMenu';
 
 const props = defineProps<{
   task: Task;
@@ -24,6 +25,50 @@ const showMenu = ref(false);
 const menuTags = ref<string[]>([]);
 const menuNewTag = ref('');
 const menuStyle = ref<Record<string, string>>({});
+const { openContextMenu } = useContextMenu();
+
+function openTaskContextMenu(event: MouseEvent) {
+  event.preventDefault();
+  event.stopPropagation();
+
+  const items = [
+    {
+      id: 'task.toggle-complete',
+      label: displayCompleted.value ? '标记为未完成' : '标记为已完成',
+      action: handleToggle,
+    },
+    {
+      id: 'task.toggle-important',
+      label: props.task.important ? '取消重要' : '标记为重要',
+      action: toggleMenuImportant,
+    },
+    {
+      id: 'task.toggle-pinned',
+      label: props.task.pinned ? '取消置顶' : '置顶任务',
+      action: toggleMenuPinned,
+    },
+    {
+      id: 'task.toggle-daily',
+      label: props.task.is_daily ? '取消每日任务' : '设为每日任务',
+      action: toggleMenuDaily,
+    },
+    {
+      id: 'task.delete',
+      label: '删除任务',
+      separatorBefore: true,
+      action: () => emit('delete', props.task.id),
+    },
+    ...pluginMenuItems.value.map((registration) => ({
+      id: registration.id,
+      label: registration.item.label,
+      icon: registration.item.icon,
+      separatorBefore: true,
+      action: () => handlePluginMenuAction(registration.item.action),
+    })),
+  ];
+
+  openContextMenu(event, items);
+}
 
 function openMenu(e: MouseEvent) {
   e.stopPropagation();
@@ -222,6 +267,7 @@ async function handlePluginMenuAction(action: () => void | Promise<void>) {
         [dueStatus || '']: !displayCompleted && dueStatus,
       },
     ]"
+    @contextmenu="openTaskContextMenu"
   >
     <input
       type="checkbox"

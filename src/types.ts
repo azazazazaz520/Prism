@@ -146,6 +146,35 @@ export interface FileEntry {
   path: string;
   isDir: boolean;
   children?: FileEntry[];
+  /** 紧凑目录模式下的展示名称，真实名称仍保留在 name 中 */
+  displayName?: string;
+  /** 紧凑目录模式下用于提示的完整展示路径 */
+  displayPath?: string;
+  /** 紧凑目录模式下新建文件或文件夹时使用的真实目录路径 */
+  createPath?: string;
+  /** 紧凑目录模式下可独立交互的目录片段 */
+  segments?: FileTreeSegment[];
+}
+
+/** 文件树中可独立操作的目录片段 */
+export interface FileTreeSegment {
+  name: string;
+  path: string;
+}
+
+/** 文件树右键菜单的目标 */
+export interface FileTreeContextTarget {
+  name: string;
+  path: string;
+  kind: 'directory' | 'file';
+}
+
+/** 笔记布局持久化状态 */
+export interface NotesLayoutState {
+  /** 侧边栏宽度（px），范围 220-420 */
+  sidebarWidth: number;
+  /** 已展开的目录路径列表 */
+  expandedPaths: string[];
 }
 
 // ── Prompt 管理相关类型 ──────────────────────────────

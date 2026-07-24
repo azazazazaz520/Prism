@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
 pub(crate) mod ai;
+pub(crate) mod logging;
 pub(crate) mod models;
 pub(crate) mod note_service;
 pub(crate) mod persistence;
@@ -35,6 +36,7 @@ pub struct AppState {
     pub(crate) data: Mutex<store::DataStore>,
     pub(crate) config: Mutex<store::ConfigStore>,
     pub(crate) sync: Mutex<store::SyncStore>,
+    pub(crate) logger: Arc<logging::LogWriter>,
     /// 插件模块源码临时存储，key = token，激活后立即消费
     pub(crate) plugin_modules: Mutex<HashMap<String, String>>,
 }
@@ -153,14 +155,47 @@ where
 
 /// 统一入口：单实例检查 → 初始化存储 → 注册命令 → 启动事件循环
 pub fn run() {
+    let logger = match logging::LogWriter::new(persistence::get_logs_dir()) {
+        Ok(writer) => Arc::new(writer),
+        Err(error) => {
+            eprintln!("[logging] 无法初始化日志写入器：{error}");
+            Arc::new(logging::LogWriter::disabled())
+        }
+    };
+
+    let panic_logger = logger.clone();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        let location = panic_info
+            .location()
+            .map(|value| format!("{}:{}", value.file(), value.line()));
+        let payload = panic_info
+            .payload()
+            .downcast_ref::<&str>()
+            .copied()
+            .or_else(|| {
+                panic_info
+                    .payload()
+                    .downcast_ref::<String>()
+                    .map(String::as_str)
+            })
+            .unwrap_or("未知 panic");
+        let _ = panic_logger.append_internal(
+            logging::LogLevel::Error,
+            "runtime",
+            "runtime.panic",
+            "Rust 线程发生 panic",
+            serde_json::json!({ "location": location, "payload": payload }),
+        );
+    }));
+
     let lock_path = instance_lock::acquire();
     if lock_path.is_none() {
         std::process::exit(0);
     }
     let lock_path = lock_path.unwrap();
 
-    let (data, config) = store::initialize();
-    let sync = store::load_sync();
+    let (data, config) = store::initialize(&logger);
+    let sync = store::load_sync(&logger);
     let running = Arc::new(std::sync::atomic::AtomicBool::new(true));
 
     // 插件一次性 token 注册表（3s TTL）
@@ -175,6 +210,7 @@ pub fn run() {
             data: Mutex::new(data),
             config: Mutex::new(config),
             sync: Mutex::new(sync),
+            logger: logger.clone(),
             plugin_modules: Mutex::new(HashMap::new()),
         })
         .manage(token_registry)
@@ -250,6 +286,8 @@ pub fn run() {
             });
         })
         .invoke_handler(tauri::generate_handler![
+            // 日志命令
+            commands::logging::append_log_batch,
             // 任务命令 (commands::tasks)
             commands::tasks::get_tasks,
             commands::tasks::get_all_tasks_including_deleted,

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { watch, onUnmounted } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
+import { diagnosticsLogger } from '../diagnostics/invoke-logged';
 import type { ReleaseInfo } from '../types';
 import { renderMarkdown } from '../composables/useMarkdown';
 
@@ -43,7 +44,9 @@ function formatDate(iso: string): string {
 function openDownload(url: string) {
   // 防御性校验：仅允许 http / https 协议
   if (!/^https?:\/\//i.test(url)) {
-    console.warn('[UpdateDialog] 拒绝打开非 http/https URL:', url);
+    diagnosticsLogger.warn('update', 'update.rejected_external_url', '拒绝打开非 http/https URL', {
+      url,
+    });
     return;
   }
   invoke('open_url', { url });

@@ -1,5 +1,6 @@
 pub mod ai;
 pub mod config;
+pub mod logging;
 pub mod notes;
 pub mod plugins;
 pub mod prompt;

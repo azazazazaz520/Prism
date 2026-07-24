@@ -1,5 +1,5 @@
 import { ref, watchEffect } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
 
 export type ThemeMode = 'auto' | 'light' | 'dark' | 'hud';
 

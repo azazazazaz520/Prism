@@ -1,4 +1,5 @@
 import type { PluginPermission } from '../types';
+import { diagnosticsLogger } from '../diagnostics/invoke-logged';
 import { createTasksAPI } from './tasks-impl';
 import { createNetworkAPI } from './network-impl';
 
@@ -111,12 +112,19 @@ export function buildCapability(pluginId: string, permissions: PluginPermission[
         const prefix = `[${pluginId}]`;
         switch (level) {
           case 'error':
+            diagnosticsLogger.error('plugin', 'plugin.ui_notice_error', message, undefined, {
+              plugin_id: pluginId,
+            });
             console.error(prefix, message);
             break;
           case 'warn':
+            diagnosticsLogger.warn('plugin', 'plugin.ui_notice_warn', message, {
+              plugin_id: pluginId,
+            });
             console.warn(prefix, message);
             break;
           default:
+            diagnosticsLogger.info('plugin', 'plugin.ui_notice', message, { plugin_id: pluginId });
             console.log(prefix, message);
         }
       },
@@ -159,12 +167,21 @@ export function buildCapability(pluginId: string, permissions: PluginPermission[
         const prefix = `[diag:${pluginId}]`;
         switch (level) {
           case 'error':
+            diagnosticsLogger.error('plugin', 'plugin.diagnostic_error', message, undefined, {
+              plugin_id: pluginId,
+            });
             console.error(prefix, message);
             break;
           case 'warn':
+            diagnosticsLogger.warn('plugin', 'plugin.diagnostic_warn', message, {
+              plugin_id: pluginId,
+            });
             console.warn(prefix, message);
             break;
           default:
+            diagnosticsLogger.info('plugin', 'plugin.diagnostic_info', message, {
+              plugin_id: pluginId,
+            });
             console.log(prefix, message);
         }
       },

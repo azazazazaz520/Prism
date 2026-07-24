@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, inject } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invokeWithDiagnostics as invoke } from '../../diagnostics/invoke-logged';
+import { diagnosticsLogger } from '../../diagnostics/invoke-logged';
 import type { AiExecuteResult } from '../../types';
 import { useAiStatus } from '../../composables/useAiStatus';
 import { useAiResultCache } from '../../composables/useAiResultCache';
@@ -38,7 +39,7 @@ async function refresh() {
       saveFocusResult(text, false);
     }
   } catch (e: any) {
-    console.error('[AiSummary]', e);
+    diagnosticsLogger.error('ai', 'ai.summary_failed', 'AI 今日总结失败', e);
     saveFocusResult(typeof e === 'string' ? e : 'AI 分析失败，请重试', true);
   } finally {
     loading.value = false;

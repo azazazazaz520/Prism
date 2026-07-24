@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onErrorCaptured } from 'vue';
+import { diagnosticsLogger } from '../diagnostics/invoke-logged';
 
 const error = ref<Error | null>(null);
 const errorInfo = ref<string>('');
@@ -7,6 +8,7 @@ const errorInfo = ref<string>('');
 onErrorCaptured((err, _instance, info) => {
   error.value = err;
   errorInfo.value = info;
+  diagnosticsLogger.error('plugin', 'plugin.component_error', '插件组件异常', err, { info });
   // 阻止向上冒泡，避免整个应用崩溃
   return false;
 });

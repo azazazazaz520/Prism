@@ -10,7 +10,8 @@ import {
   nextTick,
   shallowRef,
 } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
+import { diagnosticsLogger } from '../diagnostics/invoke-logged';
 import type { PluginManifest, PluginDiagnostics, PluginContext } from '../types';
 import { validateManifest, checkEngines, PRISM_VERSION } from './usePluginManifest';
 import { parseModule } from '../plugin-api/module-resolver';
@@ -160,7 +161,14 @@ export function usePluginLoader() {
       for (const raw of manifests) {
         if (!validateManifest(raw)) {
           const fallbackId = (raw as any).id || 'unknown';
-          console.warn(`[PluginLoader] ${fallbackId} manifest 校验失败，跳过`);
+          diagnosticsLogger.warn(
+            'plugin',
+            'plugin.manifest_invalid',
+            '插件 manifest 校验失败，已跳过',
+            {
+              plugin_id: fallbackId,
+            },
+          );
           continue;
         }
         const m: PluginManifest = raw;
@@ -207,12 +215,20 @@ export function usePluginLoader() {
             }).catch(() => {});
           }
           activatePlugin(id).catch((e) => {
-            console.warn(`[PluginLoader] 自动激活 ${id} 失败:`, e);
+            diagnosticsLogger.error(
+              'plugin',
+              'plugin.auto_activate_failed',
+              '插件自动激活失败',
+              e,
+              {
+                plugin_id: id,
+              },
+            );
           });
         }
       }
     } catch (e) {
-      console.error('[PluginLoader] 扫描失败:', e);
+      diagnosticsLogger.error('plugin', 'plugin.scan_failed', '插件扫描失败', e);
     }
   }
 
@@ -356,7 +372,10 @@ export function usePluginLoader() {
         },
       });
     } catch (e) {
-      console.warn('[PluginLoader] 保存配置失败:', e);
+      diagnosticsLogger.warn('plugin', 'plugin.config_save_failed', '插件配置保存失败', {
+        error: e instanceof Error ? e.message : String(e),
+        plugin_id: pluginId,
+      });
     }
 
     if (newEnabled) {

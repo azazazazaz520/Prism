@@ -1,5 +1,6 @@
 import { ref } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
+import { diagnosticsLogger } from '../diagnostics/invoke-logged';
 import type { PromptMeta } from '../types';
 
 /** Prompt 注册表（共享单例 ref） */
@@ -17,7 +18,7 @@ export function usePromptRepo() {
     try {
       prompts.value = await invoke<PromptMeta[]>('list_prompts');
     } catch (e) {
-      console.error('加载 Prompt 列表失败:', e);
+      diagnosticsLogger.error('prompt', 'prompt.list_failed', '加载 Prompt 列表失败', e);
     }
   }
 

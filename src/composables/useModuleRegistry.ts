@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
+import { diagnosticsLogger } from '../diagnostics/invoke-logged';
 import type { AppModule, ModuleDescriptor } from '../types';
 
 /** 完整模块注册表（所有可用模块的元数据定义） */
@@ -88,7 +89,7 @@ export function useModuleRegistry() {
     try {
       await invoke('set_module_enabled', { moduleId, enabled });
     } catch (e) {
-      console.error('保存模块开关失败:', e);
+      diagnosticsLogger.error('modules', 'modules.save_toggle_failed', '保存模块开关失败', e);
     }
   }
 

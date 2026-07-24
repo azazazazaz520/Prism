@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { diagnosticsLogger } from '../diagnostics/invoke-logged';
 import { usePromptRepo } from '../composables/usePromptRepo';
 import type { PromptMeta } from '../types';
 
@@ -26,7 +27,7 @@ async function selectPrompt(p: PromptMeta) {
     isDirty.value = false;
     statusMsg.value = '';
   } catch (e) {
-    console.error('加载 Prompt 失败:', e);
+    diagnosticsLogger.error('prompt', 'prompt.load_failed', '加载 Prompt 失败', e);
     statusMsg.value = `加载失败: ${normalizeError(e)}`;
   }
 }
@@ -43,7 +44,7 @@ async function save() {
     isDirty.value = false;
     statusMsg.value = '已保存 ✓';
   } catch (e) {
-    console.error('保存 Prompt 失败:', e);
+    diagnosticsLogger.error('prompt', 'prompt.save_failed', '保存 Prompt 失败', e);
     statusMsg.value = `保存失败: ${normalizeError(e)}`;
   } finally {
     saving.value = false;
@@ -64,7 +65,7 @@ async function resetPrompt() {
     isDirty.value = false;
     statusMsg.value = '已恢复默认 ✓';
   } catch (e) {
-    console.error('重置 Prompt 失败:', e);
+    diagnosticsLogger.error('prompt', 'prompt.reset_failed', '重置 Prompt 失败', e);
     statusMsg.value = `重置失败: ${normalizeError(e)}`;
   } finally {
     saving.value = false;

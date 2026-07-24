@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue';
 import { createClient, type SupabaseClient, type Session, type User } from '@supabase/supabase-js';
 import { withTimeout } from './syncUtils';
+import { diagnosticsLogger } from '../diagnostics/invoke-logged';
 
 /** 全局单例 Supabase 客户端，所有 composable 共享 */
 let supabase: SupabaseClient | null = null;
@@ -99,7 +100,7 @@ export function useAuth() {
     } catch (e) {
       const message = e instanceof Error ? e.message : '匿名登录失败';
       error.value = message;
-      console.warn('[auth] anonymous sign-in failed:', message);
+      diagnosticsLogger.warn('auth', 'auth.anonymous_sign_in_failed', '匿名登录失败', { message });
     } finally {
       isLoading.value = false;
     }

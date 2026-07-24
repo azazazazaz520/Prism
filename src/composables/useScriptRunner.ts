@@ -1,5 +1,6 @@
 import { ref, shallowRef } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
+import { diagnosticsLogger } from '../diagnostics/invoke-logged';
 import { buildCapability } from '../plugin-api/capability-builder';
 import type { PluginPermission } from '../types';
 
@@ -38,7 +39,7 @@ export function useScriptRunner() {
         status: 'idle' as const,
       }));
     } catch (e) {
-      console.error('[ScriptRunner] 扫描失败:', e);
+      diagnosticsLogger.error('scripts', 'scripts.scan_failed', '扫描脚本失败', e);
     }
   }
 

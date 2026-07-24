@@ -1,8 +1,8 @@
 {
-  "version": "0.1.0",
-  "release_date": "2026-07-24T00:00:00Z",
-  "release_notes": "Prism 桌面版初始版本\n\n- 任务管理、Markdown 笔记、AI 辅助\n- 跨设备同步（Supabase）\n- 插件与脚本系统\n- 开发者工具箱",
-  "download_url": "https://github.com/azazazazaz520/Prism/releases/latest",
-  "release_url": "https://github.com/azazazazaz520/Prism/releases/latest",
-  "sha256": null
+  "sha256": "fc3abbe1430f1ee5996cb582a3437cee49a9f1b1b629e40b90ed5efddcfea6f5",
+  "download_url": "https://github.com/azazazazaz520/Prism/releases/download/v0.3.5/Prism_0.3.5_x64-setup.exe",
+  "release_notes": "## Changes since v0.3.4\n\n- fix: 修复更新清单发布与代理错误处理 (asd_fire)",
+  "release_url": "https://github.com/azazazazaz520/Prism/releases/tag/v0.3.5",
+  "release_date": "2026-07-24T13:09:56.9889615Z",
+  "version": "0.3.5"
 }

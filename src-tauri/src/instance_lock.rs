@@ -42,7 +42,7 @@ fn current_exe_name() -> String {
 ///
 /// 用于测试中的死进程探测。锁逻辑请用 `is_same_process`。
 ///
-/// Windows: 调用 `tasklist /FI "PID eq N"`，解析输出判断进程是否存在。
+/// Windows: 使用 Windows API 查询进程句柄，避免依赖本地化命令行输出。
 /// Unix: 发送信号 0（不中断进程），根据返回值判断。
 /// PID 0 在所有平台上都是系统保留值，直接返回 false。
 #[allow(dead_code)]
@@ -52,15 +52,7 @@ fn is_pid_alive(pid: u32) -> bool {
     }
     #[cfg(windows)]
     {
-        use std::os::windows::process::CommandExt;
-        std::process::Command::new("tasklist")
-            .args(["/FI", &format!("PID eq {}", pid)])
-            .creation_flags(0x08000000) // CREATE_NO_WINDOW
-            .output()
-            .is_ok_and(|o| {
-                let stdout = String::from_utf8_lossy(&o.stdout);
-                !stdout.contains("No tasks") && stdout.contains(&pid.to_string())
-            })
+        query_process_exe_name(pid).is_some()
     }
     #[cfg(unix)]
     {
@@ -86,7 +78,7 @@ fn is_pid_alive(pid: u32) -> bool {
 
 /// 检查指定 PID 的进程是否存活 **且** 进程名匹配。
 ///
-/// Windows: `tasklist /FI "PID eq N" /FO CSV /NH` 解析 CSV 第一列。
+/// Windows: 使用 Windows API 查询进程完整路径，再提取可执行文件名。
 /// Unix: 读取 `/proc/PID/comm` 比对。
 fn is_same_process(pid: u32, expected_name: &str) -> bool {
     if pid == 0 {
@@ -94,17 +86,7 @@ fn is_same_process(pid: u32, expected_name: &str) -> bool {
     }
     #[cfg(windows)]
     {
-        use std::os::windows::process::CommandExt;
-        std::process::Command::new("tasklist")
-            .args(["/FI", &format!("PID eq {}", pid), "/FO", "CSV", "/NH"])
-            .creation_flags(0x08000000) // CREATE_NO_WINDOW
-            .output()
-            .is_ok_and(|o| {
-                let stdout = String::from_utf8_lossy(&o.stdout);
-                // CSV 格式: "name.exe","PID","Session","Session#","Mem Usage"
-                let name = stdout.split(',').next().unwrap_or("").trim_matches('"');
-                name.eq_ignore_ascii_case(expected_name)
-            })
+        query_process_exe_name(pid).is_some_and(|name| name.eq_ignore_ascii_case(expected_name))
     }
     #[cfg(unix)]
     {
@@ -120,6 +102,38 @@ fn is_same_process(pid: u32, expected_name: &str) -> bool {
     {
         false
     }
+}
+
+#[cfg(windows)]
+fn query_process_exe_name(pid: u32) -> Option<String> {
+    use windows::core::PWSTR;
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Threading::{
+        OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_FORMAT,
+        PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+
+    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()? };
+    let mut buffer = [0u16; 32_768];
+    let mut length = buffer.len() as u32;
+    let result = unsafe {
+        QueryFullProcessImageNameW(
+            handle,
+            PROCESS_NAME_FORMAT(0),
+            PWSTR(buffer.as_mut_ptr()),
+            &mut length,
+        )
+    };
+    let _ = unsafe { CloseHandle(handle) };
+
+    result.ok()?;
+    String::from_utf16(&buffer[..length as usize])
+        .ok()
+        .and_then(|path| {
+            std::path::Path::new(&path)
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+        })
 }
 
 /// 在指定目录下尝试创建/验证单实例锁。

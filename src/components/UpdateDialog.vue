@@ -73,6 +73,13 @@ function formatReleaseBody(body: string): string {
           </div>
           <div class="dialog-footer">
             <button class="dialog-btn dialog-btn-cancel" @click="emit('close')">以后再说</button>
+            <button
+              v-if="release.release_url"
+              class="dialog-btn dialog-btn-secondary"
+              @click="openDownload(release.release_url!)"
+            >
+              查看 Release
+            </button>
             <button class="dialog-btn dialog-btn-confirm" @click="openDownload(release.html_url)">
               前往下载
             </button>
@@ -210,6 +217,16 @@ function formatReleaseBody(body: string): string {
   border-color: var(--accent-hover);
 }
 
+.dialog-btn-secondary {
+  background: transparent;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.dialog-btn-secondary:hover {
+  background: var(--accent-bg);
+}
+
 /* HUD 主题 */
 [data-theme='hud'] .dialog-container,
 [data-theme='hud'] .dialog-container {
@@ -252,6 +269,27 @@ function formatReleaseBody(body: string): string {
 [data-theme='hud'] .dialog-btn-confirm:hover {
   background: var(--accent-hover);
   box-shadow: 0 0 12px var(--accent-glow);
+}
+
+[data-theme='hud'] .dialog-btn-secondary,
+[data-theme='hud'] .dialog-btn-secondary {
+  background: transparent;
+  color: var(--accent-dim);
+  border-color: var(--accent-dim);
+  clip-path: polygon(
+    6px 0%,
+    100% 0%,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0% 100%,
+    0% 6px
+  );
+  border-radius: 0;
+}
+
+[data-theme='hud'] .dialog-btn-secondary:hover,
+[data-theme='hud'] .dialog-btn-secondary:hover {
+  background: var(--accent-glow);
 }
 
 /* 过渡动画 */

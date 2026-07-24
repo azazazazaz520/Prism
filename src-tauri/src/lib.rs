@@ -367,6 +367,10 @@ pub fn run() {
             commands::plugins::scan_scripts,
             commands::plugins::read_script_content,
             commands::plugins::register_plugin_module,
+            // 版本更新检查
+            commands::update::check_update,
+            commands::update::get_update_network_config,
+            commands::update::set_update_network_config,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

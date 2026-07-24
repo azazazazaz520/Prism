@@ -315,11 +315,49 @@ export class PluginSessionExpiredError extends Error {
 
 // ── 更新相关类型 ──────────────────────────────
 
-/** GitHub Release 信息（GET /repos/:owner/:repo/releases/latest 响应子集） */
+/** GitHub Release 信息（与旧版兼容，新增可选字段） */
 export interface ReleaseInfo {
   tag_name: string;
   name: string;
   body: string;
   html_url: string;
   published_at: string;
+  /** 独立的 Release 页面地址（静态清单模式可用） */
+  release_url?: string;
+}
+
+/** 更新检查错误码 */
+export type UpdateCheckErrorCode =
+  | 'network_unreachable'
+  | 'proxy_failed'
+  | 'timeout'
+  | 'tls_failed'
+  | 'rate_limited'
+  | 'repository_not_found'
+  | 'bad_response'
+  | 'invalid_version';
+
+/** 更新检查错误响应（Rust 端返回的 JSON 串） */
+export interface UpdateCheckErrorResponse {
+  error_code: UpdateCheckErrorCode;
+  message: string;
+}
+
+/** 更新网络模式 */
+export type UpdateNetworkMode = 'system' | 'custom' | 'direct';
+
+/** 版本更新网络配置 */
+export interface UpdateNetworkConfig {
+  mode: UpdateNetworkMode;
+  proxy_url: string | null;
+}
+
+/** Windows 版本更新清单（静态 JSON 文件格式） */
+export interface WindowsUpdateManifest {
+  version: string;
+  release_date: string;
+  release_notes: string;
+  download_url: string;
+  release_url: string;
+  sha256: string | null;
 }

@@ -11,13 +11,13 @@
 use crate::store::{UpdateNetworkConfig, UpdateNetworkMode, WindowsUpdateManifest};
 use crate::AppState;
 
-/// 更新清单主地址（CDN 部署后替换为此地址，当前使用 GitHub Raw 备用地址）
+/// 更新清单主地址（CDN 部署后替换为此地址）
 const UPDATE_MANIFEST_PRIMARY: &str =
-    "https://raw.githubusercontent.com/azazazazaz520/Prism/main/update/windows.json";
+    "https://raw.githubusercontent.com/azazazazaz520/Prism/master/update/windows.json";
 
 /// 更新清单备用地址（当主地址不可达时使用）
 const UPDATE_MANIFEST_FALLBACK: &str =
-    "https://raw.githubusercontent.com/azazazazaz520/Prism/main/update/windows.json";
+    "https://raw.githubusercontent.com/azazazazaz520/Prism/master/update/windows.json";
 
 /// 请求超时秒数
 const REQUEST_TIMEOUT_SECS: u64 = 15;

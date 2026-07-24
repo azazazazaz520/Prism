@@ -8,7 +8,8 @@ const props = withDefaults(
   }>(),
   { initialSub: 'preferences' },
 );
-import { invoke } from '@tauri-apps/api/core';
+import { invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
+import { diagnosticsLogger } from '../diagnostics/invoke-logged';
 import type { SettingsSubModule } from '../types';
 import { useTheme, type ThemeMode } from '../composables/useTheme';
 import { useModuleRegistry } from '../composables/useModuleRegistry';
@@ -109,7 +110,7 @@ async function saveReminder() {
   try {
     await invoke('set_reminder_minutes', { minutes: reminderMinutes.value });
   } catch (e) {
-    console.error('保存提醒设置失败:', e);
+    diagnosticsLogger.error('settings', 'settings.save_reminder_failed', '保存提醒设置失败', e);
   }
 }
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
 import type { AiMode, AiExecuteResult, ParsedTask } from '../types';
 
 const emit = defineEmits<{

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { getActivePageRegistrations, activatePluginPage } from './plugin-api/views-impl';
-import { invoke } from '@tauri-apps/api/core';
+import { invokeWithDiagnostics as invoke } from './diagnostics/invoke-logged';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { AppModule, SettingsSubModule } from './types';
 import TaskInput from './components/TaskInput.vue';

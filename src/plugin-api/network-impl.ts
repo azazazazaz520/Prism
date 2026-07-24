@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
 
 // ═══════════════════════════════════════════════════════════════
 //  prism:network API 工厂

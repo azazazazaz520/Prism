@@ -2,6 +2,7 @@ import { ref, watch } from 'vue';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { useAuth, getSupabaseClient } from './useAuth';
 import type { Task, DailyCompletion } from '../types';
+import { diagnosticsLogger } from '../diagnostics/invoke-logged';
 
 /** 离线操作队列：网络断开时暂存本地，恢复后批量推送 */
 const OFFLINE_QUEUE_KEY = 'prism_offline_queue';
@@ -136,7 +137,9 @@ export function useSync() {
       // 推送成功后消费离线队列
       flushOfflineQueue();
     } catch (e) {
-      console.error('同步任务失败:', e);
+      diagnosticsLogger.error('sync', 'sync.push_task_failed', '同步任务失败', e, {
+        task_id: task.id,
+      });
       syncStatus.value = 'error';
       offlineQueue.push({
         type: 'upsert',
@@ -186,7 +189,16 @@ export function useSync() {
       // 成功推送后消费离线队列
       flushOfflineQueue();
     } catch (e) {
-      console.error('同步每日完成记录失败:', e);
+      diagnosticsLogger.error(
+        'sync',
+        'sync.push_daily_completion_failed',
+        '同步每日完成记录失败',
+        e,
+        {
+          task_id: dc.task_id,
+          date: dc.date,
+        },
+      );
       offlineQueue.push({
         type: 'upsert',
         table: 'daily_completions',
@@ -232,7 +244,16 @@ export function useSync() {
       // 成功推送后消费离线队列
       flushOfflineQueue();
     } catch (e) {
-      console.error('删除每日完成记录失败:', e);
+      diagnosticsLogger.error(
+        'sync',
+        'sync.delete_daily_completion_failed',
+        '删除每日完成记录失败',
+        e,
+        {
+          task_id: taskId,
+          date,
+        },
+      );
       offlineQueue.push({
         type: 'delete',
         table: 'daily_completions',
@@ -272,7 +293,16 @@ export function useSync() {
 
       return allDCs;
     } catch (e) {
-      console.error('拉取远程每日完成记录失败:', e);
+      diagnosticsLogger.error(
+        'sync',
+        'sync.pull_daily_completions_failed',
+        '拉取远程每日完成记录失败',
+        e,
+        {
+          profile_id: profileId,
+          page,
+        },
+      );
       syncStatus.value = 'error';
       return [];
     }
@@ -317,7 +347,11 @@ export function useSync() {
       lastSyncAt.value = new Date().toISOString();
       return allTasks;
     } catch (e) {
-      console.error('拉取远程任务失败:', e);
+      diagnosticsLogger.error('sync', 'sync.pull_tasks_failed', '拉取远程任务失败', e, {
+        profile_id: profileId,
+        force_full: forceFull,
+        task_count: allTasks.length,
+      });
       syncStatus.value = 'error';
       return allTasks.length > 0 ? allTasks : [];
     }
@@ -400,7 +434,11 @@ export function useSync() {
       } catch (e) {
         offlineQueue.push(item);
         persistOfflineQueue(offlineQueue);
-        console.error('离线队列推送失败:', e);
+        diagnosticsLogger.warn('sync', 'sync.offline_queue_item_failed', '离线队列推送失败', {
+          type: item.type,
+          table: item.table,
+          error: e instanceof Error ? e.message : String(e),
+        });
       }
     }
 

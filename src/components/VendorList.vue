@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
 import type { Vendor } from '../types';
 import AddVendorModal from './AddVendorModal.vue';
 

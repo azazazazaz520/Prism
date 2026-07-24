@@ -1,5 +1,6 @@
 import { ref } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
+import { diagnosticsLogger } from '../diagnostics/invoke-logged';
 import { useSync } from './useSync';
 import { useAuth, getSupabaseClient } from './useAuth';
 
@@ -172,7 +173,14 @@ export function useSyncCode() {
         });
       }
     } catch (e) {
-      console.warn('[syncCode] mergeLocalToProfile failed:', e);
+      diagnosticsLogger.warn(
+        'sync',
+        'sync.merge_local_to_profile_failed',
+        '合并本地任务到远端 profile 失败',
+        {
+          error: e instanceof Error ? e.message : String(e),
+        },
+      );
     }
   }
 
@@ -203,7 +211,14 @@ export function useSyncCode() {
         });
       }
     } catch (e) {
-      console.warn('[syncCode] ensureProfileMembership failed:', e);
+      diagnosticsLogger.warn(
+        'sync',
+        'sync.ensure_profile_membership_failed',
+        '确保同步 profile 成员关系失败',
+        {
+          error: e instanceof Error ? e.message : String(e),
+        },
+      );
     }
   }
 

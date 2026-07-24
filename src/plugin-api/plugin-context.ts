@@ -1,4 +1,5 @@
 import type { PluginContext, PluginPermission, Disposable } from '../types';
+import { diagnosticsLogger } from '../diagnostics/invoke-logged';
 
 /** Vue 运行时注入接口 — 由调用方传入，避免模块拆分导致多实例 */
 export interface VueRuntime {
@@ -54,15 +55,23 @@ export function createPluginContext(
       const prefix = `[${runtimeId}]`;
       switch (level) {
         case 'error':
+          diagnosticsLogger.error('plugin', 'plugin.context_error', message, undefined, {
+            plugin_id: pluginId,
+          });
           console.error(prefix, message);
           break;
         case 'warn':
+          diagnosticsLogger.warn('plugin', 'plugin.context_warn', message, { plugin_id: pluginId });
           console.warn(prefix, message);
           break;
         case 'debug':
+          diagnosticsLogger.info('plugin', 'plugin.context_debug', message, {
+            plugin_id: pluginId,
+          });
           console.debug(prefix, message);
           break;
         default:
+          diagnosticsLogger.info('plugin', 'plugin.context_info', message, { plugin_id: pluginId });
           console.log(prefix, message);
       }
     },

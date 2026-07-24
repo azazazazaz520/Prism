@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, nextTick, computed } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
 import type { ChatMessage } from '../types';
 
 // ── 状态 ──────────────────────────────

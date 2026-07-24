@@ -1,4 +1,5 @@
 import type { Disposable } from '../types';
+import { diagnosticsLogger } from '../diagnostics/invoke-logged';
 
 /**
  * 批量 Disposable 容器。
@@ -36,7 +37,9 @@ export class DisposableStore implements Disposable {
       try {
         d.dispose();
       } catch (e) {
-        console.warn('[DisposableStore] dispose 异常:', e);
+        diagnosticsLogger.warn('plugin', 'plugin.dispose_failed', '插件资源释放异常', {
+          error: e instanceof Error ? e.message : String(e),
+        });
       }
     }
   }

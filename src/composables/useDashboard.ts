@@ -1,5 +1,6 @@
 import { ref } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
+import { diagnosticsLogger } from '../diagnostics/invoke-logged';
 import type { WidgetDefinition, DashboardLayout } from '../types';
 
 // ── 内建 Widget 注册表 ──────────────────────────
@@ -95,7 +96,9 @@ export function useDashboard() {
     try {
       await invoke('set_dashboard_layout', { layout: JSON.stringify(layout.value) });
     } catch (e) {
-      console.warn('保存仪表盘布局失败:', e);
+      diagnosticsLogger.warn('dashboard', 'dashboard.save_layout_failed', '保存仪表盘布局失败', {
+        error: e instanceof Error ? e.message : String(e),
+      });
     }
   }
 

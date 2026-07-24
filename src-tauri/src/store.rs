@@ -16,9 +16,9 @@ pub use crate::persistence::*;
 // ═══════════════════════════════════════════════════════════════
 
 /// 创建目录 → 返回 (DataStore, ConfigStore)
-pub fn initialize() -> (DataStore, ConfigStore) {
-    ensure_workspace();
-    (load_data(), load_config())
+pub fn initialize(logger: &crate::logging::LogWriter) -> (DataStore, ConfigStore) {
+    ensure_workspace(logger);
+    (load_data(logger), load_config(logger))
 }
 
 // ═══════════════════════════════════════════════════════════════

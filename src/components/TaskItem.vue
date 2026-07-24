@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, nextTick, computed, onMounted, onUnmounted } from 'vue';
 import type { Task } from '../types';
+import { diagnosticsLogger } from '../diagnostics/invoke-logged';
 import { getMenuRegistrations } from '../plugin-api/menus-impl';
 
 const props = defineProps<{
@@ -197,7 +198,15 @@ async function handlePluginMenuAction(action: () => void | Promise<void>) {
   try {
     await action();
   } catch (e) {
-    console.error('[TaskItem] 插件菜单回调异常:', e);
+    diagnosticsLogger.error(
+      'plugin',
+      'plugin.task_menu_callback_failed',
+      '插件任务菜单回调异常',
+      e,
+      {
+        taskId: props.task.id,
+      },
+    );
   }
   showMenu.value = false;
 }

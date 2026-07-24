@@ -8,7 +8,8 @@
  * 防抖自动保存至本地文件系统，同时支持 Ctrl+S 手动保存。
  */
 import { ref, watch, computed } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
+import { diagnosticsLogger } from '../diagnostics/invoke-logged';
 import { open } from '@tauri-apps/plugin-dialog';
 import { renderMarkdown } from '../composables/useMarkdown';
 import type { FileEntry } from '../types';
@@ -134,7 +135,9 @@ async function handleManualSave() {
     await invoke('write_note', { path: selectedPath.value, content: content.value });
     isDirty.value = false;
   } catch (e) {
-    console.error('保存失败:', e);
+    diagnosticsLogger.error('notes', 'notes.save_failed', '保存笔记失败', e, {
+      path: selectedPath.value,
+    });
   } finally {
     saving.value = false;
   }
@@ -185,7 +188,7 @@ async function loadNotesDir() {
   try {
     notesDir.value = await invoke<string>('get_notes_directory');
   } catch (e) {
-    console.error('获取笔记目录失败:', e);
+    diagnosticsLogger.error('notes', 'notes.get_directory_failed', '获取笔记目录失败', e);
   }
 }
 
@@ -202,7 +205,7 @@ async function changeNotesDir() {
       await loadTree();
     }
   } catch (e) {
-    console.error('设置笔记目录失败:', e);
+    diagnosticsLogger.error('notes', 'notes.set_directory_failed', '设置笔记目录失败', e);
   }
 }
 
@@ -222,7 +225,7 @@ async function loadTree() {
   try {
     tree.value = await invoke<FileEntry[]>('list_note_tree');
   } catch (e) {
-    console.error('加载文件树失败:', e);
+    diagnosticsLogger.error('notes', 'notes.load_tree_failed', '加载文件树失败', e);
   }
 }
 
@@ -234,7 +237,9 @@ async function openFile(path: string) {
     cursorLine.value = 1;
     cursorCol.value = 1;
   } catch (e) {
-    console.error('读取文件失败:', e);
+    diagnosticsLogger.error('notes', 'notes.read_file_failed', '读取文件失败', e, {
+      path: selectedPath.value,
+    });
   }
 }
 
@@ -255,7 +260,9 @@ watch(content, (val) => {
       await invoke('write_note', { path: selectedPath.value, content: val });
       isDirty.value = false;
     } catch (e) {
-      console.error('保存失败:', e);
+      diagnosticsLogger.error('notes', 'notes.save_failed', '保存笔记失败', e, {
+        path: selectedPath.value,
+      });
     } finally {
       saving.value = false;
     }
@@ -356,7 +363,7 @@ async function createFile(parentDir: string) {
     openFile(path);
   } catch (e) {
     showStatus(`创建文件失败: ${e}`);
-    console.error('创建文件失败:', e);
+    diagnosticsLogger.error('notes', 'notes.create_file_failed', '创建文件失败', e);
   }
 }
 
@@ -380,7 +387,7 @@ async function createFolder(parentDir: string) {
     expanded.value = next;
   } catch (e) {
     showStatus(`创建文件夹失败: ${e}`);
-    console.error('创建文件夹失败:', e);
+    diagnosticsLogger.error('notes', 'notes.create_directory_failed', '创建文件夹失败', e);
   }
 }
 
@@ -405,7 +412,7 @@ async function renameEntry(path: string, isDir: boolean) {
     await loadTree();
   } catch (e) {
     showStatus(`重命名失败: ${e}`);
-    console.error('重命名失败:', e);
+    diagnosticsLogger.error('notes', 'notes.rename_failed', '重命名失败', e);
   }
 }
 
@@ -443,7 +450,7 @@ async function deleteEntry(path: string) {
     await loadTree();
   } catch (e) {
     showStatus(`删除失败: ${e}`);
-    console.error('删除失败:', e);
+    diagnosticsLogger.error('notes', 'notes.delete_failed', '删除笔记失败', e);
   }
 }
 </script>

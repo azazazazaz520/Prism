@@ -1,5 +1,5 @@
 import { ref, computed, watch, type Ref } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
 import type { Task, DailyCompletion } from '../types';
 import { useAuth } from './useAuth';
 import { useSync } from './useSync';
@@ -15,6 +15,7 @@ import {
   mergeTasksLWW,
 } from './useFilterEngine';
 import { withTimeout } from './syncUtils';
+import { diagnosticsLogger } from '../diagnostics/invoke-logged';
 
 // 重新导出 — 保持向后兼容
 export { mergeTasksLWW } from './useFilterEngine';
@@ -72,20 +73,37 @@ export function useTaskStore() {
 
   function onTaskChanged(task: Task) {
     if (isLoggedIn.value) {
-      pushTask(task).catch((e) => console.warn('[sync] pushTask:', e));
+      pushTask(task).catch((e) =>
+        diagnosticsLogger.warn('sync', 'sync.background_push_task_failed', '后台推送任务失败', {
+          task_id: task.id,
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
     }
   }
 
   function onDailyChanged(dc: DailyCompletion) {
     if (isLoggedIn.value) {
-      pushDailyCompletion(dc).catch((e) => console.warn('[sync] pushDailyCompletion:', e));
+      pushDailyCompletion(dc).catch((e) =>
+        diagnosticsLogger.warn(
+          'sync',
+          'sync.background_push_daily_completion_failed',
+          '后台推送每日完成记录失败',
+          { task_id: dc.task_id, date: dc.date, error: e instanceof Error ? e.message : String(e) },
+        ),
+      );
     }
   }
 
   function onDailyDeleted(taskId: string, date: string) {
     if (isLoggedIn.value) {
       pushDeleteDailyCompletion(taskId, date).catch((e) =>
-        console.warn('[sync] pushDeleteDailyCompletion:', e),
+        diagnosticsLogger.warn(
+          'sync',
+          'sync.background_delete_daily_completion_failed',
+          '后台删除每日完成记录失败',
+          { task_id: taskId, date, error: e instanceof Error ? e.message : String(e) },
+        ),
       );
     }
   }
@@ -100,7 +118,9 @@ export function useTaskStore() {
       try {
         return await fn(...args);
       } catch (e) {
-        console.error(`[${label}] failed:`, e);
+        diagnosticsLogger.error('task', 'task.operation_failed', `任务操作失败：${label}`, e, {
+          operation: label,
+        });
         await loadAll();
       }
     };
@@ -138,7 +158,9 @@ export function useTaskStore() {
         try {
           await initAuth();
         } catch (e) {
-          console.warn('[sync] initAuth failed:', e);
+          diagnosticsLogger.warn('sync', 'sync.auth_init_failed', '同步认证初始化失败', {
+            error: e instanceof Error ? e.message : String(e),
+          });
         }
       }
 
@@ -149,7 +171,12 @@ export function useTaskStore() {
       });
       if (isLoggedIn.value && changedTasks.length > 0) {
         for (const t of changedTasks) {
-          pushTask(t).catch((e) => console.warn('[sync] push reset_daily:', e));
+          pushTask(t).catch((e) =>
+            diagnosticsLogger.warn('sync', 'sync.reset_daily_push_failed', '每日任务重置推送失败', {
+              task_id: t.id,
+              error: e instanceof Error ? e.message : String(e),
+            }),
+          );
         }
       }
 
@@ -164,10 +191,19 @@ export function useTaskStore() {
           if (profileRestored) {
             syncCode
               .mergeLocalToProfile(getProfileId()!)
-              .catch((e) => console.warn('[sync] mergeLocalToProfile failed:', e));
+              .catch((e) =>
+                diagnosticsLogger.warn(
+                  'sync',
+                  'sync.merge_local_to_profile_failed',
+                  '合并本地任务到远端 profile 失败',
+                  { error: e instanceof Error ? e.message : String(e) },
+                ),
+              );
           }
         } catch (e) {
-          console.warn('[sync] restoreProfile failed:', e);
+          diagnosticsLogger.warn('sync', 'sync.restore_profile_failed', '恢复同步 profile 失败', {
+            error: e instanceof Error ? e.message : String(e),
+          });
         }
 
         if (navigator.onLine) {
@@ -179,14 +215,24 @@ export function useTaskStore() {
             if (remoteTasks && remoteTasks.length > 0) {
               merged = mergeLWW(merged, remoteTasks);
               invoke('sync_local_tasks', { remoteTasks }).catch((e) =>
-                console.warn('[sync] sync_local_tasks failed:', e),
+                diagnosticsLogger.warn(
+                  'sync',
+                  'sync.persist_remote_tasks_failed',
+                  '保存远端任务失败',
+                  {
+                    task_count: remoteTasks.length,
+                    error: e instanceof Error ? e.message : String(e),
+                  },
+                ),
               );
             }
             if (remoteDCs && remoteDCs.length > 0) {
               await mergeDailyCompletions(remoteDCs);
             }
           } catch (e) {
-            console.warn('[sync] loadAll pull failed:', e);
+            diagnosticsLogger.warn('sync', 'sync.load_all_pull_failed', '加载远端同步数据失败', {
+              error: e instanceof Error ? e.message : String(e),
+            });
           }
         }
       }
@@ -207,7 +253,12 @@ export function useTaskStore() {
       });
       if (isLoggedIn.value && changedTasks.length > 0) {
         for (const t of changedTasks) {
-          pushTask(t).catch((e) => console.warn('[sync] push reset_daily:', e));
+          pushTask(t).catch((e) =>
+            diagnosticsLogger.warn('sync', 'sync.reset_daily_push_failed', '每日任务重置推送失败', {
+              task_id: t.id,
+              error: e instanceof Error ? e.message : String(e),
+            }),
+          );
         }
       }
 
@@ -225,14 +276,24 @@ export function useTaskStore() {
           if (remoteTasks && remoteTasks.length > 0) {
             merged = mergeLWW(merged, remoteTasks);
             invoke('sync_local_tasks', { remoteTasks }).catch((e) =>
-              console.warn('[sync] sync_local_tasks failed:', e),
+              diagnosticsLogger.warn(
+                'sync',
+                'sync.persist_remote_tasks_failed',
+                '保存远端任务失败',
+                {
+                  task_count: remoteTasks.length,
+                  error: e instanceof Error ? e.message : String(e),
+                },
+              ),
             );
           }
           if (remoteDCs && remoteDCs.length > 0) {
             await mergeDailyCompletions(remoteDCs);
           }
         } catch (e) {
-          console.warn('[sync] refreshTasks pull failed:', e);
+          diagnosticsLogger.warn('sync', 'sync.refresh_tasks_pull_failed', '刷新远端同步数据失败', {
+            error: e instanceof Error ? e.message : String(e),
+          });
         }
       }
 
@@ -273,7 +334,10 @@ export function useTaskStore() {
     try {
       await invoke('sync_local_tasks', { remoteTasks });
     } catch (e) {
-      console.warn('[sync] persist remote tasks failed:', e);
+      diagnosticsLogger.warn('sync', 'sync.persist_remote_tasks_failed', '保存远端任务失败', {
+        task_count: remoteTasks.length,
+        error: e instanceof Error ? e.message : String(e),
+      });
     }
   }
 
@@ -303,7 +367,12 @@ export function useTaskStore() {
         if (!isLoggedIn.value) return;
 
         for (const task of pendingResetTasks.value) {
-          pushTask(task).catch((e) => console.warn('[sync] push reset_daily:', e));
+          pushTask(task).catch((e) =>
+            diagnosticsLogger.warn('sync', 'sync.reset_daily_push_failed', '每日任务重置推送失败', {
+              task_id: task.id,
+              error: e instanceof Error ? e.message : String(e),
+            }),
+          );
         }
         pendingResetTasks.value = [];
 
@@ -311,14 +380,21 @@ export function useTaskStore() {
         if (profileRestored) {
           syncCode
             .mergeLocalToProfile(getProfileId()!)
-            .catch((e) => console.warn('[sync] mergeLocalToProfile failed:', e));
+            .catch((e) =>
+              diagnosticsLogger.warn(
+                'sync',
+                'sync.merge_local_to_profile_failed',
+                '合并本地任务到远端 profile 失败',
+                { error: e instanceof Error ? e.message : String(e) },
+              ),
+            );
         }
 
         await initSync();
         await pullRemoteAndMerge();
       } catch (e) {
         syncError.value = e instanceof Error ? e.message : '后台同步失败';
-        console.warn('[sync] background sync failed:', e);
+        diagnosticsLogger.error('sync', 'sync.background_failed', '后台同步失败', e);
       } finally {
         isSyncing.value = false;
         syncPromise = null;
@@ -429,7 +505,12 @@ export function useTaskStore() {
       });
       await refreshDailyCompletions();
     } catch (e) {
-      console.warn('[sync] mergeDailyCompletions failed:', e);
+      diagnosticsLogger.warn(
+        'sync',
+        'sync.merge_daily_completions_failed',
+        '合并每日完成记录失败',
+        { error: e instanceof Error ? e.message : String(e) },
+      );
     }
   }
 
@@ -625,7 +706,11 @@ export function useTaskStore() {
   // 网络恢复后自动拉取远端变更（弥补 Tauri webview 中 online 事件不可靠）
   watch(syncStatus, (newVal, oldVal) => {
     if (newVal === 'idle' && (oldVal === 'offline' || oldVal === 'error')) {
-      pullAndMerge().catch((e) => console.warn('[sync] auto-pull after reconnect failed:', e));
+      pullAndMerge().catch((e) =>
+        diagnosticsLogger.warn('sync', 'sync.auto_pull_failed', '网络恢复后的自动拉取失败', {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
     }
   });
 

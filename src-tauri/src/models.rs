@@ -1,43 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-// ═══════════════════════════════════════════════════════════════
-//  更新网络配置模型
-// ═══════════════════════════════════════════════════════════════
-
-/// 更新检查网络模式
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum UpdateNetworkMode {
-    /// 使用系统或环境代理配置
-    #[default]
-    System,
-    /// 使用用户指定的 HTTP/HTTPS 代理地址
-    Custom,
-    /// 不使用代理，直接连接
-    Direct,
-}
-
-/// 版本更新网络配置
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct UpdateNetworkConfig {
-    /// 网络模式："system" | "custom" | "direct"
-    #[serde(default)]
-    pub mode: UpdateNetworkMode,
-    /// 自定义代理地址（仅 mode=custom 时生效），格式：http://host:port 或 https://host:port
-    #[serde(default)]
-    pub proxy_url: Option<String>,
-}
-
-impl Default for UpdateNetworkConfig {
-    fn default() -> Self {
-        Self {
-            mode: UpdateNetworkMode::System,
-            proxy_url: None,
-        }
-    }
-}
-
 /// Windows 版本更新清单（静态 JSON 文件格式）
 ///
 /// 由 CD 流程在发布时自动生成，包含最新版本号、下载地址、哈希校验等信息。
@@ -189,9 +152,6 @@ pub struct ConfigStore {
     /// 插件配置（key=plugin.id, value=PluginConfig）
     #[serde(default)]
     pub plugins: std::collections::HashMap<String, PluginConfig>,
-    /// 版本更新网络配置
-    #[serde(default)]
-    pub update_network: UpdateNetworkConfig,
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -228,7 +188,6 @@ pub fn default_config_store() -> ConfigStore {
         notes_dir: None,
         dashboard_layout: None,
         plugins: std::collections::HashMap::new(),
-        update_network: UpdateNetworkConfig::default(),
     }
 }
 

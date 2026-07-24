@@ -343,15 +343,6 @@ export interface UpdateCheckErrorResponse {
   message: string;
 }
 
-/** 更新网络模式 */
-export type UpdateNetworkMode = 'system' | 'custom' | 'direct';
-
-/** 版本更新网络配置 */
-export interface UpdateNetworkConfig {
-  mode: UpdateNetworkMode;
-  proxy_url: string | null;
-}
-
 /** Windows 版本更新清单（静态 JSON 文件格式） */
 export interface WindowsUpdateManifest {
   version: string;

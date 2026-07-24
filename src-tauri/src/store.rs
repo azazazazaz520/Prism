@@ -45,8 +45,6 @@ mod tests {
         assert_eq!(config.theme, "auto");
         assert_eq!(config.reminder_minutes, 30);
         assert!(config.plugins.is_empty());
-        assert_eq!(config.update_network.mode, UpdateNetworkMode::System);
-        assert!(config.update_network.proxy_url.is_none());
     }
 
     #[test]
@@ -129,10 +127,6 @@ mod tests {
             notes_dir: None,
             dashboard_layout: None,
             plugins: std::collections::HashMap::new(),
-            update_network: UpdateNetworkConfig {
-                mode: UpdateNetworkMode::Custom,
-                proxy_url: Some("http://127.0.0.1:7890".to_string()),
-            },
         };
         let json = serde_json::to_string(&config).unwrap();
         let parsed: ConfigStore = serde_json::from_str(&json).unwrap();
@@ -140,11 +134,6 @@ mod tests {
         assert_eq!(parsed.active_vendor_id, Some("v1".to_string()));
         assert_eq!(parsed.theme, "dark");
         assert_eq!(parsed.reminder_minutes, 15);
-        assert_eq!(parsed.update_network.mode, UpdateNetworkMode::Custom);
-        assert_eq!(
-            parsed.update_network.proxy_url.as_deref(),
-            Some("http://127.0.0.1:7890")
-        );
     }
 
     #[test]

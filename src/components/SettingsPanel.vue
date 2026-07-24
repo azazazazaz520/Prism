@@ -24,7 +24,6 @@ import type {
   ReleaseInfo,
   UpdateCheckErrorCode,
   UpdateCheckErrorResponse,
-  UpdateNetworkConfig,
   WindowsUpdateManifest,
 } from '../types';
 import { getVersion } from '@tauri-apps/api/app';
@@ -148,7 +147,7 @@ const ERROR_MESSAGES: Record<UpdateCheckErrorCode, string> = {
   proxy_failed: '代理连接失败，请检查代理地址和端口',
   timeout: '连接 GitHub 超时，请检查 VPN 或网络状态',
   tls_failed: '安全连接 GitHub 失败，请检查系统时间和网络拦截软件',
-  rate_limited: 'GitHub API 已达到匿名请求限制，请稍后重试',
+  rate_limited: '更新服务请求过于频繁',
   repository_not_found: '更新仓库不存在或暂时不可访问',
   bad_response: 'GitHub 响应异常，请稍后重试',
   invalid_version: '更新信息格式异常，请联系维护者',
@@ -208,47 +207,6 @@ async function checkUpdate() {
     isCheckingUpdate.value = false;
   }
 }
-
-// ── 更新网络配置 ──────────────────────────────
-
-const updateNetworkMode = ref<'system' | 'custom' | 'direct'>('system');
-const customProxyUrl = ref('');
-const isSavingNetwork = ref(false);
-const networkSaveTip = ref('');
-
-async function loadNetworkConfig() {
-  try {
-    const config = await invoke<UpdateNetworkConfig>('get_update_network_config');
-    updateNetworkMode.value = config.mode;
-    customProxyUrl.value = config.proxy_url ?? '';
-  } catch {
-    // 默认值已在 ref 初始化中设置
-  }
-}
-
-async function saveNetworkConfig() {
-  if (isSavingNetwork.value) return;
-  isSavingNetwork.value = true;
-  networkSaveTip.value = '';
-  try {
-    await invoke('set_update_network_config', {
-      mode: updateNetworkMode.value,
-      proxyUrl: updateNetworkMode.value === 'custom' ? customProxyUrl.value : null,
-    });
-    networkSaveTip.value = '已保存';
-    setTimeout(() => {
-      networkSaveTip.value = '';
-    }, 2000);
-  } catch (e) {
-    networkSaveTip.value = String(e);
-  } finally {
-    isSavingNetwork.value = false;
-  }
-}
-
-onMounted(() => {
-  loadNetworkConfig();
-});
 
 onUnmounted(() => {
   if (_updateTipTimer) clearTimeout(_updateTipTimer);
@@ -486,51 +444,6 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
             </div>
             <Transition name="tip-fade">
               <p v-if="updateTip" class="update-tip">{{ updateTip }}</p>
-            </Transition>
-          </div>
-
-          <div class="settings-group">
-            <div class="group-title">更新网络</div>
-            <div class="setting-row">
-              <label>网络模式</label>
-              <div class="mode-select">
-                <button
-                  v-for="opt in [
-                    { value: 'system' as const, label: '环境代理' },
-                    { value: 'custom' as const, label: '自定义' },
-                    { value: 'direct' as const, label: '直连' },
-                  ]"
-                  :key="opt.value"
-                  :class="['mode-btn', { active: updateNetworkMode === opt.value }]"
-                  @click="updateNetworkMode = opt.value"
-                >
-                  {{ opt.label }}
-                </button>
-              </div>
-            </div>
-            <div v-if="updateNetworkMode === 'custom'" class="setting-row">
-              <label>代理地址</label>
-              <input
-                v-model="customProxyUrl"
-                type="text"
-                class="proxy-input"
-                placeholder="http://127.0.0.1:7890"
-              />
-            </div>
-            <div class="setting-row">
-              <span class="network-hint-label">
-                环境代理读取 HTTPS_PROXY 变量；自定义用于 VPN HTTP 代理端口；TUN 模式请选直连
-              </span>
-              <button
-                class="about-btn save-btn"
-                :disabled="isSavingNetwork"
-                @click="saveNetworkConfig"
-              >
-                {{ isSavingNetwork ? '保存中…' : '保存' }}
-              </button>
-            </div>
-            <Transition name="tip-fade">
-              <p v-if="networkSaveTip" class="update-tip network-save-tip">{{ networkSaveTip }}</p>
             </Transition>
           </div>
         </div>
@@ -993,80 +906,6 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
   opacity: 0;
 }
 
-/* ── 更新网络配置 ──────────────────────────── */
-
-.mode-select {
-  display: flex;
-  gap: 2px;
-}
-
-.mode-btn {
-  padding: 4px 10px;
-  font-size: var(--text-sm);
-  border: 1px solid var(--border-light);
-  background: var(--bg-primary);
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.mode-btn:first-child {
-  border-radius: var(--radius-md) 0 0 var(--radius-md);
-}
-
-.mode-btn:last-child {
-  border-radius: 0 var(--radius-md) var(--radius-md) 0;
-}
-
-.mode-btn:not(:first-child) {
-  border-left: none;
-}
-
-.mode-btn:hover {
-  background: var(--bg-hover);
-}
-
-.mode-btn.active {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
-}
-
-.proxy-input {
-  width: 220px;
-  padding: 6px var(--space-sm);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  outline: none;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-}
-
-.proxy-input:focus {
-  border-color: var(--accent);
-}
-
-.proxy-input::placeholder {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-}
-
-.network-hint-label {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  max-width: 280px;
-  line-height: 1.4;
-}
-
-.save-btn {
-  flex-shrink: 0;
-}
-
-.network-save-tip {
-  margin-top: var(--space-sm);
-}
-
 /* HUD 主题适配 */
 [data-theme='hud'] .about-link,
 [data-theme='hud'] .about-link {
@@ -1088,46 +927,7 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
   border-color: var(--border-line);
 }
 
-[data-theme='hud'] .update-tip,
 [data-theme='hud'] .update-tip {
   color: var(--accent-dim);
-}
-
-[data-theme='hud'] .mode-btn {
-  border-radius: 0;
-  background: var(--bg-secondary);
-  border-color: var(--border-line);
-  clip-path: polygon(
-    4px 0%,
-    100% 0%,
-    100% calc(100% - 4px),
-    calc(100% - 4px) 100%,
-    0% 100%,
-    0% 4px
-  );
-}
-
-[data-theme='hud'] .mode-btn.active {
-  background: var(--accent);
-  color: #0f1118;
-  border-color: var(--accent);
-}
-
-[data-theme='hud'] .proxy-input {
-  background: var(--bg-secondary);
-  border-color: var(--border-line);
-  border-radius: 0;
-  clip-path: polygon(
-    4px 0%,
-    100% 0%,
-    100% calc(100% - 4px),
-    calc(100% - 4px) 100%,
-    0% 100%,
-    0% 4px
-  );
-}
-
-[data-theme='hud'] .network-hint-label {
-  color: var(--text-muted);
 }
 </style>

@@ -1,8 +1,8 @@
 {
-  "sha256": "fc3abbe1430f1ee5996cb582a3437cee49a9f1b1b629e40b90ed5efddcfea6f5",
-  "download_url": "https://github.com/azazazazaz520/Prism/releases/download/v0.3.5/Prism_0.3.5_x64-setup.exe",
-  "release_notes": "## Changes since v0.3.4\n\n- fix: 修复更新清单发布与代理错误处理 (asd_fire)",
-  "release_url": "https://github.com/azazazazaz520/Prism/releases/tag/v0.3.5",
-  "release_date": "2026-07-24T13:09:56.9889615Z",
-  "version": "0.3.5"
+  "release_date": "2026-07-24T17:48:53.6664590Z",
+  "release_notes": "## Changes since v0.3.5\n\n- feat: 完善全局右键菜单与笔记界面交互 (asd_fire)\n- refactor(update): 移除更新网络配置 (asd_fire)\n- refactor(update): 移除更新检查缓存逻辑 (asd_fire)\n- chore: 同步稳定版更新清单 (github-actions[bot])\n- feat: 实施第一阶段用户体验改进 (asd_fire)",
+  "version": "0.3.6",
+  "release_url": "https://github.com/azazazazaz520/Prism/releases/tag/v0.3.6",
+  "sha256": "9786f26d9b93e6f70dfc596933ca12e7895254f6c9f962a498a940260be643f8",
+  "download_url": "https://github.com/azazazazaz520/Prism/releases/download/v0.3.6/Prism_0.3.6_x64-setup.exe"
 }

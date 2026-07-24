@@ -129,10 +129,6 @@ const isCheckingUpdate = ref(false);
 const updateTip = ref('');
 let _updateTipTimer: ReturnType<typeof setTimeout> | null = null;
 
-let _lastCheckResult: 'latest' | 'error' | null = null;
-let _lastCheckTime = 0;
-const CHECK_CACHE_MS = 12 * 60 * 60 * 1000; // 12 小时，避免频繁请求触发限流
-
 onMounted(async () => {
   try {
     appVersion.value = await getVersion();
@@ -171,17 +167,6 @@ async function checkUpdate() {
   if (_updateTipTimer) clearTimeout(_updateTipTimer);
   updateTip.value = '';
 
-  const now = Date.now();
-  if (_lastCheckResult && now - _lastCheckTime < CHECK_CACHE_MS) {
-    if (_lastCheckResult === 'latest') {
-      updateTip.value = '已是最新版本';
-      _updateTipTimer = setTimeout(() => {
-        updateTip.value = '';
-      }, 2000);
-    }
-    return;
-  }
-
   isCheckingUpdate.value = true;
 
   try {
@@ -201,14 +186,11 @@ async function checkUpdate() {
     if (compareVersions(manifest.version, appVersion.value) > 0) {
       latestRelease.value = release;
       showUpdateDialog.value = true;
-      _lastCheckResult = null;
     } else {
       updateTip.value = '已是最新版本';
       _updateTipTimer = setTimeout(() => {
         updateTip.value = '';
       }, 2000);
-      _lastCheckResult = 'latest';
-      _lastCheckTime = now;
     }
   } catch (e) {
     let errorMessage = '检查更新失败';
@@ -222,8 +204,6 @@ async function checkUpdate() {
     _updateTipTimer = setTimeout(() => {
       updateTip.value = '';
     }, 3000);
-    _lastCheckResult = 'error';
-    _lastCheckTime = now;
   } finally {
     isCheckingUpdate.value = false;
   }

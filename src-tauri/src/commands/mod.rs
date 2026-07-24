@@ -6,6 +6,7 @@ pub mod plugins;
 pub mod prompt;
 pub mod screenshot;
 pub mod tasks;
+pub mod update;
 
 use serde::Serialize;
 

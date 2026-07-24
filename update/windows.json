@@ -1,0 +1,8 @@
+{
+  "version": "0.1.0",
+  "release_date": "2026-07-24T00:00:00Z",
+  "release_notes": "Prism 桌面版初始版本\n\n- 任务管理、Markdown 笔记、AI 辅助\n- 跨设备同步（Supabase）\n- 插件与脚本系统\n- 开发者工具箱",
+  "download_url": "https://github.com/azazazazaz520/Prism/releases/latest",
+  "release_url": "https://github.com/azazazazaz520/Prism/releases/latest",
+  "sha256": null
+}

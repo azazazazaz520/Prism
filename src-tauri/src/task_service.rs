@@ -214,6 +214,17 @@ pub fn delete(data: &mut store::DataStore, id: &str) -> Option<()> {
     Some(())
 }
 
+/// 恢复软删除任务，并更新时间戳以便跨设备同步撤销操作。
+pub fn restore(data: &mut store::DataStore, id: &str) -> Option<()> {
+    let task = data.tasks.iter_mut().find(|t| t.id == id)?;
+    if !task.is_deleted {
+        return Some(());
+    }
+    task.is_deleted = false;
+    task.updated_at = chrono::Utc::now().to_rfc3339();
+    Some(())
+}
+
 /// 一键软删除所有已完成任务（跳过每日任务，每日任务每天自动重置）
 pub fn clear_completed(data: &mut store::DataStore) {
     let now = chrono::Utc::now().to_rfc3339();

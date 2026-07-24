@@ -131,6 +131,7 @@ function formatDueDate(d: string): string {
         ref="inputRef"
         v-model="title"
         type="text"
+        aria-label="新任务标题"
         placeholder="输入新任务..."
         :class="['task-input-field', { error: showError }]"
         @keydown.enter="handleSubmit"
@@ -143,7 +144,13 @@ function formatDueDate(d: string): string {
       <div v-if="expanded" class="input-panel">
         <!-- 快捷属性按钮行 -->
         <div class="quick-actions">
-          <button :class="['qa-btn', { active: important }]" @click="important = !important">
+          <button
+            type="button"
+            :class="['qa-btn', { active: important }]"
+            :aria-pressed="important"
+            aria-label="标记为重要"
+            @click="important = !important"
+          >
             <svg
               width="10"
               height="10"
@@ -160,7 +167,13 @@ function formatDueDate(d: string): string {
             </svg>
             重要
           </button>
-          <button :class="['qa-btn', { active: pinned }]" @click="pinned = !pinned">
+          <button
+            type="button"
+            :class="['qa-btn', { active: pinned }]"
+            :aria-pressed="pinned"
+            aria-label="置顶任务"
+            @click="pinned = !pinned"
+          >
             <svg
               width="10"
               height="10"
@@ -177,7 +190,13 @@ function formatDueDate(d: string): string {
             </svg>
             置顶
           </button>
-          <button :class="['qa-btn', { active: isDaily }]" @click="isDaily = !isDaily">
+          <button
+            type="button"
+            :class="['qa-btn', { active: isDaily }]"
+            :aria-pressed="isDaily"
+            aria-label="设置为每日任务"
+            @click="isDaily = !isDaily"
+          >
             <svg
               width="10"
               height="10"
@@ -194,7 +213,10 @@ function formatDueDate(d: string): string {
             每日
           </button>
           <button
+            type="button"
             :class="['qa-btn', { active: showTagInput || tags.length > 0 }]"
+            :aria-expanded="showTagInput"
+            aria-label="编辑任务标签"
             @click="toggleTagInput"
           >
             <svg
@@ -218,8 +240,10 @@ function formatDueDate(d: string): string {
             <div class="date-btn-wrapper">
               <button
                 ref="dateBtnRef"
+                type="button"
                 :class="['qa-btn', 'date-btn', 'date-btn-inline', { active: dueDate }]"
                 title="截止日期"
+                :aria-expanded="showPicker"
                 @click="showPicker = !showPicker"
               >
                 <svg
@@ -241,7 +265,7 @@ function formatDueDate(d: string): string {
               </button>
               <DatePicker :visible="showPicker" :anchor-el="dateBtnRef" @select="onDateSelect" />
             </div>
-            <button class="task-input-btn" @click="handleSubmit">添加</button>
+            <button type="button" class="task-input-btn" @click="handleSubmit">添加</button>
           </div>
         </div>
 

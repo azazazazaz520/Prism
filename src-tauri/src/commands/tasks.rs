@@ -85,6 +85,14 @@ pub fn delete_task(state: tauri::State<AppState>, id: String) -> Result<(), Stri
     })
 }
 
+/// 恢复指定的软删除任务，供前端撤销删除操作使用
+#[tauri::command]
+pub fn restore_task(state: tauri::State<AppState>, id: String) -> Result<(), String> {
+    state
+        .write_data(|d| task_service::restore(d, &id))
+        .map(|_| ())
+}
+
 /// 一键软删除所有已完成任务
 #[tauri::command]
 pub fn clear_completed(state: tauri::State<AppState>) -> Result<(), String> {

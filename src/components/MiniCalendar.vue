@@ -1,16 +1,16 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { computed, ref } from 'vue';
 import type { Task } from '../types';
 
 const props = defineProps<{
   tasks: Task[];
+  selectedDate: string | null;
 }>();
 
 const emit = defineEmits<{
   selectDate: [date: string | null];
 }>();
 
-const selectedDate = ref<string | null>(null);
 const today = new Date();
 const currentYear = ref(today.getFullYear());
 const currentMonth = ref(today.getMonth());
@@ -63,11 +63,9 @@ function nextMonth() {
 
 function selectDay(day: number) {
   const dk = dateKey(day);
-  if (selectedDate.value === dk) {
-    selectedDate.value = null;
+  if (props.selectedDate === dk) {
     emit('selectDate', null);
   } else {
-    selectedDate.value = dk;
     emit('selectDate', dk);
   }
 }
@@ -81,7 +79,7 @@ function isToday(day: number): boolean {
 }
 
 function isSelected(day: number): boolean {
-  return selectedDate.value === dateKey(day);
+  return props.selectedDate === dateKey(day);
 }
 </script>
 
@@ -93,7 +91,7 @@ function isSelected(day: number): boolean {
         {{ currentYear }}
       </div>
       <div class="mc-month-row">
-        <button class="mc-nav" @click="prevMonth">
+        <button type="button" class="mc-nav" aria-label="上个月" @click="prevMonth">
           <svg
             width="12"
             height="12"
@@ -108,7 +106,7 @@ function isSelected(day: number): boolean {
           </svg>
         </button>
         <span class="mc-month">{{ currentMonth + 1 }}月</span>
-        <button class="mc-nav" @click="nextMonth">
+        <button type="button" class="mc-nav" aria-label="下个月" @click="nextMonth">
           <svg
             width="12"
             height="12"
@@ -131,6 +129,7 @@ function isSelected(day: number): boolean {
       <button
         v-for="(cell, i) in days"
         :key="i"
+        type="button"
         :class="[
           'mc-day',
           {
@@ -141,6 +140,12 @@ function isSelected(day: number): boolean {
           },
         ]"
         :disabled="cell === null"
+        :aria-label="
+          cell === null
+            ? undefined
+            : `${currentYear}年${currentMonth + 1}月${cell}日${isSelected(cell) ? '，已选择' : ''}`
+        "
+        :aria-pressed="cell !== null && isSelected(cell)"
         @click="cell !== null && selectDay(cell)"
       >
         <span class="mc-day-num">{{ cell }}</span>
@@ -241,8 +246,8 @@ function isSelected(day: number): boolean {
 
 /* ── Nav arrows ──────────────────────── */
 .mc-nav {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;

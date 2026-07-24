@@ -227,6 +227,7 @@ async function handlePluginMenuAction(action: () => void | Promise<void>) {
       type="checkbox"
       class="task-checkbox"
       :checked="displayCompleted"
+      :aria-label="`${task.title}${displayCompleted ? '，已完成' : '，未完成'}`"
       autocomplete="off"
       @change="handleToggle"
     />
@@ -291,10 +292,19 @@ async function handlePluginMenuAction(action: () => void | Promise<void>) {
 
     <div v-if="!editing" class="task-actions">
       <div class="menu-wrapper">
-        <button class="task-menu-btn" title="更多操作" @click="openMenu">⋯</button>
+        <button
+          type="button"
+          class="task-menu-btn"
+          title="更多操作"
+          aria-label="打开任务更多操作"
+          :aria-expanded="showMenu"
+          @click="openMenu"
+        >
+          ⋯
+        </button>
         <Teleport to="body">
-          <div v-if="showMenu" class="task-menu" :style="menuStyle" @click.stop>
-            <div class="menu-item" @click="toggleMenuImportant">
+          <div v-if="showMenu" class="task-menu" role="menu" :style="menuStyle" @click.stop>
+            <button type="button" class="menu-item" role="menuitem" @click="toggleMenuImportant">
               <span>
                 <svg
                   width="12"
@@ -315,8 +325,8 @@ async function handlePluginMenuAction(action: () => void | Promise<void>) {
               <span :class="['menu-toggle', { on: task.important }]">{{
                 task.important ? '开' : '关'
               }}</span>
-            </div>
-            <div class="menu-item" @click="toggleMenuPinned">
+            </button>
+            <button type="button" class="menu-item" role="menuitem" @click="toggleMenuPinned">
               <span>
                 <svg
                   width="12"
@@ -337,8 +347,8 @@ async function handlePluginMenuAction(action: () => void | Promise<void>) {
               <span :class="['menu-toggle', { on: task.pinned }]">{{
                 task.pinned ? '开' : '关'
               }}</span>
-            </div>
-            <div class="menu-item" @click="toggleMenuDaily">
+            </button>
+            <button type="button" class="menu-item" role="menuitem" @click="toggleMenuDaily">
               <span>
                 <svg
                   width="12"
@@ -358,7 +368,7 @@ async function handlePluginMenuAction(action: () => void | Promise<void>) {
               <span :class="['menu-toggle', { on: task.is_daily }]">{{
                 task.is_daily ? '开' : '关'
               }}</span>
-            </div>
+            </button>
             <div class="menu-divider"></div>
             <div class="menu-tags">
               <div class="menu-tags-header">标签</div>
@@ -382,9 +392,10 @@ async function handlePluginMenuAction(action: () => void | Promise<void>) {
             <!-- 插件菜单项（task-context） -->
             <template v-if="pluginMenuItems.length > 0">
               <div class="menu-divider"></div>
-              <div
+              <button
                 v-for="reg in pluginMenuItems"
                 :key="reg.id"
+                type="button"
                 class="menu-item plugin-menu-item"
                 :title="reg.pluginId"
                 @click="handlePluginMenuAction(reg.item.action)"
@@ -395,12 +406,20 @@ async function handlePluginMenuAction(action: () => void | Promise<void>) {
                   {{ reg.item.label }}
                 </span>
                 <span class="plugin-menu-badge">{{ reg.pluginId }}</span>
-              </div>
+              </button>
             </template>
           </div>
         </Teleport>
       </div>
-      <button class="task-delete-btn" title="删除" @click="emit('delete', task.id)">×</button>
+      <button
+        type="button"
+        class="task-delete-btn"
+        title="删除"
+        aria-label="删除任务"
+        @click="emit('delete', task.id)"
+      >
+        ×
+      </button>
     </div>
   </div>
 </template>
@@ -777,13 +796,19 @@ async function handlePluginMenuAction(action: () => void | Promise<void>) {
 }
 
 .menu-item {
+  width: 100%;
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius-sm);
   cursor: pointer;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
   font-size: var(--text-sm);
+  text-align: left;
 }
 
 .menu-item:hover {

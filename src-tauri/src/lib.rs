@@ -296,6 +296,7 @@ pub fn run() {
             commands::tasks::toggle_daily_task,
             commands::tasks::update_task,
             commands::tasks::delete_task,
+            commands::tasks::restore_task,
             commands::tasks::clear_completed,
             commands::tasks::get_tasks_by_date,
             commands::tasks::get_all_tags,

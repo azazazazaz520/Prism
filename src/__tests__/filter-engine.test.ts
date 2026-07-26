@@ -11,6 +11,7 @@ import {
   countOverdue,
   countPending,
   getTodayStr,
+  matchesTaskQuery,
 } from '../composables/useFilterEngine';
 
 // ═══════════════════════════════════════════════════════════════
@@ -137,6 +138,21 @@ describe('filterTasks', () => {
     const result = filterTasks(tasks, '2026-01-01', ['home']);
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('3');
+  });
+});
+
+describe('matchesTaskQuery', () => {
+  const task = {
+    id: 'task-123',
+    title: '整理项目文档',
+    tags: ['项目', '文档'],
+  } as any;
+
+  it('按标题、标签和任务 ID 搜索', () => {
+    expect(matchesTaskQuery(task, '项目文档')).toBe(true);
+    expect(matchesTaskQuery(task, '文档')).toBe(true);
+    expect(matchesTaskQuery(task, 'TASK-123')).toBe(true);
+    expect(matchesTaskQuery(task, '不存在')).toBe(false);
   });
 });
 

@@ -18,11 +18,11 @@
   --font-weight-bold: 700;
 
   /* 字号层级 */
-  --text-h1: 20px;
-  --text-h2: 16px;
-  --text-base: 14px;
-  --text-sm: 12px;
-  --text-xs: 11px;
+  --text-h1: 24px;
+  --text-h2: 18px;
+  --text-base: 15px;
+  --text-sm: 13px;
+  --text-xs: 12px;
 
   /* ── 背景 ──────────────────────────── */
   --bg-primary: #f8fdfb;
@@ -197,7 +197,7 @@
 }
 
 /* ═══════════════════════════════════════════
-   HUD / 终末地风格 — data-theme="hud"
+   HUD — data-theme="hud"
    手动切换，不跟随系统
    ═══════════════════════════════════════════ */
 

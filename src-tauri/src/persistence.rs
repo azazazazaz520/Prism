@@ -35,12 +35,20 @@ pub fn get_config_path() -> PathBuf {
     get_workspace_dir().join("config.json")
 }
 
+/// 获取默认笔记工作区路径。
+pub fn get_default_notes_dir() -> PathBuf {
+    dirs::document_dir()
+        .or_else(dirs::home_dir)
+        .unwrap_or_default()
+        .join("Prism")
+}
+
 /// 获取笔记目录（优先使用自定义路径，否则使用默认）
 pub fn get_notes_dir(config: &ConfigStore) -> PathBuf {
     if let Some(ref custom_dir) = config.notes_dir {
         custom_dir.clone()
     } else {
-        get_workspace_dir().join("notes")
+        get_default_notes_dir()
     }
 }
 
@@ -58,7 +66,7 @@ pub fn get_scripts_dir() -> PathBuf {
 //  Workspace 初始化
 // ═══════════════════════════════════════════════════════════════
 
-/// 确保 Workspace 目录结构存在（notes/、prompts/、plugins/、notes.meta.json）
+/// 确保应用数据目录和默认笔记工作区存在。
 /// 目录创建失败时记录 stderr 但不阻塞启动（用户可能无权限写入父目录）
 pub fn ensure_workspace(logger: &LogWriter) {
     let root = get_workspace_dir();
@@ -66,12 +74,13 @@ pub fn ensure_workspace(logger: &LogWriter) {
         eprintln!("[store] 无法创建 workspace 目录 {:?}: {}", root, e);
         record_workspace_error(logger, "persistence.workspace_create_failed", &root, &e);
     }
-    if let Err(e) = fs::create_dir_all(root.join("notes")) {
+    let notes_dir_to_create = get_default_notes_dir();
+    if let Err(e) = fs::create_dir_all(&notes_dir_to_create) {
         eprintln!("[store] 无法创建 notes 目录: {}", e);
         record_workspace_error(
             logger,
             "persistence.notes_create_failed",
-            &root.join("notes"),
+            &notes_dir_to_create,
             &e,
         );
     }

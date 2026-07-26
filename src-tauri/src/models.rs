@@ -143,7 +143,7 @@ pub struct ConfigStore {
     /// 模块不在 map 中时默认启用
     #[serde(default)]
     pub module_enabled: std::collections::HashMap<String, bool>,
-    /// 自定义笔记目录路径（绝对路径，None 时使用默认 ~/.todo-app/notes）
+    /// 自定义笔记目录路径（绝对路径，None 时使用默认文档目录下的 Prism）
     #[serde(default)]
     pub notes_dir: Option<PathBuf>,
     /// 仪表盘布局配置（JSON 字符串，前端序列化）

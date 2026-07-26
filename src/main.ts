@@ -6,9 +6,9 @@ import { installGlobalDiagnostics } from './diagnostics/logger';
 import { diagnosticsLogger } from './diagnostics/invoke-logged';
 import type { Logger } from './diagnostics/logger';
 import App from './App.vue';
-import FloatingWindow from './components/FloatingWindow.vue';
-import ImportFloating from './components/ImportFloating.vue';
-import ScreenshotSelector from './components/ScreenshotSelector.vue';
+import FloatingWindow from './components/overlays/FloatingWindow.vue';
+import ImportFloating from './components/overlays/ImportFloating.vue';
+import ScreenshotSelector from './components/overlays/ScreenshotSelector.vue';
 
 function mountApp(component: Component, logger: Logger) {
   const app = createApp(component);

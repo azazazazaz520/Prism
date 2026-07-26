@@ -4,26 +4,23 @@ import { getActivePageRegistrations, activatePluginPage } from './plugin-api/vie
 import { invokeWithDiagnostics as invoke } from './diagnostics/invoke-logged';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { AppModule, SettingsSubModule } from './types';
-import TaskInput from './components/TaskInput.vue';
-import TaskList from './components/TaskList.vue';
-import TaskStats from './components/TaskStats.vue';
-import SyncStatus from './components/SyncStatus.vue';
-import MiniCalendar from './components/MiniCalendar.vue';
-import TagFilterBar from './components/TagFilterBar.vue';
-import SettingsPanel from './components/SettingsPanel.vue';
-import AiCommandPanel from './components/AiCommandPanel.vue';
-import AiAssistant from './components/AiAssistant.vue';
-import NoteEditor from './components/NoteEditor.vue';
-import Toolbox from './components/Toolbox.vue';
-import Dashboard from './components/Dashboard.vue';
-import Toast from './components/Toast.vue';
-import TaskSearch from './components/TaskSearch.vue';
-import PluginViewHost from './components/PluginViewHost.vue';
-import ContextMenu from './components/ContextMenu.vue';
+import TaskInput from './components/tasks/TaskInput.vue';
+import TaskList from './components/tasks/TaskList.vue';
+import SyncStatus from './components/app/SyncStatus.vue';
+import MiniCalendar from './components/tasks/MiniCalendar.vue';
+import TagFilterBar from './components/tasks/TagFilterBar.vue';
+import SettingsPanel from './components/app/SettingsPanel.vue';
+import AiCommandPanel from './components/ai/AiCommandPanel.vue';
+import AiAssistant from './components/ai/AiAssistant.vue';
+import NoteEditor from './components/notes/NoteEditor.vue';
+import Toolbox from './components/tools/Toolbox.vue';
+import Toast from './components/overlays/Toast.vue';
+import TaskSearch from './components/tasks/TaskSearch.vue';
+import PluginViewHost from './components/plugins/PluginViewHost.vue';
+import ContextMenu from './components/overlays/ContextMenu.vue';
 import { useModuleRegistry } from './composables/useModuleRegistry';
 import { useTaskStore } from './composables/useTaskStore';
 import { useAiStatus } from './composables/useAiStatus';
-import { useDashboard } from './composables/useDashboard';
 import { usePluginLoader } from './composables/usePluginLoader';
 import { useContextMenu } from './composables/useContextMenu';
 
@@ -41,7 +38,6 @@ const {
   searchQuery,
   filteredTasks,
   dailyCompletionsMap,
-  overdueCount,
   pendingCount,
   isLocalReady,
   isLoading,
@@ -71,7 +67,8 @@ const { aiEnabled, load: loadAiSettings } = useAiStatus();
 // ── 全局状态 ──────────────────────────────
 
 /** 当前侧边栏选中的功能模块 */
-const activeModule = ref<AppModule>('tasks');
+// 笔记是 Prism 的主工作区；任务仍作为独立功能保留在左侧入口。
+const activeModule = ref<AppModule>('notes');
 
 /** 是否有插件页面正在激活 */
 const isPluginPageActive = computed(() => getActivePageRegistrations().length > 0);
@@ -79,6 +76,48 @@ const isPluginPageActive = computed(() => getActivePageRegistrations().length > 
 /** 非 tasks 模块或插件页激活时 grid 只保留 icon-rail + 主内容区 */
 const gridColumns = computed(() =>
   activeModule.value === 'tasks' && !isPluginPageActive.value ? '56px 280px 1fr 300px' : '56px 1fr',
+);
+
+const completedCount = computed(() => tasks.value.filter((task) => task.completed).length);
+const todayDate = new Date();
+const todayString = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`;
+const overdueCount = computed(
+  () =>
+    tasks.value.filter((task) => task.due_date && task.due_date < todayString && !task.completed)
+      .length,
+);
+const todayCount = computed(
+  () => tasks.value.filter((task) => task.due_date === todayString).length,
+);
+type TaskView = 'all' | 'pending' | 'today' | 'overdue' | 'completed';
+const taskView = ref<TaskView>('all');
+const taskViewOptions = computed(() => [
+  { id: 'all' as TaskView, label: '全部任务', count: tasks.value.length },
+  { id: 'pending' as TaskView, label: '待处理', count: pendingCount.value },
+  { id: 'today' as TaskView, label: '今天', count: todayCount.value },
+  { id: 'overdue' as TaskView, label: '已逾期', count: overdueCount.value },
+  { id: 'completed' as TaskView, label: '已完成', count: completedCount.value },
+]);
+const visibleTasks = computed(() => {
+  switch (taskView.value) {
+    case 'pending':
+      return filteredTasks.value.filter((task) => !task.completed);
+    case 'today':
+      return filteredTasks.value.filter((task) => task.due_date === todayString);
+    case 'overdue':
+      return filteredTasks.value.filter(
+        (task) => task.due_date && task.due_date < todayString && !task.completed,
+      );
+    case 'completed':
+      return filteredTasks.value.filter((task) => task.completed);
+    default:
+      return filteredTasks.value;
+  }
+});
+const hasTaskFilters = computed(
+  () =>
+    Boolean(filterDate.value || selectedTags.value.length || searchQuery.value.trim()) ||
+    taskView.value !== 'all',
 );
 
 // ── 生命周期 ──────────────────────────────
@@ -123,8 +162,6 @@ onUnmounted(() => {
 onMounted(async () => {
   document.addEventListener('contextmenu', onGlobalContextMenu);
   await Promise.all([loadAll(), loadAiSettings(), loadModules()]);
-  const { loadLayout } = useDashboard();
-  loadLayout();
   // 初始化插件系统（扫描 + 加载配置）
   const { loadPlugins } = usePluginLoader();
   loadPlugins();
@@ -167,14 +204,20 @@ function clearTaskFilters() {
   selectDate(null);
   toggleTag('');
   searchQuery.value = '';
+  taskView.value = 'all';
   void refreshTasks();
+}
+
+function selectTaskView(view: TaskView) {
+  taskView.value = view;
+  selectDate(null);
 }
 
 const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
 </script>
 
 <template>
-  <!-- 终末地风格 — 背景工业轮廓曲线 -->
+  <!-- 背景工业轮廓曲线 -->
   <svg
     class="bg-contour"
     viewBox="0 0 1200 600"
@@ -206,59 +249,44 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
     </g>
   </svg>
   <div :class="['app-layout', { 'tasks-layout': activeModule === 'tasks' && !isPluginPageActive }]">
-    <!-- 图标轨 - 56px -->
+    <!-- 工作区导航轨：笔记与任务优先，辅助功能分组放置 -->
     <nav class="icon-rail">
-      <div class="rail-brand">
-        <svg
-          width="22"
-          height="22"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-        >
-          <path d="M12 2.5L4 7v10l8 4.5 8-4.5V7L12 2.5z" />
-          <path d="M12 12L4 7" />
-          <path d="M12 12l8-5" />
-          <path d="M12 12v9.5" />
-        </svg>
-      </div>
       <button
         type="button"
-        :class="['rail-btn', { active: activeModule === 'tasks' || activeModule === 'settings' }]"
-        data-tooltip="Tasks"
+        v-if="isEnabled('notes')"
+        :class="['rail-btn', { active: activeModule === 'notes' }]"
+        data-tooltip="笔记工作区"
+        aria-label="笔记工作区"
+        :aria-current="activeModule === 'notes' ? 'page' : undefined"
+        @click="handleSwitchModule('notes')"
+      >
+        <svg viewBox="0 0 24 24">
+          <path d="M6 3.5h8l4 4V20a.5.5 0 0 1-.5.5h-11A.5.5 0 0 1 6 20z" />
+          <path d="M14 3.5v4h4M9 12h6M9 16h5" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        v-if="isEnabled('tasks')"
+        :class="['rail-btn', { active: activeModule === 'tasks' }]"
+        data-tooltip="任务"
         aria-label="任务"
         :aria-current="activeModule === 'tasks' ? 'page' : undefined"
         @click="handleSwitchModule('tasks')"
       >
         <svg viewBox="0 0 24 24">
-          <rect x="3" y="3" width="7" height="7" rx="1" />
-          <rect x="14" y="3" width="7" height="7" rx="1" />
-          <rect x="3" y="14" width="7" height="7" rx="1" />
-          <rect x="14" y="14" width="7" height="7" rx="1" />
+          <rect x="4" y="4" width="16" height="16" rx="2" />
+          <path d="m8 9 1.5 1.5L12 8M14 9h3M8 15l1.5 1.5L12 14M14 15h3" />
         </svg>
       </button>
-      <button
-        type="button"
-        v-if="isEnabled('notes')"
-        :class="['rail-btn', { active: activeModule === 'notes' }]"
-        data-tooltip="Notes"
-        aria-label="笔记"
-        :aria-current="activeModule === 'notes' ? 'page' : undefined"
-        @click="handleSwitchModule('notes')"
-      >
-        <svg viewBox="0 0 24 24">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-          <polyline points="14 2 14 8 20 8" />
-          <line x1="16" y1="13" x2="8" y2="13" />
-          <line x1="16" y1="17" x2="8" y2="17" />
-        </svg>
-      </button>
+
+      <div class="rail-divider" aria-hidden="true"></div>
+
       <button
         type="button"
         v-if="isEnabled('ai-assistant')"
         :class="['rail-btn', { active: activeModule === 'ai-assistant' }]"
-        data-tooltip="AI"
+        data-tooltip="AI 助手"
         aria-label="AI 助手"
         :aria-current="activeModule === 'ai-assistant' ? 'page' : undefined"
         @click="handleSwitchModule('ai-assistant')"
@@ -315,32 +343,28 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
       </button>
     </nav>
 
-    <!-- Sidebar: 280px 分组任务列表 + 内联输入 -->
+    <!-- Sidebar: 任务搜索与入口 -->
     <aside v-if="activeModule === 'tasks' && !isPluginPageActive" class="task-sidebar">
       <div class="sidebar-header">
-        <span class="sidebar-label">Operations</span>
+        <span class="sidebar-label">任务</span>
         <span class="sidebar-count">{{ tasks.length }}</span>
       </div>
       <div class="sidebar-list">
         <TaskSearch v-model="searchQuery" />
-        <div v-if="isLoading && !isLocalReady" class="sidebar-loading">
-          <span class="loading-spinner"></span>
-          <span class="loading-text">加载本地任务…</span>
+        <div class="task-view-section">
+          <div class="task-view-heading">快速视图</div>
+          <button
+            v-for="view in taskViewOptions"
+            :key="view.id"
+            type="button"
+            :class="['task-view-item', { active: taskView === view.id }]"
+            @click="selectTaskView(view.id)"
+          >
+            <span class="task-view-dot" aria-hidden="true"></span>
+            <span>{{ view.label }}</span>
+            <span class="task-view-count">{{ view.count }}</span>
+          </button>
         </div>
-        <TaskList
-          v-else
-          :tasks="filteredTasks"
-          :daily-completions-map="dailyCompletionsMap"
-          :ai-enabled="aiEnabled"
-          :load-error="loadError"
-          :has-filters="Boolean(filterDate || selectedTags.length || searchQuery.trim())"
-          @toggle="toggleTask"
-          @toggle-daily="toggleDailyTask"
-          @update="updateTask"
-          @delete="deleteTask"
-          @update-meta="updateTaskMeta"
-          @clear-filters="clearTaskFilters"
-        />
       </div>
     </aside>
 
@@ -351,32 +375,55 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
         style="flex: 1; display: flex; flex-direction: column; overflow: hidden"
       >
         <div v-if="activeModule === 'tasks' && isEnabled('tasks')" key="tasks" class="module-tasks">
-          <!-- 顶部固定区：标题 + TaskInput -->
+          <!-- 顶部固定区：标题 + 任务输入 -->
           <div class="tasks-top">
             <div class="main-header">
               <div>
-                <h1 class="main-title">任务看板</h1>
+                <h1 class="main-title">任务</h1>
                 <div class="main-subtitle">
-                  {{ pendingCount }} 待完成 · {{ overdueCount }} 已过期
+                  {{ pendingCount }} 项待完成 · {{ completedCount }} 项已完成
                 </div>
               </div>
+              <button
+                v-if="completedCount > 0"
+                type="button"
+                class="clear-completed-btn"
+                @click="clearCompleted"
+              >
+                清除已完成
+              </button>
             </div>
             <div class="main-input">
               <TaskInput :ai-enabled="aiEnabled" @add="addTask" />
             </div>
           </div>
 
-          <!-- 中部可滚区：仪表盘 -->
+          <!-- 中部可滚区：任务列表 -->
           <div class="tasks-scroll">
-            <Dashboard />
+            <div v-if="isLoading && !isLocalReady" class="task-loading">
+              <span class="loading-spinner"></span>
+              <span class="loading-text">加载任务…</span>
+            </div>
+            <TaskList
+              v-else
+              class="main-task-list"
+              :tasks="visibleTasks"
+              :daily-completions-map="dailyCompletionsMap"
+              :ai-enabled="aiEnabled"
+              :load-error="loadError"
+              :has-filters="hasTaskFilters"
+              @toggle="toggleTask"
+              @toggle-daily="toggleDailyTask"
+              @update="updateTask"
+              @delete="deleteTask"
+              @update-meta="updateTaskMeta"
+              @clear-filters="clearTaskFilters"
+            />
             <PluginViewHost location="panel" />
           </div>
 
-          <!-- 底部固定区：统计 + Sync -->
+          <!-- 底部固定区：同步状态 -->
           <div class="tasks-bottom">
-            <div class="bottom-stats-row">
-              <TaskStats :tasks="tasks" @clear-completed="clearCompleted" />
-            </div>
             <div class="bottom-sync-row">
               <SyncStatus />
             </div>
@@ -392,14 +439,6 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
         </div>
 
         <div
-          v-else-if="activeModule === 'notes' && isEnabled('notes')"
-          key="notes"
-          class="module-notes"
-        >
-          <NoteEditor />
-        </div>
-
-        <div
           v-else-if="activeModule === 'devtools' && isEnabled('devtools')"
           key="devtools"
           class="module-devtools"
@@ -407,8 +446,15 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
           <Toolbox :ai-enabled="aiEnabled" />
         </div>
 
-        <div v-else key="settings" class="module-settings">
+        <div v-else-if="activeModule === 'settings'" key="settings" class="module-settings">
           <SettingsPanel :initial-sub="settingsInitialSub" />
+        </div>
+
+        <div
+          v-show="activeModule === 'notes' && isEnabled('notes')"
+          class="module-notes module-notes-persistent"
+        >
+          <NoteEditor :active="activeModule === 'notes'" />
         </div>
       </div>
 
@@ -502,8 +548,8 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: var(--space-md) 0;
-  gap: var(--space-xs);
+  padding: 10px 0;
+  gap: 4px;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border-subtle);
 }
@@ -534,6 +580,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   cursor: pointer;
   position: relative;
   transition: all 0.2s;
+  border-radius: var(--radius-sm);
 }
 
 [data-theme='hud'] .rail-btn {
@@ -616,6 +663,13 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   flex: 1;
 }
 
+.rail-divider {
+  width: 24px;
+  height: 1px;
+  margin: 6px 0;
+  background: var(--border-subtle);
+}
+
 /* ── 任务侧栏 280px ───────────────────── */
 .task-sidebar {
   display: flex;
@@ -647,16 +701,15 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
 
 .sidebar-label {
   font-family: var(--font-heading);
-  font-size: 11px;
+  font-size: var(--text-base);
   font-weight: 600;
-  letter-spacing: 3px;
-  text-transform: uppercase;
+  letter-spacing: 0;
   color: var(--text-tertiary);
 }
 
 .sidebar-count {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--text-sm);
   color: var(--accent-dim);
   background: var(--accent-glow-s);
   padding: 1px 6px;
@@ -674,6 +727,71 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   flex: 1;
   overflow-y: auto;
   padding: 0 var(--space-sm);
+}
+
+.task-view-section {
+  padding: var(--space-sm) var(--space-sm) var(--space-lg);
+}
+
+.task-view-heading {
+  padding: 0 var(--space-sm) var(--space-sm);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.task-view-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 40px;
+  padding: 0 var(--space-sm);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.task-view-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.task-view-item.active {
+  background: var(--accent-muted);
+  color: var(--accent-hover);
+  font-weight: 600;
+}
+
+.task-view-dot {
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.task-view-item.active .task-view-dot {
+  background: currentColor;
+}
+
+.task-view-count {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.task-view-item.active .task-view-count {
+  color: inherit;
 }
 
 .sidebar-loading {
@@ -756,6 +874,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
 .tasks-scroll {
   flex: 1;
   overflow-y: auto;
+  padding: 0 var(--space-xl);
 }
 
 .tasks-bottom {
@@ -763,6 +882,23 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   border-top: 1px solid var(--border-subtle);
   padding: var(--space-sm) var(--space-xl);
   background: var(--bg-primary);
+}
+
+.main-task-list {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: var(--space-lg) 0 var(--space-2xl);
+}
+
+.task-loading {
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  color: var(--text-muted);
+  font-size: var(--text-base);
 }
 
 .plugin-page-topbar {
@@ -873,7 +1009,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   position: relative;
 }
 
-/* 扫描线 — 终末地风格能量线 */
+/* 扫描线 */
 .main-header::after {
   content: '';
   position: absolute;
@@ -893,7 +1029,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
 
 .main-title {
   font-family: var(--font-heading);
-  font-size: 28px;
+  font-size: 30px;
   font-weight: 700;
   letter-spacing: 1px;
   color: var(--text-primary);
@@ -902,11 +1038,33 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
 }
 
 .main-subtitle {
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
-  letter-spacing: 1px;
+  letter-spacing: 0;
   margin-top: 4px;
+}
+
+.clear-completed-btn {
+  align-self: center;
+  padding: 8px 12px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition:
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.clear-completed-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-light);
+  color: var(--accent);
 }
 
 .task-detail {
@@ -1021,6 +1179,11 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
     padding-left: var(--space-lg);
     padding-right: var(--space-lg);
   }
+
+  .tasks-scroll {
+    padding-left: var(--space-lg);
+    padding-right: var(--space-lg);
+  }
 }
 
 @media (max-width: 800px) {
@@ -1038,6 +1201,11 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
 
   .main-header,
   .tasks-bottom {
+    padding-left: var(--space-md);
+    padding-right: var(--space-md);
+  }
+
+  .tasks-scroll {
     padding-left: var(--space-md);
     padding-right: var(--space-md);
   }

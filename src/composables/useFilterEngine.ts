@@ -36,6 +36,15 @@ export function filterTasks(tasks: Task[], date: string | null, tags: string[]):
   return [...result];
 }
 
+/** 按标题、标签或稳定任务 ID 匹配搜索词。 */
+export function matchesTaskQuery(task: Task, query: string): boolean {
+  const normalized = query.trim().toLocaleLowerCase();
+  if (!normalized) return true;
+  return [task.title, task.id, ...task.tags].some((value) =>
+    value.toLocaleLowerCase().includes(normalized),
+  );
+}
+
 /** 从任务列表提取去重排序后的标签列表 */
 export function tagsFromTasks(tasks: Task[]): string[] {
   const tags = [...new Set(tasks.flatMap((t) => t.tags))];

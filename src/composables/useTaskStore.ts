@@ -13,6 +13,7 @@ import {
   getTodayStr,
   mergeLWW,
   mergeTasksLWW,
+  matchesTaskQuery,
 } from './useFilterEngine';
 import { withTimeout } from './syncUtils';
 import { diagnosticsLogger } from '../diagnostics/invoke-logged';
@@ -186,9 +187,7 @@ export function useTaskStore() {
   const filteredTasks = computed(() => {
     const filtered = filterTasks(tasks.value, filterDate.value, selectedTags.value);
     const query = searchQuery.value.trim().toLocaleLowerCase();
-    return query
-      ? filtered.filter((task) => task.title.toLocaleLowerCase().includes(query))
-      : filtered;
+    return filtered.filter((task) => matchesTaskQuery(task, query));
   });
 
   const overdueCount = computed(() => countOverdue(tasks.value));
@@ -585,6 +584,7 @@ export function useTaskStore() {
         syncAllTags();
       }
       onTaskChanged(task);
+      return task;
     },
     'addTask',
   );

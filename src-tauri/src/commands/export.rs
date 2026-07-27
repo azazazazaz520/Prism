@@ -16,6 +16,8 @@ use crate::AppState;
 const PANDOC_TIMEOUT: Duration = Duration::from_secs(60);
 const PANDOC_VERSION_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_PANDOC_ERROR_LENGTH: usize = 4000;
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -145,6 +147,7 @@ async fn run_pandoc(
     );
 
     let mut command = Command::new(pandoc);
+    configure_hidden_console(&mut command);
     command
         .arg("--from=gfm")
         .arg("--to=docx")
@@ -246,13 +249,12 @@ fn common_pandoc_paths() -> Vec<PathBuf> {
 }
 
 async fn detect_pandoc_version(path: &Path) -> Result<String, String> {
-    let output = timeout(
-        PANDOC_VERSION_TIMEOUT,
-        Command::new(path).arg("--version").output(),
-    )
-    .await
-    .map_err(|_| "PANDOC_TIMEOUT: Pandoc 版本检测超时".to_string())?
-    .map_err(|_| "PANDOC_NOT_FOUND: 未找到 Pandoc，请安装或配置 Pandoc 路径".to_string())?;
+    let mut command = Command::new(path);
+    configure_hidden_console(&mut command);
+    let output = timeout(PANDOC_VERSION_TIMEOUT, command.arg("--version").output())
+        .await
+        .map_err(|_| "PANDOC_TIMEOUT: Pandoc 版本检测超时".to_string())?
+        .map_err(|_| "PANDOC_NOT_FOUND: 未找到 Pandoc，请安装或配置 Pandoc 路径".to_string())?;
     if !output.status.success() {
         return Err("PANDOC_INVALID: Pandoc 版本检测失败".into());
     }
@@ -266,6 +268,12 @@ async fn detect_pandoc_version(path: &Path) -> Result<String, String> {
         return Err("PANDOC_INVALID: Pandoc 未返回版本信息".into());
     }
     Ok(version)
+}
+
+/// 在 Windows 生产环境中隐藏 Pandoc 的控制台窗口；其他平台保持默认行为。
+fn configure_hidden_console(command: &mut Command) {
+    #[cfg(windows)]
+    command.creation_flags(CREATE_NO_WINDOW);
 }
 
 fn create_temp_output_path(output_path: &Path) -> Result<PathBuf, String> {

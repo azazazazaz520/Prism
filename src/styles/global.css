@@ -44,7 +44,7 @@ body {
 
 /* ── 选中高亮 ────────────────────────── */
 ::selection {
-  background: var(--accent-muted);
+  background: var(--selection-bg);
   color: var(--text-primary);
 }
 

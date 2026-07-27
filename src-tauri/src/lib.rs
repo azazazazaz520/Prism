@@ -19,6 +19,7 @@ pub(crate) mod store;
 pub(crate) mod task_service;
 
 mod commands;
+mod file_watcher;
 mod instance_lock;
 mod reminder;
 mod shortcuts;
@@ -39,6 +40,8 @@ pub struct AppState {
     pub(crate) logger: Arc<logging::LogWriter>,
     /// 插件模块源码临时存储，key = token，激活后立即消费
     pub(crate) plugin_modules: Mutex<HashMap<String, String>>,
+    /// 文件系统监听器（drop 时自动停止监听）
+    pub(crate) file_watcher: Mutex<Option<file_watcher::FileWatcher>>,
 }
 
 impl AppState {
@@ -212,6 +215,7 @@ pub fn run() {
             sync: Mutex::new(sync),
             logger: logger.clone(),
             plugin_modules: Mutex::new(HashMap::new()),
+            file_watcher: Mutex::new(None),
         })
         .manage(token_registry)
         .register_asynchronous_uri_scheme_protocol("prism-api", move |ctx, request, responder| {
@@ -334,6 +338,8 @@ pub fn run() {
             // 笔记命令
             commands::notes::list_note_tree,
             commands::notes::read_note,
+            commands::notes::read_note_meta,
+            commands::notes::get_note_mtime,
             commands::notes::write_note,
             commands::notes::create_note_dir,
             commands::notes::delete_note_entry,
@@ -388,6 +394,14 @@ pub fn run() {
             }
 
             shortcuts::register_all(app.handle());
+
+            // 启动文件系统监听（笔记目录的实时增删改检测）
+            {
+                let state = app.state::<AppState>();
+                let notes_dir = state.with_config(store::get_notes_dir);
+                let watcher = file_watcher::FileWatcher::start(app.handle().clone(), notes_dir);
+                *state.file_watcher.lock().unwrap() = Some(watcher);
+            }
 
             let backend = Arc::new(reminder::TauriBackend::new(app.handle().clone()));
             reminder::start(backend, running);

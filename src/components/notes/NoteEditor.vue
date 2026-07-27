@@ -13,6 +13,7 @@ import { ref, watch, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { invokeWithDiagnostics as invoke } from '../../diagnostics/invoke-logged';
 import { diagnosticsLogger } from '../../diagnostics/invoke-logged';
 import { open } from '@tauri-apps/plugin-dialog';
+import { listen } from '@tauri-apps/api/event';
 import type { FileEntry, FileTreeContextTarget, NotesLayoutState, Task } from '../../types';
 import { compactFileTree } from '../../utils/note-tree';
 import { getMenuRegistrations, type EditorSelection } from '../../plugin-api/menus-impl';
@@ -34,6 +35,7 @@ import {
   type TaskReference,
 } from '../../notes/task-references';
 import { useNoteTaskSync } from '../../composables/useNoteTaskSync';
+import { FILE_CHANGED_EXTERNALLY } from '../../utils/error-codes';
 
 const props = withDefaults(defineProps<{ active?: boolean }>(), { active: true });
 
@@ -76,6 +78,9 @@ const taskPickerVisible = ref(false);
 const noteQuickSwitcherVisible = ref(false);
 const noteContentCache = new Map<string, string>();
 const recentNotePaths = ref<string[]>([]);
+
+/** 当前打开文件读取时的版本标识，用于外部变更检测 */
+const currentFileMtime = ref<string | null>(null);
 
 const { tasks, toggleTask, toggleDailyTask, updateTask, addTask, deleteTask } = useTaskStore();
 const {
@@ -344,16 +349,37 @@ function filterFileTree(entries: FileEntry[], query: string): FileEntry[] {
 
 const filteredDisplayTree = computed(() => filterFileTree(displayTree.value, noteSearch.value));
 
-/** 当前笔记中的 Markdown 标题，用于右侧上下文面板的大纲。 */
-const outline = computed(() =>
-  content.value
-    .split(/\r?\n/)
-    .map((line) => {
-      const match = /^(#{1,3})\s+(.+?)\s*$/.exec(line);
-      return match ? { level: match[1].length, title: match[2] } : null;
-    })
-    .filter((item): item is { level: number; title: string } => Boolean(item)),
-);
+/** 当前笔记中的 Markdown 标题，用于右侧上下文面板的大纲。
+ *  代码块（``` 围栏）内的 # 不会被识别为标题。 */
+const outline = computed(() => {
+  const codeFenceRe = /^\s{0,3}(`{3,}|~{3,})/;
+  const result: { level: number; title: string }[] = [];
+  let inCodeFence = false;
+  let fenceChar = '';
+  let fenceLen = 0;
+
+  for (const line of content.value.split(/\r?\n/)) {
+    const fence = codeFenceRe.exec(line);
+    if (fence) {
+      if (!inCodeFence) {
+        inCodeFence = true;
+        fenceChar = fence[1][0];
+        fenceLen = fence[1].length;
+      } else if (fence[1][0] === fenceChar && fence[1].length >= fenceLen) {
+        inCodeFence = false;
+      }
+      continue;
+    }
+    if (inCodeFence) continue;
+
+    const match = /^(#{1,3})\s+(.+?)\s*$/.exec(line);
+    if (match) {
+      result.push({ level: match[1].length, title: match[2] });
+    }
+  }
+
+  return result;
+});
 
 /** 当前笔记任务引用所在的其他笔记路径，用于反向链接提示。 */
 const backlinkPaths = computed(() => {
@@ -457,14 +483,62 @@ async function handleManualSave() {
   if (!selectedPath.value) return;
   saving.value = true;
   try {
-    await invoke('write_note', { path: selectedPath.value, content: content.value });
-    isDirty.value = false;
-  } catch (e) {
-    diagnosticsLogger.error('notes', 'notes.save_failed', '保存笔记失败', e, {
+    const writtenMtime = await invoke<string>('write_note', {
       path: selectedPath.value,
+      content: content.value,
+      expectedMtime: currentFileMtime.value,
     });
+    isDirty.value = false;
+    currentFileMtime.value = writtenMtime;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    if (message.startsWith(FILE_CHANGED_EXTERNALLY)) {
+      // 文件在外部被修改，静默加载外部最新版本
+      await reloadFromDisk();
+    } else {
+      diagnosticsLogger.error('notes', 'notes.save_failed', '保存笔记失败', e, {
+        path: selectedPath.value,
+      });
+    }
   } finally {
     saving.value = false;
+  }
+}
+
+// ═══ 外部文件变更处理（Obsidian 式：静默加载最新版本） ═══
+
+/**
+ * 从磁盘重新加载当前文件，替换编辑器内容。
+ * 用于外部变更检测后的自动同步。
+ */
+async function reloadFromDisk(path = selectedPath.value) {
+  if (!path) return;
+  try {
+    const meta = await invoke<{ content: string; mtime: string }>('read_note_meta', {
+      path,
+    });
+    noteContentCache.set(path, meta.content);
+    setNoteContent(path, meta.content);
+    if (selectedPath.value === path) {
+      content.value = meta.content;
+      currentFileMtime.value = meta.mtime;
+      isDirty.value = false;
+    }
+  } catch {
+    // 文件可能被删除等，静默处理
+  }
+}
+
+/** 检查当前文件是否被外部修改，若变化则自动加载最新版本 */
+async function checkExternalModification() {
+  if (!selectedPath.value) return;
+  try {
+    const diskMtime = await invoke<string>('get_note_mtime', { path: selectedPath.value });
+    if (currentFileMtime.value && diskMtime !== currentFileMtime.value) {
+      await reloadFromDisk();
+    }
+  } catch {
+    // 文件可能被删除等，静默处理
   }
 }
 
@@ -744,7 +818,22 @@ async function openFile(path: string, initialContent?: string) {
     selectedPath.value = path;
     titleDraft.value = path.split('/').pop()?.replace(/\.md$/i, '') || '未命名';
     const cached = noteContentCache.get(path);
-    content.value = initialContent ?? cached ?? (await invoke<string>('read_note', { path }));
+    if (initialContent) {
+      content.value = initialContent;
+      currentFileMtime.value = await invoke<string>('get_note_mtime', { path });
+    } else if (cached) {
+      content.value = cached;
+      // 从缓存恢复时仍从磁盘获取最新 mtime 用于冲突检测
+      try {
+        currentFileMtime.value = await invoke<string>('get_note_mtime', { path });
+      } catch {
+        currentFileMtime.value = null;
+      }
+    } else {
+      const meta = await invoke<{ content: string; mtime: string }>('read_note_meta', { path });
+      content.value = meta.content;
+      currentFileMtime.value = meta.mtime;
+    }
     noteContentCache.set(path, content.value);
     setNoteContent(path, content.value);
     isDirty.value = false;
@@ -887,17 +976,31 @@ watch(content, (val) => {
   clearPendingSave();
   const savePath = selectedPath.value;
   if (!savePath) return;
+  const expectedMtime = currentFileMtime.value;
   saveTimer = setTimeout(async () => {
     saving.value = true;
     try {
-      await invoke('write_note', { path: savePath, content: val });
+      const writtenMtime = await invoke<string>('write_note', {
+        path: savePath,
+        content: val,
+        expectedMtime,
+      });
       noteContentCache.set(savePath, val);
       setNoteContent(savePath, val);
-      if (selectedPath.value === savePath) isDirty.value = false;
+      if (selectedPath.value === savePath) {
+        isDirty.value = false;
+        currentFileMtime.value = writtenMtime;
+      }
     } catch (e) {
-      diagnosticsLogger.error('notes', 'notes.save_failed', '保存笔记失败', e, {
-        path: savePath,
-      });
+      const message = e instanceof Error ? e.message : String(e);
+      if (message.startsWith(FILE_CHANGED_EXTERNALLY)) {
+        // 文件在外部被修改，静默加载外部最新版本
+        await reloadFromDisk(savePath);
+      } else {
+        diagnosticsLogger.error('notes', 'notes.save_failed', '保存笔记失败', e, {
+          path: savePath,
+        });
+      }
     } finally {
       saving.value = false;
     }
@@ -1353,14 +1456,48 @@ function handleDocumentClick(event: MouseEvent) {
 
 // ═══ 生命周期 ═══
 
-onMounted(() => {
+let unlistenFileWatcher: (() => void) | null = null;
+let fileTreeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** 处理文件系统监听事件 */
+function handleFileChangeEvent(event: { kind: string; path: string }) {
+  switch (event.kind) {
+    case 'create':
+    case 'remove':
+      // 文件创建或删除 → 防抖刷新文件树
+      if (fileTreeDebounceTimer) clearTimeout(fileTreeDebounceTimer);
+      fileTreeDebounceTimer = setTimeout(() => {
+        void loadTree();
+      }, 300);
+      break;
+    case 'modify':
+      // 文件内容被外部修改 → 仅当不是当前正在编辑的文件时更新
+      if (event.path === selectedPath.value) {
+        if (!isDirty.value) reloadFromDisk();
+        // 有未保存修改时，交由保存时的 mtime 校验处理冲突
+      } else {
+        // 更新缓存中的旧版本
+        noteContentCache.delete(event.path);
+      }
+      break;
+  }
+}
+
+onMounted(async () => {
   loadLayoutState();
   constrainOnResize();
   loadRecentWorkspaces();
   void initializeNotesWorkspace();
   window.addEventListener('resize', constrainOnResize);
   window.addEventListener('keydown', handleKeyboardShortcuts, true);
+  window.addEventListener('focus', checkExternalModification);
   document.addEventListener('click', handleDocumentClick);
+
+  // 监听 Rust 后端的文件系统变更事件
+  const unlisten = await listen<{ kind: string; path: string }>('notes://file-changed', (event) =>
+    handleFileChangeEvent(event.payload),
+  );
+  unlistenFileWatcher = () => unlisten();
 });
 
 async function initializeNotesWorkspace() {
@@ -1373,10 +1510,21 @@ async function initializeNotesWorkspace() {
 
 watch([openTabs, selectedPath, notesDir], saveNoteSession, { deep: true });
 
+// 从其他视图切回笔记视图时，检测当前文件是否被外部修改
+watch(
+  () => props.active,
+  (active) => {
+    if (active) checkExternalModification();
+  },
+);
+
 onUnmounted(() => {
   if (taskSyncTimer) clearTimeout(taskSyncTimer);
+  if (fileTreeDebounceTimer) clearTimeout(fileTreeDebounceTimer);
+  if (unlistenFileWatcher) unlistenFileWatcher();
   window.removeEventListener('resize', constrainOnResize);
   window.removeEventListener('keydown', handleKeyboardShortcuts, true);
+  window.removeEventListener('focus', checkExternalModification);
   document.removeEventListener('click', handleDocumentClick);
 });
 </script>
@@ -1724,6 +1872,7 @@ onUnmounted(() => {
                 <div class="editor-document-body">
                   <MarkdownEditor
                     ref="textareaRef"
+                    :key="selectedPath"
                     :model-value="content"
                     placeholder="开始编写 Markdown..."
                     @update:model-value="content = $event"

@@ -8,6 +8,7 @@ import {
   updateTaskReferences,
   type TaskReferenceIndex,
 } from '../notes/task-references';
+import { FILE_CHANGED_EXTERNALLY } from '../utils/error-codes';
 
 const noteContents = ref<Record<string, string>>({});
 const isIndexing = ref(false);
@@ -55,6 +56,22 @@ export function useNoteTaskSync() {
     noteContents.value = {};
   }
 
+  /** 使用文件版本校验写入任务引用，避免覆盖外部编辑。 */
+  async function writeNoteSafely(path: string, content: string): Promise<string | null> {
+    const expectedMtime = await invoke<string>('get_note_mtime', { path });
+    try {
+      return await invoke<string>('write_note', { path, content, expectedMtime });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.startsWith(FILE_CHANGED_EXTERNALLY)) {
+        const meta = await invoke<{ content: string; mtime: string }>('read_note_meta', { path });
+        setNoteContent(path, meta.content);
+        return null;
+      }
+      throw error;
+    }
+  }
+
   function removeNote(path: string) {
     const next = { ...noteContents.value };
     delete next[path];
@@ -88,8 +105,8 @@ export function useNoteTaskSync() {
         if (next === current) return;
         writingPaths.add(path);
         try {
-          await invoke('write_note', { path, content: next });
-          setNoteContent(path, next);
+          const writtenMtime = await writeNoteSafely(path, next);
+          if (writtenMtime) setNoteContent(path, next);
         } finally {
           writingPaths.delete(path);
         }
@@ -114,8 +131,8 @@ export function useNoteTaskSync() {
         if (next === current) return;
         writingPaths.add(path);
         try {
-          await invoke('write_note', { path, content: next });
-          setNoteContent(path, next);
+          const writtenMtime = await writeNoteSafely(path, next);
+          if (writtenMtime) setNoteContent(path, next);
         } finally {
           writingPaths.delete(path);
         }

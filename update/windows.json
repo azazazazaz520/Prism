@@ -1,8 +1,8 @@
 {
-  "sha256": "c98ddf83b585fa909116db841e57f123415c21fe2174d1eee0301a7aa5849d6f",
-  "version": "0.4.0",
-  "download_url": "https://github.com/azazazazaz520/Prism/releases/download/v0.4.0/Prism_0.4.0_x64-setup.exe",
-  "release_date": "2026-07-27T15:41:49.3219108Z",
-  "release_url": "https://github.com/azazazazaz520/Prism/releases/tag/v0.4.0",
-  "release_notes": "## Changes since v0.4.0-alpha.2\n\n- feat: 增加 Pandoc Word 导出功能 (asd_fire)\n- fix: 收紧笔记标题布局间距 (asd_fire)\n- fix: 优化了工作区加载时的性能表现 (asd_fire)"
+  "release_date": "2026-07-27T17:33:32.6533634Z",
+  "release_notes": "## Changes since v0.4.0\n\n- feat(export): 在 Windows 中隐藏 Pandoc 控制台窗口 (asd_fire)\n- chore: 同步稳定版更新清单 (github-actions[bot])",
+  "version": "0.4.1",
+  "release_url": "https://github.com/azazazazaz520/Prism/releases/tag/v0.4.1",
+  "download_url": "https://github.com/azazazazaz520/Prism/releases/download/v0.4.1/Prism_0.4.1_x64-setup.exe",
+  "sha256": "38cb48be16bcea450288bf29b94830bbd65c97d53a180a6ca0a5ae755a98e150"
 }

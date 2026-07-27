@@ -2828,9 +2828,10 @@ onUnmounted(() => {
 }
 
 .note-document-title {
-  width: min(760px, calc(100% - 64px));
-  margin: 42px auto 14px;
-  padding: 0;
+  width: min(860px, 100%);
+  box-sizing: border-box;
+  margin: 18px auto 4px;
+  padding: 0 40px;
   border: 0;
   outline: 0;
   background: transparent;

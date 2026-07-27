@@ -12,7 +12,7 @@
 import { ref, watch, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { invokeWithDiagnostics as invoke } from '../../diagnostics/invoke-logged';
 import { diagnosticsLogger } from '../../diagnostics/invoke-logged';
-import { open } from '@tauri-apps/plugin-dialog';
+import { open, save } from '@tauri-apps/plugin-dialog';
 import { listen } from '@tauri-apps/api/event';
 import type { FileEntry, FileTreeContextTarget, NotesLayoutState, Task } from '../../types';
 import { compactFileTree } from '../../utils/note-tree';
@@ -71,6 +71,7 @@ const content = ref('');
 const titleDraft = ref('');
 const titleInput = ref<HTMLInputElement | null>(null);
 const saving = ref(false);
+const exporting = ref(false);
 const isDirty = ref(false);
 const cursorLine = ref(1);
 const cursorCol = ref(1);
@@ -115,6 +116,7 @@ const { openContextMenu, createClipboardMenuItems } = useContextMenu();
 /** 操作结果提示（临时显示） */
 const statusMsg = ref('');
 let statusTimer: ReturnType<typeof setTimeout> | null = null;
+const noteActionsMenuOpen = ref(false);
 
 function showStatus(msg: string) {
   statusMsg.value = msg;
@@ -122,6 +124,24 @@ function showStatus(msg: string) {
   statusTimer = setTimeout(() => {
     statusMsg.value = '';
   }, 3000);
+}
+
+function toggleNoteActionsMenu() {
+  noteActionsMenuOpen.value = !noteActionsMenuOpen.value;
+}
+
+function closeNoteActionsMenu() {
+  noteActionsMenuOpen.value = false;
+}
+
+function handleNoteActionsMenuOutside(event: MouseEvent) {
+  const target = event.target as HTMLElement | null;
+  if (!target?.closest('.note-toolbar-menu')) closeNoteActionsMenu();
+}
+
+interface ExportDocxResult {
+  output_path: string;
+  pandoc_version: string;
 }
 
 /** 笔记目录路径 */
@@ -506,6 +526,52 @@ async function handleManualSave() {
 }
 
 // ═══ 外部文件变更处理（Obsidian 式：静默加载最新版本） ═══
+
+/** 使用 Pandoc 将当前笔记导出为 Word 文档。 */
+async function exportCurrentNoteToDocx() {
+  const path = selectedPath.value;
+  if (!path || exporting.value) return;
+
+  exporting.value = true;
+  try {
+    if (isDirty.value) {
+      clearPendingSave();
+      await handleManualSave();
+    }
+
+    const defaultName = `${selectedName.value.replace(/\.md$/i, '') || '未命名'}.docx`;
+    const selected = await save({
+      defaultPath: defaultName,
+      title: '导出为 Word',
+      filters: [{ name: 'Word 文档', extensions: ['docx'] }],
+    });
+    if (!selected) return;
+
+    const outputPath = /\.docx$/i.test(selected) ? selected : `${selected}.docx`;
+    const result = await invoke<ExportDocxResult>('export_note_to_docx', {
+      options: { notePath: path, outputPath },
+    });
+    showStatus(`已导出 Word：${result.output_path.split(/[\\/]/).pop() || outputPath}`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.startsWith('PANDOC_NOT_FOUND')) {
+      showStatus('未找到 Pandoc，请安装 Pandoc 或将其加入系统 PATH');
+    } else if (message.startsWith('PANDOC_TIMEOUT')) {
+      showStatus('Word 导出超时，请检查文档中的图片或附件');
+    } else if (message.startsWith('PANDOC_CONVERSION_FAILED')) {
+      showStatus(`Word 导出失败：${message.replace(/^PANDOC_CONVERSION_FAILED:\s*/, '')}`);
+    } else if (message.startsWith('DOCX_OUTPUT_FAILED')) {
+      showStatus(`Word 导出失败：${message.replace(/^DOCX_OUTPUT_FAILED:\s*/, '')}`);
+    } else {
+      diagnosticsLogger.error('notes', 'notes.export_docx_failed', '导出 Word 失败', error, {
+        path,
+      });
+      showStatus(`Word 导出失败：${message || '请检查 Pandoc 配置和输出目录'}`);
+    }
+  } finally {
+    exporting.value = false;
+  }
+}
 
 /**
  * 从磁盘重新加载当前文件，替换编辑器内容。
@@ -1564,6 +1630,7 @@ onMounted(async () => {
   window.addEventListener('keydown', handleKeyboardShortcuts, true);
   window.addEventListener('focus', checkExternalModification);
   document.addEventListener('click', handleDocumentClick);
+  document.addEventListener('click', handleNoteActionsMenuOutside);
 
   // 监听 Rust 后端的文件系统变更事件
   const unlisten = await listen<{ kind: string; path: string }>('notes://file-changed', (event) =>
@@ -1597,6 +1664,7 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyboardShortcuts, true);
   window.removeEventListener('focus', checkExternalModification);
   document.removeEventListener('click', handleDocumentClick);
+  document.removeEventListener('click', handleNoteActionsMenuOutside);
 });
 </script>
 
@@ -1855,6 +1923,69 @@ onUnmounted(() => {
               </div>
               <MarkdownToolbar :editor-ref="textareaRef" />
               <div class="toolbar-right">
+                <div class="note-toolbar-menu">
+                  <button
+                    class="toolbar-action-btn"
+                    :class="{ active: noteActionsMenuOpen }"
+                    title="更多操作"
+                    aria-label="更多操作"
+                    :aria-expanded="noteActionsMenuOpen"
+                    @click.stop="toggleNoteActionsMenu"
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      aria-hidden="true"
+                    >
+                      <circle cx="5" cy="12" r="1.6" />
+                      <circle cx="12" cy="12" r="1.6" />
+                      <circle cx="19" cy="12" r="1.6" />
+                    </svg>
+                  </button>
+                  <div v-if="noteActionsMenuOpen" class="note-toolbar-menu-popover" @click.stop>
+                    <button
+                      type="button"
+                      @click="
+                        createUntitledFile();
+                        closeNoteActionsMenu();
+                      "
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 5v14M5 12h14" />
+                      </svg>
+                      <span>新建笔记</span>
+                    </button>
+                    <button
+                      type="button"
+                      @click="
+                        createFolder('');
+                        closeNoteActionsMenu();
+                      "
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M22 19a2 2 0 01-2 2V5a2 2 0 012 2zM12 11v6M9 14h6" />
+                      </svg>
+                      <span>新建文件夹</span>
+                    </button>
+                    <div class="note-toolbar-menu-separator" aria-hidden="true" />
+                    <button
+                      type="button"
+                      :disabled="exporting"
+                      @click="
+                        exportCurrentNoteToDocx();
+                        closeNoteActionsMenu();
+                      "
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M5 3h10l4 4v14H5zM15 3v5h5M8 15h8M8 18h5" />
+                        <path d="M8 11h5" />
+                      </svg>
+                      <span>导出为 Word</span>
+                    </button>
+                  </div>
+                </div>
                 <button class="toolbar-action-btn" title="新建笔记" @click="createUntitledFile()">
                   <svg
                     width="14"
@@ -1881,6 +2012,26 @@ onUnmounted(() => {
                     <path
                       d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2zM12 11v6M9 14h6"
                     />
+                  </svg>
+                </button>
+                <button
+                  class="toolbar-action-btn"
+                  title="导出为 Word"
+                  :disabled="exporting"
+                  @click="exportCurrentNoteToDocx"
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M12 3v12M7 10l5 5 5-5" />
+                    <path d="M5 21h14" />
                   </svg>
                 </button>
                 <button
@@ -2617,6 +2768,69 @@ onUnmounted(() => {
   gap: var(--space-sm);
 }
 
+/* 低频笔记操作收纳为 Obsidian 风格的更多菜单。 */
+.toolbar-right > .toolbar-action-btn:not(.context-toggle) {
+  display: none;
+}
+
+.note-toolbar-menu {
+  position: relative;
+}
+
+.note-toolbar-menu-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  min-width: 168px;
+  padding: var(--space-xs);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow-lg);
+}
+
+.note-toolbar-menu-popover button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.note-toolbar-menu-popover button:hover {
+  background: var(--bg-hover);
+}
+
+.note-toolbar-menu-popover button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.note-toolbar-menu-popover svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.note-toolbar-menu-separator {
+  height: 1px;
+  margin: var(--space-xs) 0;
+  background: var(--border-subtle);
+}
+
 .toolbar-action-btn {
   background: none;
   border: 1px solid var(--border-light);
@@ -2634,6 +2848,17 @@ onUnmounted(() => {
   background: var(--accent-bg);
   color: var(--accent);
   border-color: var(--accent-muted);
+}
+
+.toolbar-action-btn.active {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-color: var(--accent-muted);
+}
+
+.toolbar-action-btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
 }
 
 .editor-modes {

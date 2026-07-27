@@ -335,7 +335,11 @@ pub fn run() {
             commands::config::set_module_enabled,
             commands::config::get_dashboard_layout,
             commands::config::set_dashboard_layout,
+            commands::config::get_pandoc_path,
+            commands::config::set_pandoc_path,
             // 笔记命令
+            commands::export::export_note_to_docx,
+            commands::export::get_pandoc_info,
             commands::notes::list_note_tree,
             commands::notes::list_note_dir,
             commands::notes::read_note,

@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::store;
 use crate::AppState;
 use tauri::{Emitter, LogicalSize, Manager};
@@ -213,5 +215,32 @@ pub fn get_dashboard_layout(state: tauri::State<AppState>) -> Option<String> {
 pub fn set_dashboard_layout(state: tauri::State<AppState>, layout: String) -> Result<(), String> {
     state.with_config_mut(|config| {
         config.dashboard_layout = Some(layout);
+    })
+}
+
+/// 获取用户配置的 Pandoc 路径；为空时由导出命令自动发现。
+#[tauri::command]
+pub fn get_pandoc_path(state: tauri::State<AppState>) -> Option<String> {
+    state.with_config(|config| {
+        config
+            .pandoc_path
+            .as_ref()
+            .map(|path| path.to_string_lossy().to_string())
+    })
+}
+
+/// 设置用户配置的 Pandoc 路径；传入空值可恢复自动发现。
+#[tauri::command]
+pub fn set_pandoc_path(state: tauri::State<AppState>, path: Option<String>) -> Result<(), String> {
+    let next_path = path
+        .filter(|value| !value.trim().is_empty())
+        .map(PathBuf::from);
+    if let Some(path) = &next_path {
+        if !path.is_file() {
+            return Err("PANDOC_INVALID: 指定的 Pandoc 路径不存在或不是可执行文件".into());
+        }
+    }
+    state.with_config_mut(|config| {
+        config.pandoc_path = next_path;
     })
 }

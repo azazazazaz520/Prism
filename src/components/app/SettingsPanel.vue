@@ -28,11 +28,22 @@ import type {
 } from '../../types';
 import { getVersion } from '@tauri-apps/api/app';
 import { compareVersions } from 'compare-versions';
+import { open } from '@tauri-apps/plugin-dialog';
 
 const { theme, setTheme } = useTheme();
 const { allModules, isEnabled, toggle: toggleModule } = useModuleRegistry();
 
+interface PandocInfo {
+  path: string;
+  version: string;
+}
+
 const activeSub = ref<SettingsSubModule>(props.initialSub);
+
+const pandocInfo = ref<PandocInfo | null>(null);
+const pandocStatus = ref<'checking' | 'available' | 'missing' | 'invalid'>('checking');
+const pandocTip = ref('');
+const isSelectingPandoc = ref(false);
 
 /** 主题选择器展开状态 */
 const isThemeOpen = ref(false);
@@ -118,6 +129,62 @@ async function saveReminder() {
     diagnosticsLogger.error('settings', 'settings.save_reminder_failed', '保存提醒设置失败', e);
   }
 }
+
+async function loadPandocInfo() {
+  pandocStatus.value = 'checking';
+  pandocTip.value = '';
+  try {
+    pandocInfo.value = await invoke<PandocInfo>('get_pandoc_info');
+    pandocStatus.value = 'available';
+  } catch (error) {
+    pandocInfo.value = null;
+    const message = String(error);
+    pandocStatus.value = message.startsWith('PANDOC_NOT_FOUND') ? 'missing' : 'invalid';
+    pandocTip.value = message.replace(/^[A-Z_]+:\s*/, '') || '无法检测 Pandoc';
+  }
+}
+
+async function selectPandoc() {
+  if (isSelectingPandoc.value) return;
+  isSelectingPandoc.value = true;
+  try {
+    const selected = await open({
+      multiple: false,
+      directory: false,
+      title: '选择 Pandoc 可执行文件',
+    });
+    if (typeof selected !== 'string') return;
+    await invoke('set_pandoc_path', { path: selected });
+    await loadPandocInfo();
+  } catch (error) {
+    diagnosticsLogger.error(
+      'settings',
+      'settings.set_pandoc_path_failed',
+      '设置 Pandoc 路径失败',
+      error,
+    );
+    pandocTip.value = '保存 Pandoc 路径失败';
+  } finally {
+    isSelectingPandoc.value = false;
+  }
+}
+
+async function resetPandocPath() {
+  try {
+    await invoke('set_pandoc_path', { path: null });
+    await loadPandocInfo();
+  } catch (error) {
+    diagnosticsLogger.error(
+      'settings',
+      'settings.reset_pandoc_path_failed',
+      '恢复 Pandoc 自动发现失败',
+      error,
+    );
+    pandocTip.value = '恢复自动发现失败';
+  }
+}
+
+onMounted(loadPandocInfo);
 
 // ── 更新检测 ──────────────────────────────
 
@@ -382,6 +449,49 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
                 <span class="unit">分钟</span>
               </div>
             </div>
+          </div>
+
+          <div class="settings-group">
+            <div class="group-title">Markdown 导出</div>
+            <div class="setting-row pandoc-row">
+              <div class="pandoc-label">
+                <label>Pandoc</label>
+                <span :class="['pandoc-status', `is-${pandocStatus}`]">
+                  <template v-if="pandocStatus === 'checking'">检测中…</template>
+                  <template v-else-if="pandocStatus === 'available'">
+                    {{ pandocInfo?.version || '已就绪' }}
+                  </template>
+                  <template v-else-if="pandocStatus === 'missing'">未找到</template>
+                  <template v-else>不可用</template>
+                </span>
+              </div>
+              <div class="pandoc-actions">
+                <button
+                  type="button"
+                  class="about-btn"
+                  :disabled="isSelectingPandoc"
+                  @click="selectPandoc"
+                >
+                  选择路径
+                </button>
+                <button
+                  v-if="pandocInfo"
+                  type="button"
+                  class="text-action-btn"
+                  @click="resetPandocPath"
+                >
+                  自动发现
+                </button>
+                <button type="button" class="text-action-btn" @click="loadPandocInfo">
+                  重新检测
+                </button>
+              </div>
+            </div>
+            <p v-if="pandocInfo" class="pandoc-path" :title="pandocInfo.path">
+              {{ pandocInfo.path }}
+            </p>
+            <p v-if="pandocTip" class="pandoc-tip">{{ pandocTip }}</p>
+            <p class="setting-hint">用于将当前 Markdown 笔记导出为 Word 文档。</p>
           </div>
         </div>
 
@@ -897,6 +1007,74 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
 .about-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.pandoc-row {
+  gap: var(--space-md);
+}
+
+.pandoc-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.pandoc-status {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.pandoc-status.is-available {
+  color: var(--success, #22c55e);
+}
+
+.pandoc-status.is-missing,
+.pandoc-status.is-invalid {
+  color: var(--danger, #ef4444);
+}
+
+.pandoc-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+}
+
+.text-action-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.text-action-btn:hover {
+  text-decoration: underline;
+}
+
+.pandoc-path,
+.pandoc-tip,
+.setting-hint {
+  margin: var(--space-sm) 0 0;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.pandoc-path {
+  overflow: hidden;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pandoc-tip {
+  color: var(--danger, #ef4444);
+}
+
+.setting-hint {
+  color: var(--text-muted);
 }
 
 .update-tip {

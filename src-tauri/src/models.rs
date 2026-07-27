@@ -146,6 +146,12 @@ pub struct ConfigStore {
     /// 自定义笔记目录路径（绝对路径，None 时使用默认文档目录下的 Prism）
     #[serde(default)]
     pub notes_dir: Option<PathBuf>,
+    /// Pandoc 可执行文件的可选自定义路径；为空时自动从应用资源目录和 PATH 查找
+    #[serde(default)]
+    pub pandoc_path: Option<PathBuf>,
+    /// Word 导出的默认 reference.docx 模板路径
+    #[serde(default)]
+    pub pandoc_reference_doc: Option<PathBuf>,
     /// 仪表盘布局配置（JSON 字符串，前端序列化）
     #[serde(default)]
     pub dashboard_layout: Option<String>,
@@ -186,6 +192,8 @@ pub fn default_config_store() -> ConfigStore {
         reminder_minutes: default_reminder_minutes(),
         module_enabled: std::collections::HashMap::new(),
         notes_dir: None,
+        pandoc_path: None,
+        pandoc_reference_doc: None,
         dashboard_layout: None,
         plugins: std::collections::HashMap::new(),
     }

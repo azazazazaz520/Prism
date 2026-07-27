@@ -63,6 +63,7 @@ const MAX_RECENT_NOTES = 12;
 // ═══ 状态 ═══
 
 const tree = ref<FileEntry[]>([]);
+const loadingDirectories = new Set<string>();
 const selectedPath = ref<string | null>(null);
 const openTabs = ref<string[]>([]);
 const noteSearch = ref('');
@@ -85,7 +86,6 @@ const currentFileMtime = ref<string | null>(null);
 const { tasks, toggleTask, toggleDailyTask, updateTask, addTask, deleteTask } = useTaskStore();
 const {
   referenceIndex,
-  refreshIndex,
   setNoteContent,
   resetNotes,
   removeNotesUnderPath,
@@ -676,8 +676,7 @@ async function switchNotesWorkspace(selected: string) {
     noteContentCache.clear();
     resetNotes();
     expanded.value = new Set(['inbox']);
-    const entries = await loadTree(false);
-    void refreshIndex(entries);
+    await loadTree();
   } catch (e) {
     diagnosticsLogger.error('notes', 'notes.switch_workspace_failed', '切换笔记工作区失败', e);
     showStatus(`切换笔记工作区失败: ${e}`);
@@ -713,16 +712,86 @@ const notesDirShort = computed(() => {
 
 // ═══ 文件树加载与导航 ═══
 
-async function loadTree(refreshReferences = true) {
+async function loadTree(_refreshReferences = false) {
   try {
-    const nextTree = await invoke<FileEntry[]>('list_note_tree');
+    const nextTree = await invoke<FileEntry[]>('list_note_dir', { path: '' });
     tree.value = nextTree;
-    if (refreshReferences) void refreshIndex(nextTree);
     return nextTree;
   } catch (e) {
     diagnosticsLogger.error('notes', 'notes.load_tree_failed', '加载文件树失败', e);
     return [];
   }
+}
+
+function updateDirectoryChildren(
+  entries: FileEntry[],
+  directoryPath: string,
+  children: FileEntry[],
+): FileEntry[] {
+  return entries.map((entry) => {
+    if (entry.path === directoryPath) return { ...entry, children };
+    if (entry.isDir && entry.children) {
+      return {
+        ...entry,
+        children: updateDirectoryChildren(entry.children, directoryPath, children),
+      };
+    }
+    return entry;
+  });
+}
+
+async function loadDirectory(directoryPath: string) {
+  if (loadingDirectories.has(directoryPath)) return false;
+  const entry = findEntry(tree.value, directoryPath);
+  if (!entry || !entry.isDir || entry.children) return true;
+
+  loadingDirectories.add(directoryPath);
+  try {
+    const children = await invoke<FileEntry[]>('list_note_dir', { path: directoryPath });
+    tree.value = updateDirectoryChildren(tree.value, directoryPath, children);
+    return true;
+  } catch (e) {
+    diagnosticsLogger.error('notes', 'notes.load_directory_failed', '加载目录失败', e, {
+      path: directoryPath,
+    });
+    return false;
+  } finally {
+    loadingDirectories.delete(directoryPath);
+  }
+}
+
+function invalidateDirectory(entries: FileEntry[], directoryPath: string): FileEntry[] {
+  return entries.map((entry) => {
+    if (entry.path === directoryPath && entry.isDir) return { ...entry, children: undefined };
+    if (entry.isDir && entry.children) {
+      return { ...entry, children: invalidateDirectory(entry.children, directoryPath) };
+    }
+    return entry;
+  });
+}
+
+async function refreshDirectory(directoryPath: string) {
+  if (!directoryPath) return loadTree();
+  const entry = findEntry(tree.value, directoryPath);
+  if (!entry?.isDir || !entry.children) return true;
+  tree.value = invalidateDirectory(tree.value, directoryPath);
+  return loadDirectory(directoryPath);
+}
+
+async function ensureParentDirectoriesLoaded(filePath: string) {
+  const parts = filePath.split('/');
+  for (let i = 1; i < parts.length; i += 1) {
+    const directoryPath = parts.slice(0, i).join('/');
+    if (!(await loadDirectory(directoryPath))) break;
+  }
+}
+
+async function loadDisplayedDirectory(directoryPath: string) {
+  let entry = findEntry(tree.value, directoryPath);
+  while (entry?.isDir && entry.children?.length === 1 && entry.children[0].isDir) {
+    entry = entry.children[0];
+  }
+  return entry ? loadDirectory(entry.path) : false;
 }
 
 interface NoteSessionState {
@@ -763,23 +832,20 @@ function loadNoteSession(): NoteSessionState | null {
   }
 }
 
-function notePaths(entries: FileEntry[]): Set<string> {
-  const paths = new Set<string>();
-  for (const entry of entries) {
-    if (entry.isDir) {
-      for (const path of notePaths(entry.children ?? [])) paths.add(path);
-    } else {
-      paths.add(entry.path);
-    }
-  }
-  return paths;
-}
-
-async function restoreNoteSession(entries: FileEntry[]) {
+async function restoreNoteSession() {
   const state = loadNoteSession();
   if (!state) return;
-  const available = notePaths(entries);
-  const tabs = state.openTabs.filter((path) => available.has(path));
+  const availability = await Promise.all(
+    state.openTabs.map(async (path) => {
+      try {
+        await invoke<string>('get_note_mtime', { path });
+        return path;
+      } catch {
+        return null;
+      }
+    }),
+  );
+  const tabs = availability.filter((path): path is string => path !== null);
   if (tabs.length === 0) return;
 
   openTabs.value = tabs;
@@ -814,6 +880,7 @@ function expandParentDirectories(filePath: string) {
 
 async function openFile(path: string, initialContent?: string) {
   try {
+    await ensureParentDirectoriesLoaded(path);
     if (!openTabs.value.includes(path)) openTabs.value = [...openTabs.value, path];
     selectedPath.value = path;
     titleDraft.value = path.split('/').pop()?.replace(/\.md$/i, '') || '未命名';
@@ -888,7 +955,7 @@ async function createUntitledFile(parentDir = '') {
     }
     focusTitleAfterOpen = true;
     await openFile(path, '');
-    void loadTree(false);
+    void refreshDirectory(parentDir);
   } catch (e) {
     showStatus(`创建文件失败: ${e}`);
     diagnosticsLogger.error('notes', 'notes.create_file_failed', '创建文件失败', e);
@@ -931,7 +998,7 @@ async function renameCurrentNoteTitle() {
       noteContentCache.set(newPath, cached);
     }
     renameNote(oldPath, newPath);
-    void loadTree(false);
+    void refreshDirectory(parentDir);
   } catch (e) {
     titleDraft.value = currentTitle;
     showStatus(`重命名失败: ${e}`);
@@ -1043,11 +1110,12 @@ function handleDialogCancel() {
 
 // ═══ 文件树操作 ═══
 
-function toggleExpand(dirPath: string) {
+async function toggleExpand(dirPath: string) {
   const next = new Set(expanded.value);
   if (next.has(dirPath)) {
     next.delete(dirPath);
   } else {
+    if (!(await loadDisplayedDirectory(dirPath))) return;
     next.add(dirPath);
   }
   expanded.value = next;
@@ -1096,7 +1164,7 @@ async function createFile(parentDir: string) {
       expanded.value = next;
     }
     await openFile(path, '');
-    void loadTree(false);
+    void refreshDirectory(parentDir);
   } catch (e) {
     showStatus(`创建文件失败: ${e}`);
     diagnosticsLogger.error('notes', 'notes.create_file_failed', '创建文件失败', e);
@@ -1114,7 +1182,7 @@ async function createFolder(parentDir: string) {
   const path = parentDir ? `${parentDir}/${name}` : name;
   try {
     await invoke('create_note_dir', { path });
-    await loadTree();
+    await refreshDirectory(parentDir);
     const next = new Set(expanded.value);
     next.add(path);
     expanded.value = next;
@@ -1199,7 +1267,7 @@ async function renameEntry(path: string, isDir: boolean) {
     }
     expanded.value = nextExpanded;
     saveLayoutState();
-    await loadTree();
+    await refreshDirectory(parentPath);
   } catch (e) {
     showStatus(`重命名失败: ${e}`);
     diagnosticsLogger.error('notes', 'notes.rename_failed', '重命名失败', e);
@@ -1311,7 +1379,8 @@ async function deleteEntry(path: string) {
     content.value = contentSnapshot;
     isDirty.value = dirtySnapshot;
     saveNoteSession();
-    void loadTree(false);
+    const parentPath = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+    void refreshDirectory(parentPath);
     showStatus(`删除失败: ${e}`);
     diagnosticsLogger.error('notes', 'notes.delete_failed', '删除笔记失败', e);
   }
@@ -1467,7 +1536,10 @@ function handleFileChangeEvent(event: { kind: string; path: string }) {
       // 文件创建或删除 → 防抖刷新文件树
       if (fileTreeDebounceTimer) clearTimeout(fileTreeDebounceTimer);
       fileTreeDebounceTimer = setTimeout(() => {
-        void loadTree();
+        const parentPath = event.path.includes('/')
+          ? event.path.slice(0, event.path.lastIndexOf('/'))
+          : '';
+        void refreshDirectory(parentPath);
       }, 300);
       break;
     case 'modify':
@@ -1503,9 +1575,8 @@ onMounted(async () => {
 async function initializeNotesWorkspace() {
   await loadNotesDir();
   loadRecentNotePaths();
-  const entries = await loadTree(false);
-  await restoreNoteSession(entries);
-  void refreshIndex(entries);
+  await loadTree();
+  await restoreNoteSession();
 }
 
 watch([openTabs, selectedPath, notesDir], saveNoteSession, { deep: true });

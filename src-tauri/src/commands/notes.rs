@@ -13,6 +13,16 @@ pub fn list_note_tree(state: State<AppState>) -> Vec<note_service::FileEntry> {
     note_service::read_dir_recursive(&base, "")
 }
 
+/// 列出笔记目录的直接子项，子目录在前端展开时按需读取。
+#[tauri::command]
+pub fn list_note_dir(
+    path: String,
+    state: State<AppState>,
+) -> Result<Vec<note_service::FileEntry>, String> {
+    let base = state.with_config(store::get_notes_dir);
+    note_service::read_dir_entries(&base, &path)
+}
+
 /// 读取笔记内容
 #[tauri::command]
 pub fn read_note(path: String, state: State<AppState>) -> Result<String, String> {

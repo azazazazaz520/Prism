@@ -128,6 +128,53 @@ pub fn read_dir_recursive(base: &PathBuf, rel: &str) -> Vec<FileEntry> {
     entries
 }
 
+/// 读取指定目录的直接子项，不递归读取子目录。
+pub fn read_dir_entries(base: &Path, rel: &str) -> Result<Vec<FileEntry>, String> {
+    let dir = resolve_note_path(base, rel)?;
+    let metadata = fs::metadata(&dir).map_err(|e| format!("读取目录元信息失败: {}", e))?;
+    if !metadata.is_dir() {
+        return Err("目标路径不是目录".into());
+    }
+
+    let mut entries = Vec::new();
+    let read = fs::read_dir(&dir).map_err(|e| format!("读取目录失败: {}", e))?;
+    for entry in read {
+        let entry = entry.map_err(|e| format!("读取目录项失败: {}", e))?;
+        let name = entry.file_name().to_string_lossy().to_string();
+        let entry_rel = if rel.is_empty() {
+            name.clone()
+        } else {
+            format!("{}/{}", rel, name)
+        };
+        let file_type = entry
+            .file_type()
+            .map_err(|e| format!("读取目录项类型失败: {}", e))?;
+
+        if file_type.is_dir() {
+            entries.push(FileEntry {
+                name,
+                path: entry_rel,
+                is_dir: true,
+                children: None,
+            });
+        } else if file_type.is_file() && name.to_lowercase().ends_with(".md") {
+            entries.push(FileEntry {
+                name,
+                path: entry_rel,
+                is_dir: false,
+                children: None,
+            });
+        }
+    }
+
+    entries.sort_by(|a, b| {
+        b.is_dir
+            .cmp(&a.is_dir)
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+    Ok(entries)
+}
+
 /// 读取笔记文件内容
 pub fn read_note_content(base: &Path, rel_path: &str) -> Result<String, String> {
     let full = resolve_note_path(base, rel_path)?;
@@ -315,6 +362,24 @@ mod tests {
         let json = serde_json::to_string(&entry).unwrap();
         assert!(json.contains("inbox"));
         assert!(json.contains("children"));
+    }
+
+    #[test]
+    fn test_read_dir_entries_only_reads_one_level() {
+        let tmp = std::env::temp_dir().join(format!("prism-test-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(tmp.join("notes/nested/deep")).unwrap();
+        fs::write(tmp.join("notes/root.md"), "root").unwrap();
+        fs::write(tmp.join("notes/ignored.txt"), "ignored").unwrap();
+        fs::write(tmp.join("notes/nested/child.md"), "child").unwrap();
+
+        let entries = read_dir_entries(&tmp.join("notes"), "").unwrap();
+        assert_eq!(entries.len(), 2);
+        assert!(entries.iter().any(|entry| entry.path == "root.md"));
+        let nested = entries.iter().find(|entry| entry.path == "nested").unwrap();
+        assert!(nested.is_dir);
+        assert!(nested.children.is_none());
+
+        fs::remove_dir_all(&tmp).ok();
     }
 
     #[test]

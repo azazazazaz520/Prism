@@ -337,6 +337,7 @@ pub fn run() {
             commands::config::set_dashboard_layout,
             // 笔记命令
             commands::notes::list_note_tree,
+            commands::notes::list_note_dir,
             commands::notes::read_note,
             commands::notes::read_note_meta,
             commands::notes::get_note_mtime,

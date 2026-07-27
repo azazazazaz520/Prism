@@ -55,16 +55,16 @@ impl FileWatcher {
         std::thread::spawn(move || {
             // watcher 必须在此线程内保持存活
             let _watcher = watcher;
-            let dir_prefix = notes_dir.to_string_lossy().replace('\\', "/");
-
             loop {
                 match event_rx.recv_timeout(std::time::Duration::from_millis(500)) {
                     Ok(Ok(event)) => {
                         for path in &event.paths {
-                            let abs = path.to_string_lossy().replace('\\', "/");
+                            let is_markdown =
+                                path.extension().and_then(|extension| extension.to_str())
+                                    == Some("md");
 
                             // 只处理 .md 文件
-                            if !abs.ends_with(".md") {
+                            if !is_markdown {
                                 continue;
                             }
 
@@ -83,21 +83,24 @@ impl FileWatcher {
                             };
 
                             // 计算相对路径
-                            let rel = abs
-                                .strip_prefix(&dir_prefix)
-                                .and_then(|s| s.strip_prefix('/'))
-                                .unwrap_or(&abs);
+                            let Some(relative_path) = path.strip_prefix(&notes_dir).ok() else {
+                                eprintln!("[prism] 文件监听路径不在笔记目录内: {}", path.display());
+                                continue;
+                            };
+                            let relative_path = relative_path.to_string_lossy().replace('\\', "/");
 
                             let _ = app_handle.emit(
                                 "notes://file-changed",
                                 FileChangeEvent {
                                     kind: kind.to_string(),
-                                    path: rel.to_string(),
+                                    path: relative_path,
                                 },
                             );
                         }
                     }
-                    Ok(Err(_)) => {}
+                    Ok(Err(e)) => {
+                        eprintln!("[prism] 文件监听事件错误: {}", e);
+                    }
                     Err(mpsc::RecvTimeoutError::Timeout) => {
                         // 检查关闭信号
                         if shutdown_rx.try_recv().is_ok() {

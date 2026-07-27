@@ -3,6 +3,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
+pub(crate) const FILE_CHANGED_EXTERNALLY: &str = "FILE_CHANGED_EXTERNALLY";
+
 /// 笔记文件元信息，包含内容和文件版本标识。
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -179,11 +181,11 @@ pub fn write_note_content(
         match fs::metadata(&full) {
             Ok(meta) => {
                 if file_mtime(&meta)? != expected {
-                    return Err("FILE_CHANGED_EXTERNALLY".into());
+                    return Err(FILE_CHANGED_EXTERNALLY.into());
                 }
             }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Err("FILE_CHANGED_EXTERNALLY".into());
+                return Err(FILE_CHANGED_EXTERNALLY.into());
             }
             Err(error) => return Err(format!("读取文件元信息失败: {}", error)),
         }

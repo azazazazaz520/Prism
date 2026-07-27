@@ -8,6 +8,7 @@ import {
   updateTaskReferences,
   type TaskReferenceIndex,
 } from '../notes/task-references';
+import { FILE_CHANGED_EXTERNALLY } from '../utils/error-codes';
 
 const noteContents = ref<Record<string, string>>({});
 const isIndexing = ref(false);
@@ -62,7 +63,7 @@ export function useNoteTaskSync() {
       return await invoke<string>('write_note', { path, content, expectedMtime });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (message.startsWith('FILE_CHANGED_EXTERNALLY')) {
+      if (message.startsWith(FILE_CHANGED_EXTERNALLY)) {
         const meta = await invoke<{ content: string; mtime: string }>('read_note_meta', { path });
         setNoteContent(path, meta.content);
         return null;

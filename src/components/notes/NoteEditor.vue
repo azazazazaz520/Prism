@@ -35,6 +35,7 @@ import {
   type TaskReference,
 } from '../../notes/task-references';
 import { useNoteTaskSync } from '../../composables/useNoteTaskSync';
+import { FILE_CHANGED_EXTERNALLY } from '../../utils/error-codes';
 
 const props = withDefaults(defineProps<{ active?: boolean }>(), { active: true });
 
@@ -491,7 +492,7 @@ async function handleManualSave() {
     currentFileMtime.value = writtenMtime;
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    if (message.startsWith('FILE_CHANGED_EXTERNALLY')) {
+    if (message.startsWith(FILE_CHANGED_EXTERNALLY)) {
       // 文件在外部被修改，静默加载外部最新版本
       await reloadFromDisk();
     } else {
@@ -992,7 +993,7 @@ watch(content, (val) => {
       }
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      if (message.startsWith('FILE_CHANGED_EXTERNALLY')) {
+      if (message.startsWith(FILE_CHANGED_EXTERNALLY)) {
         // 文件在外部被修改，静默加载外部最新版本
         await reloadFromDisk(savePath);
       } else {

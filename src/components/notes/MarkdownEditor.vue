@@ -53,6 +53,9 @@ let view: EditorView | null = null;
  *  当 EditorView 内部修改文档时设 true，watch 检测到此标记会跳过回写。 */
 let suppressExternal = false;
 
+/** 文档切换时重建撤销历史，避免多个笔记共享撤销栈。 */
+const historyComp = new Compartment();
+
 // ── 主题检测 ───────────────────────────────
 
 function isDark(): boolean {
@@ -80,6 +83,13 @@ const customTheme = EditorView.theme({
   },
   '&.cm-focused': {
     outline: 'none',
+  },
+  '& .cm-selectionBackground, &.cm-focused .cm-selectionBackground': {
+    backgroundColor: 'var(--selection-bg) !important',
+  },
+  '& .cm-content::selection, & .cm-line::selection': {
+    backgroundColor: 'var(--selection-bg)',
+    color: 'var(--text-primary)',
   },
   '.cm-scroller': {
     fontFamily: 'inherit',
@@ -534,7 +544,7 @@ const livePreviewPlugin = ViewPlugin.fromClass(
 
 function buildExtensions() {
   return [
-    history(),
+    historyComp.of(history()),
     drawSelection(),
     dropCursor(),
     bracketMatching(),
@@ -574,6 +584,7 @@ watch(
     if (newVal !== current) {
       view.dispatch({
         changes: { from: 0, to: current.length, insert: newVal },
+        effects: historyComp.reconfigure(history()),
       });
     }
   },

@@ -1,6 +1,16 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::UNIX_EPOCH;
+
+/// 笔记文件元信息，包含内容和文件版本标识。
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteMeta {
+    pub content: String,
+    /// 文件修改时间的纳秒级 Unix 时间戳，以字符串传输避免 JavaScript 精度损失
+    pub mtime: String,
+}
 
 /// 文件树节点（前端渲染用）
 #[derive(Debug, Serialize, Clone)]
@@ -122,15 +132,69 @@ pub fn read_note_content(base: &Path, rel_path: &str) -> Result<String, String> 
     fs::read_to_string(&full).map_err(|e| e.to_string())
 }
 
-/// 写入笔记内容（自动创建父目录）
-pub fn write_note_content(base: &Path, rel_path: &str, content: &str) -> Result<(), String> {
+/// 读取笔记文件内容及文件版本标识。
+pub fn read_note_meta(base: &Path, rel_path: &str) -> Result<NoteMeta, String> {
+    let full = resolve_note_path(base, rel_path)?;
+    let metadata = fs::metadata(&full).map_err(|e| format!("读取文件元信息失败: {}", e))?;
+    let mtime = file_mtime(&metadata)?;
+    let content = fs::read_to_string(&full).map_err(|e| e.to_string())?;
+    Ok(NoteMeta { content, mtime })
+}
+
+/// 获取笔记文件的版本标识（不读取内容，用于快速校验）。
+pub fn get_note_mtime(base: &Path, rel_path: &str) -> Result<String, String> {
+    let full = resolve_note_path(base, rel_path)?;
+    let metadata = fs::metadata(&full).map_err(|e| format!("读取文件元信息失败: {}", e))?;
+    file_mtime(&metadata)
+}
+
+fn file_mtime(metadata: &fs::Metadata) -> Result<String, String> {
+    metadata
+        .modified()
+        .map_err(|e| format!("读取修改时间失败: {}", e))
+        .map(|time| {
+            time.duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+                .to_string()
+        })
+}
+
+/// 写入笔记内容（自动创建父目录）。
+///
+/// 若提供了 `expected_mtime`，写入前会校验文件的当前修改时间是否匹配。
+/// 不匹配时返回 `"FILE_CHANGED_EXTERNALLY"`，前端应提示用户处理冲突。
+pub fn write_note_content(
+    base: &Path,
+    rel_path: &str,
+    content: &str,
+    expected_mtime: Option<String>,
+) -> Result<String, String> {
     let full = base.join(rel_path);
     // 确保目标路径在笔记目录内
     let _ = resolve_note_path(base, rel_path)?;
+
+    // 外部变更检测：若文件已存在且调用方提供了期望的 mtime，则校验
+    if let Some(expected) = expected_mtime {
+        match fs::metadata(&full) {
+            Ok(meta) => {
+                if file_mtime(&meta)? != expected {
+                    return Err("FILE_CHANGED_EXTERNALLY".into());
+                }
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Err("FILE_CHANGED_EXTERNALLY".into());
+            }
+            Err(error) => return Err(format!("读取文件元信息失败: {}", error)),
+        }
+    }
+
     if let Some(parent) = full.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("创建父目录失败: {}", e))?;
     }
-    fs::write(&full, content).map_err(|e| format!("写入失败: {}", e))
+    fs::write(&full, content).map_err(|e| format!("写入失败: {}", e))?;
+    let metadata = fs::metadata(&full).map_err(|e| format!("读取写入后文件元信息失败: {}", e))?;
+    file_mtime(&metadata)
 }
 
 /// 创建文件夹

@@ -1,6 +1,7 @@
 use std::fs;
-use tauri::State;
+use tauri::{AppHandle, State};
 
+use crate::file_watcher::FileWatcher;
 use crate::note_service;
 use crate::store;
 use crate::AppState;
@@ -19,11 +20,35 @@ pub fn read_note(path: String, state: State<AppState>) -> Result<String, String>
     note_service::read_note_content(&base, &path)
 }
 
-/// 写入笔记内容（自动创建父目录）
+/// 读取笔记内容及文件修改时间（用于外部变更检测）
 #[tauri::command]
-pub fn write_note(path: String, content: String, state: State<AppState>) -> Result<(), String> {
+pub fn read_note_meta(
+    path: String,
+    state: State<AppState>,
+) -> Result<note_service::NoteMeta, String> {
     let base = state.with_config(store::get_notes_dir);
-    note_service::write_note_content(&base, &path, &content)
+    note_service::read_note_meta(&base, &path)
+}
+
+/// 获取笔记文件修改时间（不读取内容，用于快速校验）
+#[tauri::command]
+pub fn get_note_mtime(path: String, state: State<AppState>) -> Result<String, String> {
+    let base = state.with_config(store::get_notes_dir);
+    note_service::get_note_mtime(&base, &path)
+}
+
+/// 写入笔记内容（自动创建父目录）。
+/// 可选 `expectedMtime` 用于外部变更检测：
+/// 若文件在读取后被外部修改，写入将返回 FILE_CHANGED_EXTERNALLY 错误。
+#[tauri::command]
+pub fn write_note(
+    path: String,
+    content: String,
+    expected_mtime: Option<String>,
+    state: State<AppState>,
+) -> Result<String, String> {
+    let base = state.with_config(store::get_notes_dir);
+    note_service::write_note_content(&base, &path, &content, expected_mtime)
 }
 
 /// 创建文件夹
@@ -59,7 +84,11 @@ pub fn get_notes_directory(state: State<AppState>) -> String {
 
 /// 设置自定义笔记目录
 #[tauri::command]
-pub fn set_notes_directory(dir_path: String, state: State<AppState>) -> Result<(), String> {
+pub fn set_notes_directory(
+    dir_path: String,
+    app_handle: AppHandle,
+    state: State<AppState>,
+) -> Result<(), String> {
     let path = std::path::PathBuf::from(&dir_path);
     if !path.exists() {
         return Err(format!("路径不存在: {}", dir_path));
@@ -79,5 +108,10 @@ pub fn set_notes_directory(dir_path: String, state: State<AppState>) -> Result<(
 
     state.with_config_mut(|config| {
         config.notes_dir = Some(path);
-    })
+    })?;
+
+    let notes_dir = state.with_config(store::get_notes_dir);
+    let watcher = FileWatcher::start(app_handle, notes_dir);
+    *state.file_watcher.lock().unwrap() = Some(watcher);
+    Ok(())
 }

@@ -125,6 +125,8 @@ mod tests {
             reminder_minutes: 15,
             module_enabled: std::collections::HashMap::new(),
             notes_dir: None,
+            pandoc_path: None,
+            pandoc_reference_doc: None,
             dashboard_layout: None,
             plugins: std::collections::HashMap::new(),
         };

@@ -521,7 +521,7 @@ const livePreviewPlugin = ViewPlugin.fromClass(
           lastTo = decoration.to;
         }
 
-        const taskMetaStart = line.text.indexOf('<!-- prism-task:');
+        const taskMetaStart = line.text.indexOf('<' + '!-- prism-task:');
         if (
           taskMetaStart >= 0 &&
           line.text.endsWith('-->') &&

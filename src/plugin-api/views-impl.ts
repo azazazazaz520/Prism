@@ -53,6 +53,11 @@ export function activatePluginPage(pluginId: string) {
   activePagePluginId.value = pluginId;
 }
 
+/** 清除当前插件页，使主应用模块重新接管内容区。 */
+export function deactivatePluginPage(): void {
+  activePagePluginId.value = null;
+}
+
 /** 获取当前激活的插件页面注册信息 */
 export function getActivePageRegistrations(): ViewRegistration[] {
   return !activePagePluginId.value

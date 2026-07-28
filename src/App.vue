@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { getActivePageRegistrations, activatePluginPage } from './plugin-api/views-impl';
+import {
+  getActivePageRegistrations,
+  activatePluginPage,
+  deactivatePluginPage,
+} from './plugin-api/views-impl';
 import { invokeWithDiagnostics as invoke } from './diagnostics/invoke-logged';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { AppModule, SettingsSubModule } from './types';
@@ -197,6 +201,7 @@ function handleSwitchModule(module: AppModule) {
   if (module !== 'settings' && !isEnabled(module)) return;
   // 正常切换时清除外部指定的子模块，使用默认行为
   settingsInitialSub.value = undefined;
+  deactivatePluginPage();
   activeModule.value = module;
 }
 

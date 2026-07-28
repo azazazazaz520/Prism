@@ -264,6 +264,8 @@ export interface PluginContext {
   track<T extends Disposable>(disposable: T): T;
   dispose(): void;
   log(level: 'debug' | 'info' | 'warn' | 'error', message: string): void;
+  /** 通过宿主系统浏览器打开受限的 HTTP(S) 地址。 */
+  openUrl(url: string): Promise<void>;
   commands: {
     register(id: string, callback: () => void | Promise<void>): Disposable;
     execute(id: string, ...args: unknown[]): Promise<void>;

@@ -1,5 +1,5 @@
 import type { PluginContext, PluginPermission, Disposable } from '../types';
-import { diagnosticsLogger } from '../diagnostics/invoke-logged';
+import { diagnosticsLogger, invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
 
 /** Vue 运行时注入接口 — 由调用方传入，避免模块拆分导致多实例 */
 export interface VueRuntime {
@@ -74,6 +74,10 @@ export function createPluginContext(
           diagnosticsLogger.info('plugin', 'plugin.context_info', message, { plugin_id: pluginId });
           console.log(prefix, message);
       }
+    },
+
+    openUrl(url: string): Promise<void> {
+      return invoke('open_url', { url });
     },
 
     // ── 命令扩展点 ────────────────────────────────

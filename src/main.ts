@@ -9,6 +9,7 @@ import App from './App.vue';
 import FloatingWindow from './components/overlays/FloatingWindow.vue';
 import ImportFloating from './components/overlays/ImportFloating.vue';
 import ScreenshotSelector from './components/overlays/ScreenshotSelector.vue';
+import { getCurrent, onOpenUrl } from '@tauri-apps/plugin-deep-link';
 
 function mountApp(component: Component, logger: Logger) {
   const app = createApp(component);
@@ -19,6 +20,41 @@ function mountApp(component: Component, logger: Logger) {
     });
   };
   app.mount('#app');
+}
+
+function dispatchOAuthCallback(url: string): void {
+  try {
+    const parsed = new URL(url);
+    if (
+      parsed.protocol !== 'prism:' ||
+      parsed.hostname !== 'oauth' ||
+      parsed.pathname !== '/callback'
+    ) {
+      return;
+    }
+    window.dispatchEvent(
+      new CustomEvent('prism:oauth-callback', {
+        detail: {
+          provider: parsed.searchParams.get('provider'),
+          code: parsed.searchParams.get('code'),
+          error: parsed.searchParams.get('error'),
+        },
+      }),
+    );
+  } catch {
+    console.warn('[auth] 忽略无效的 Prism OAuth 回调 URL');
+  }
+}
+
+async function installOAuthDeepLinkListener(): Promise<void> {
+  try {
+    const current = await getCurrent();
+    current?.forEach(dispatchOAuthCallback);
+    await onOpenUrl((urls) => urls.forEach(dispatchOAuthCallback));
+  } catch (error) {
+    // 深链仅用于 OAuth 回调，不应阻止主界面启动。
+    console.warn('[auth] 深链监听不可用，继续启动主界面', error);
+  }
 }
 
 async function bootstrap() {
@@ -34,6 +70,7 @@ async function bootstrap() {
   );
 
   try {
+    await installOAuthDeepLinkListener();
     await initTheme();
 
     const params = new URLSearchParams(window.location.search);

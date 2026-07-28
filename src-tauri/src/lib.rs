@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 pub(crate) mod ai;
 pub(crate) mod logging;
@@ -206,6 +206,13 @@ pub fn run() {
     let token_registry_clone = token_registry.clone();
 
     tauri::Builder::default()
+        // 单实例插件必须先注册，Windows/Linux 深链接会通过命令行参数转发到现有实例。
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            if let Some(url) = argv.iter().find(|arg| arg.starts_with("prism://")) {
+                let _ = app.emit("prism://oauth-callback", url.clone());
+            }
+        }))
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
@@ -394,6 +401,7 @@ pub fn run() {
                         running_flag.store(false, std::sync::atomic::Ordering::SeqCst);
                         instance_lock::release(&lock);
                         handle.exit(0);
+                        std::process::exit(0);
                     }
                 });
             }

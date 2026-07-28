@@ -67,6 +67,13 @@
       "csp": null
     }
   },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["prism"]
+      }
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

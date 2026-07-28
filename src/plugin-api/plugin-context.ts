@@ -80,6 +80,33 @@ export function createPluginContext(
       return invoke('open_url', { url });
     },
 
+    // ═══ 插件隔离存储 ═══
+    storage: {
+      async get<T>(key: string): Promise<T | null> {
+        try {
+          const raw = localStorage.getItem(`plugin:${pluginId}:${key}`);
+          return raw === null ? null : (JSON.parse(raw) as T);
+        } catch {
+          return null;
+        }
+      },
+      async set(key: string, value: unknown): Promise<void> {
+        localStorage.setItem(`plugin:${pluginId}:${key}`, JSON.stringify(value));
+      },
+      async delete(key: string): Promise<void> {
+        localStorage.removeItem(`plugin:${pluginId}:${key}`);
+      },
+      async keys(): Promise<string[]> {
+        const prefix = `plugin:${pluginId}:`;
+        const result: string[] = [];
+        for (let index = 0; index < localStorage.length; index += 1) {
+          const key = localStorage.key(index);
+          if (key?.startsWith(prefix)) result.push(key.slice(prefix.length));
+        }
+        return result;
+      },
+    },
+
     // ── 命令扩展点 ────────────────────────────────
     commands: {
       register(id: string, callback: () => void | Promise<void>): Disposable {

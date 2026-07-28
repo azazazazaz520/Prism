@@ -266,6 +266,13 @@ export interface PluginContext {
   log(level: 'debug' | 'info' | 'warn' | 'error', message: string): void;
   /** 通过宿主系统浏览器打开受限的 HTTP(S) 地址。 */
   openUrl(url: string): Promise<void>;
+  /** 按插件隔离的持久化存储。 */
+  storage: {
+    get<T = unknown>(key: string): Promise<T | null>;
+    set(key: string, value: unknown): Promise<void>;
+    delete(key: string): Promise<void>;
+    keys(): Promise<string[]>;
+  };
   commands: {
     register(id: string, callback: () => void | Promise<void>): Disposable;
     execute(id: string, ...args: unknown[]): Promise<void>;

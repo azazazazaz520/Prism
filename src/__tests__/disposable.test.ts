@@ -97,6 +97,19 @@ function makeCtx(pluginId: string, permissions: PluginPermission[]) {
 }
 
 describe('createPluginContext', () => {
+  it('storage 按插件隔离并可跨上下文恢复', async () => {
+    localStorage.clear();
+    const first = makeCtx('com.example.storage', []);
+    await first.storage.set('token', 'secret');
+
+    const second = makeCtx('com.example.storage', []);
+    expect(await second.storage.get('token')).toBe('secret');
+    expect(await second.storage.keys()).toEqual(['token']);
+
+    const other = makeCtx('com.other.storage', []);
+    expect(await other.storage.get('token')).toBeNull();
+    localStorage.clear();
+  });
   it('runtimeId 格式为 plugin:{id}', () => {
     const ctx = makeCtx('com.example.test', []);
     expect(ctx.runtimeId).toBe('plugin:com.example.test');

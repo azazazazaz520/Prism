@@ -1,7 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { parseModule } from '../plugin-api/module-resolver';
+import { SANDBOX_PLUGIN_FACTORY_PARAMETERS } from '../plugin-api/sandbox-session';
 
 describe('parseModule', () => {
+  it('Vue 依赖名称与沙箱工厂函数参数保持一致', () => {
+    const { body } = parseModule("import { ref } from 'vue';");
+
+    expect(body).toContain('= __vue__');
+    expect(SANDBOX_PLUGIN_FACTORY_PARAMETERS).toContain('__vue__');
+  });
+
   it('将 vue import 重写为 __vue__ 解构', () => {
     const src = `import { ref, computed } from 'vue';`;
     const { body, deps } = parseModule(src);

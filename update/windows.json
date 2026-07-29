@@ -1,8 +1,8 @@
 {
-  "release_date": "2026-07-27T17:33:32.6533634Z",
-  "release_notes": "## Changes since v0.4.0\n\n- feat(export): 在 Windows 中隐藏 Pandoc 控制台窗口 (asd_fire)\n- chore: 同步稳定版更新清单 (github-actions[bot])",
-  "version": "0.4.1",
-  "release_url": "https://github.com/azazazazaz520/Prism/releases/tag/v0.4.1",
-  "download_url": "https://github.com/azazazazaz520/Prism/releases/download/v0.4.1/Prism_0.4.1_x64-setup.exe",
-  "sha256": "38cb48be16bcea450288bf29b94830bbd65c97d53a180a6ca0a5ae755a98e150"
+  "version": "0.4.2",
+  "download_url": "https://github.com/azazazazaz520/Prism/releases/download/v0.4.2/Prism_0.4.2_x64-setup.exe",
+  "sha256": "21ff8637fbe02122d96f19d8c9b30891bff209ffb41d3bcb49846de858cecac6",
+  "release_notes": "## Changes since v0.4.1\n\n- fix(导出): 修复非 Windows Clippy 未使用参数 (asd_fire)\n- feat(插件): 接入沙箱插件视图运行时 (asd_fire)\n- fix: 增加插件隔离持久化存储 (asd_fire)\n- fix: 修复插件页阻塞主模块导航 (asd_fire)\n- fix: 修复开发环境启动解析问题 (asd_fire)\n- feat: 引入 GitHub Device Flow 插件授权 (asd_fire)\n- chore: 同步稳定版更新清单 (github-actions[bot])",
+  "release_url": "https://github.com/azazazazaz520/Prism/releases/tag/v0.4.2",
+  "release_date": "2026-07-29T12:21:46.6422907Z"
 }

@@ -1,19 +1,59 @@
 <script lang="ts">
-import { defineComponent, h, ref, computed, shallowRef, watch, onBeforeUnmount } from 'vue';
+import {
+  defineComponent,
+  h,
+  ref,
+  computed,
+  shallowRef,
+  watch,
+  onBeforeUnmount,
+  onMounted,
+} from 'vue';
 import {
   getViewRegistrations,
   getActivePageRegistrations,
   type ViewLocation,
 } from '../../plugin-api/views-impl';
 import PluginErrorBoundary from './PluginErrorBoundary.vue';
+import type { SandboxIcon } from '../../plugin-api/sandbox-session';
+
+const SandboxFrame = defineComponent({
+  props: {
+    session: { type: Object, required: true },
+    viewId: { type: String, required: true },
+  },
+  setup(props) {
+    const host = ref<HTMLElement | null>(null);
+    onMounted(() => {
+      if (host.value) (props.session as any).attach(host.value, props.viewId);
+    });
+    onBeforeUnmount(() => {
+      if (host.value) (props.session as any).detach(host.value);
+    });
+    return () =>
+      h('div', {
+        ref: host,
+        class: 'plugin-sandbox-frame',
+        'data-plugin': (props.session as any).pluginId,
+        style: {
+          flex: '1 1 0',
+          minHeight: '0',
+          width: '100%',
+          display: 'flex',
+        },
+      });
+  },
+});
+
+function sandboxRailIcon(icon?: SandboxIcon) {
+  return (icon?.nodes ?? []).map((node) => h(node.tag, node.attrs));
+}
 
 /**
  * 插件视图宿主组件。
  *
- * 使用 h() 渲染函数而非 <component :is> 来渲染插件组件。
- * 后者在 Vue 3 生产构建中，对通过 new Function() 创建的组件
- * 可能触发内部 refs 访问异常。
- * h() 直出 VNode 避免了模板编译器对组件对象的代理包装。
+ * 沙箱插件通过 iframe 渲染，宿主只负责挂载沙箱视图；旧版受信插件仍可使用
+ * h() 渲染函数作为兼容路径。
  */
 
 export default defineComponent({
@@ -66,7 +106,22 @@ export default defineComponent({
               'data-tooltip': v.id,
               onClick: () => v.onActivate?.(),
             },
-            [h(PluginErrorBoundary, null, () => (v.component ? h(v.component) : null))],
+            [
+              v.sandboxSession
+                ? h(
+                    'svg',
+                    {
+                      class: 'plugin-sandbox-rail-icon',
+                      viewBox: v.icon?.viewBox || '0 0 24 24',
+                      width: 18,
+                      height: 18,
+                      fill: 'none',
+                      'aria-hidden': 'true',
+                    },
+                    sandboxRailIcon(v.icon),
+                  )
+                : h(PluginErrorBoundary, null, () => (v.component ? h(v.component) : null)),
+            ],
           ),
         );
       }
@@ -75,6 +130,15 @@ export default defineComponent({
       if (loc === 'page' && list.length > 0) {
         const v = list[0];
         const comp = v.component;
+        if (v.sandboxSession && v.sandboxViewId) {
+          return h('div', { class: 'plugin-page-host' }, [
+            h(SandboxFrame, {
+              key: `${v.pluginId}:${v.sandboxViewId}`,
+              session: v.sandboxSession,
+              viewId: v.sandboxViewId,
+            }),
+          ]);
+        }
         if (comp) {
           return h('div', { class: 'plugin-page-host' }, [
             h(
@@ -96,6 +160,13 @@ export default defineComponent({
           'div',
           { class: 'plugin-view-host', 'data-location': loc },
           list.map((v) => {
+            if (v.sandboxSession && v.sandboxViewId) {
+              return h(SandboxFrame, {
+                key: v.id,
+                session: v.sandboxSession,
+                viewId: v.sandboxViewId,
+              });
+            }
             if (v.component) {
               return h(
                 'div',
@@ -183,5 +254,17 @@ export default defineComponent({
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+}
+
+.plugin-sandbox-frame {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+}
+
+.plugin-sandbox-frame iframe {
+  flex: 1;
+  min-height: 0;
 }
 </style>

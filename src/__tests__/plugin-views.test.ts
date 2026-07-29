@@ -5,6 +5,7 @@ import {
   createViewsAPI,
   getViewRegistrations,
   clearViewRegistrations,
+  registerSandboxView,
 } from '../plugin-api/views-impl';
 
 beforeEach(() => {
@@ -104,6 +105,20 @@ describe('Views API', () => {
     const api = createViewsAPI(pluginId, track);
     const d = api.registerPage(prefix + 'testPage', {} as any);
     expect(typeof d.dispose).toBe('function');
+  });
+
+  it('沙箱重复注册同一视图 ID 时只保留一条记录', () => {
+    const session = { attach() {}, detach() {} };
+    registerSandboxView(pluginId, session, {
+      id: prefix + 'rail',
+      location: 'rail',
+    });
+    registerSandboxView(pluginId, session, {
+      id: prefix + 'rail',
+      location: 'rail',
+    });
+
+    expect(getViewRegistrations('rail').filter((v) => v.id === prefix + 'rail')).toHaveLength(1);
   });
 
   it('rail 和 page 注册到正确位置', () => {

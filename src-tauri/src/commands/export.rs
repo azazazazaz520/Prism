@@ -271,9 +271,9 @@ async fn detect_pandoc_version(path: &Path) -> Result<String, String> {
 }
 
 /// 在 Windows 生产环境中隐藏 Pandoc 的控制台窗口；其他平台保持默认行为。
-fn configure_hidden_console(command: &mut Command) {
+fn configure_hidden_console(_command: &mut Command) {
     #[cfg(windows)]
-    command.creation_flags(CREATE_NO_WINDOW);
+    _command.creation_flags(CREATE_NO_WINDOW);
 }
 
 fn create_temp_output_path(output_path: &Path) -> Result<PathBuf, String> {

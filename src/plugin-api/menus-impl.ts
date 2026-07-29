@@ -1,5 +1,6 @@
 import type { Disposable } from '../types';
 import { shallowRef } from 'vue';
+import type { SandboxMenuItem } from './sandbox-session';
 
 // ═══════════════════════════════════════════════════════════════
 //  类型
@@ -54,6 +55,33 @@ export function getMenuRegistrations(location: MenuLocation): MenuRegistration[]
 /** 清空注册表（仅测试使用） */
 export function clearMenuRegistrations(): void {
   registry.value = [];
+}
+
+/** 注册来自沙箱插件的菜单描述，点击行为通过消息桥回到 iframe。 */
+export function registerSandboxMenus(
+  pluginId: string,
+  location: MenuLocation,
+  items: SandboxMenuItem[],
+  invoke: (id: string) => Promise<void>,
+): Disposable {
+  const registrations: MenuRegistration[] = items.map((item) => ({
+    id: item.id,
+    pluginId,
+    location,
+    item: {
+      ...item,
+      action: () => invoke(item.id),
+    },
+  }));
+  registry.value = [...registry.value, ...registrations];
+  let disposed = false;
+  return {
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      registry.value = registry.value.filter((item) => !registrations.includes(item));
+    },
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════

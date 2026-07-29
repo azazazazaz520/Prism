@@ -1,5 +1,5 @@
 import type { PluginContext, PluginPermission, Disposable } from '../types';
-import { diagnosticsLogger } from '../diagnostics/invoke-logged';
+import { diagnosticsLogger, invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
 
 /** Vue 运行时注入接口 — 由调用方传入，避免模块拆分导致多实例 */
 export interface VueRuntime {
@@ -74,6 +74,37 @@ export function createPluginContext(
           diagnosticsLogger.info('plugin', 'plugin.context_info', message, { plugin_id: pluginId });
           console.log(prefix, message);
       }
+    },
+
+    openUrl(url: string): Promise<void> {
+      return invoke('open_url', { url });
+    },
+
+    // ═══ 插件隔离存储 ═══
+    storage: {
+      async get<T>(key: string): Promise<T | null> {
+        try {
+          const raw = localStorage.getItem(`plugin:${pluginId}:${key}`);
+          return raw === null ? null : (JSON.parse(raw) as T);
+        } catch {
+          return null;
+        }
+      },
+      async set(key: string, value: unknown): Promise<void> {
+        localStorage.setItem(`plugin:${pluginId}:${key}`, JSON.stringify(value));
+      },
+      async delete(key: string): Promise<void> {
+        localStorage.removeItem(`plugin:${pluginId}:${key}`);
+      },
+      async keys(): Promise<string[]> {
+        const prefix = `plugin:${pluginId}:`;
+        const result: string[] = [];
+        for (let index = 0; index < localStorage.length; index += 1) {
+          const key = localStorage.key(index);
+          if (key?.startsWith(prefix)) result.push(key.slice(prefix.length));
+        }
+        return result;
+      },
     },
 
     // ── 命令扩展点 ────────────────────────────────

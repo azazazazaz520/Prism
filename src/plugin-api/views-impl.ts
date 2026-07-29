@@ -1,5 +1,6 @@
 import { ref, shallowRef, type Component } from 'vue';
 import type { Disposable } from '../types';
+import type { SandboxViewSession, SandboxViewRegistration } from './sandbox-session';
 
 // ═══════════════════════════════════════════════════════════════
 //  类型
@@ -18,6 +19,10 @@ export interface ViewRegistration {
   /** Raw DOM 生命周期（registerDomView 使用） */
   domMount?: (container: HTMLElement) => void;
   domUnmount?: () => void;
+  /** 沙箱插件的可序列化视图桥接。 */
+  sandboxSession?: SandboxViewSession;
+  sandboxViewId?: string;
+  icon?: SandboxViewRegistration['icon'];
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -41,6 +46,51 @@ export function clearViewRegistrations(): void {
   registry.value = [];
 }
 
+/** 注册来自沙箱插件的声明式视图，不把插件组件对象带回宿主。 */
+export function registerSandboxView(
+  pluginId: string,
+  session: SandboxViewSession,
+  registration: SandboxViewRegistration,
+  onActivate?: () => void,
+): Disposable {
+  const view: ViewRegistration = {
+    id: registration.id,
+    pluginId,
+    location: registration.location,
+    onActivate,
+    sandboxSession: session,
+    sandboxViewId: registration.id,
+    icon: registration.icon,
+  };
+  // 沙箱重连或重复激活时，同一个插件视图只保留一条宿主注册记录。
+  const existingIndex = registry.value.findIndex(
+    (item) => item.sandboxSession && item.pluginId === pluginId && item.id === registration.id,
+  );
+  if (existingIndex >= 0) {
+    const next = [...registry.value];
+    next[existingIndex] = view;
+    registry.value = next;
+  } else {
+    registry.value = [...registry.value, view];
+  }
+  let disposed = false;
+  return {
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      registry.value = registry.value.filter((item) => item !== view);
+      if (activePagePluginId.value === pluginId) activePagePluginId.value = null;
+    },
+  };
+}
+
+export function clearSandboxViews(pluginId: string): void {
+  registry.value = registry.value.filter(
+    (item) => item.pluginId !== pluginId || !item.sandboxSession,
+  );
+  if (activePagePluginId.value === pluginId) activePagePluginId.value = null;
+}
+
 // ═══════════════════════════════════════════════════════════════
 //  活跃插件页面
 // ═══════════════════════════════════════════════════════════════
@@ -51,6 +101,11 @@ const activePagePluginId = ref<string | null>(null);
 /** 激活指定插件的页面（供 rail 按钮 onClick 调用） */
 export function activatePluginPage(pluginId: string) {
   activePagePluginId.value = pluginId;
+}
+
+/** 清除当前插件页，使主应用模块重新接管内容区。 */
+export function deactivatePluginPage(): void {
+  activePagePluginId.value = null;
 }
 
 /** 获取当前激活的插件页面注册信息 */

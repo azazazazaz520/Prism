@@ -14,6 +14,7 @@ const noteContents = ref<Record<string, string>>({});
 const isIndexing = ref(false);
 const indexError = ref<string | null>(null);
 const writingPaths = new Set<string>();
+const noteRevisions = new Map<string, number>();
 
 function noteFiles(entries: FileEntry[]): string[] {
   return entries.flatMap((entry) =>
@@ -37,10 +38,26 @@ export function useNoteTaskSync() {
     try {
       const entries = tree ?? (await invoke<FileEntry[]>('list_note_tree'));
       const paths = noteFiles(entries);
-      const results = await Promise.all(
-        paths.map(async (path) => [path, await invoke<string>('read_note', { path })] as const),
-      );
-      noteContents.value = Object.fromEntries(results);
+      const results: Array<readonly [string, string, number]> = [];
+      const revisionsAtStart = new Map(paths.map((path) => [path, noteRevisions.get(path) ?? 0]));
+      let nextIndex = 0;
+      const worker = async () => {
+        while (nextIndex < paths.length) {
+          const index = nextIndex++;
+          const path = paths[index];
+          results[index] = [
+            path,
+            await invoke<string>('read_note', { path }),
+            revisionsAtStart.get(path) ?? 0,
+          ];
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(4, paths.length) }, () => worker()));
+      const nextContents = { ...noteContents.value };
+      for (const [path, content, revision] of results) {
+        if ((noteRevisions.get(path) ?? 0) === revision) nextContents[path] = content;
+      }
+      noteContents.value = nextContents;
     } catch (error) {
       indexError.value = error instanceof Error ? error.message : String(error);
     } finally {
@@ -49,7 +66,19 @@ export function useNoteTaskSync() {
   }
 
   function setNoteContent(path: string, content: string) {
+    noteRevisions.set(path, (noteRevisions.get(path) ?? 0) + 1);
     noteContents.value = { ...noteContents.value, [path]: content };
+  }
+
+  /** 增量刷新单篇笔记，供文件监听器维护任务引用索引。 */
+  async function refreshNoteIndex(path: string) {
+    if (!path.toLowerCase().endsWith('.md')) return;
+    try {
+      const content = await invoke<string>('read_note', { path });
+      setNoteContent(path, content);
+    } catch {
+      removeNote(path);
+    }
   }
 
   function resetNotes() {
@@ -73,6 +102,7 @@ export function useNoteTaskSync() {
   }
 
   function removeNote(path: string) {
+    noteRevisions.set(path, (noteRevisions.get(path) ?? 0) + 1);
     const next = { ...noteContents.value };
     delete next[path];
     noteContents.value = next;
@@ -150,6 +180,7 @@ export function useNoteTaskSync() {
     isIndexing,
     indexError,
     refreshIndex,
+    refreshNoteIndex,
     setNoteContent,
     resetNotes,
     removeNote,

@@ -14,9 +14,6 @@ pub fn show_floating_window(app: tauri::AppHandle) -> Result<(), String> {
     let float_win = app
         .get_webview_window("floating")
         .ok_or("floating window not found")?;
-    if let Some(main_win) = app.get_webview_window("main") {
-        main_win.hide().map_err(|e| e.to_string())?;
-    }
     float_win.show().map_err(|e| e.to_string())?;
     float_win.set_focus().map_err(|e| e.to_string())?;
     Ok(())

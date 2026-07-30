@@ -40,6 +40,7 @@ const lastSyncAt = ref<string | null>(null);
 /** 队列重试定时器：push 失败后延迟重试，防止 Tauri 中 online 事件不可靠 */
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 const RETRY_DELAY_MS = 10_000;
+let syncNetworkListenersBound = false;
 
 function scheduleRetry(fn: () => void) {
   if (retryTimer) return; // 已有待执行的重试，去重
@@ -58,14 +59,17 @@ const PAGE_SIZE = 500;
 export function useSync() {
   const { user, isLoggedIn } = useAuth();
 
-  window.addEventListener('online', () => {
-    isOnline.value = true;
-    flushOfflineQueue();
-  });
-  window.addEventListener('offline', () => {
-    isOnline.value = false;
-    syncStatus.value = 'offline';
-  });
+  if (!syncNetworkListenersBound) {
+    syncNetworkListenersBound = true;
+    window.addEventListener('online', () => {
+      isOnline.value = true;
+      void flushOfflineQueue();
+    });
+    window.addEventListener('offline', () => {
+      isOnline.value = false;
+      syncStatus.value = 'offline';
+    });
+  }
 
   /** 获取当前认证用户 ID */
   function userId(): string | undefined {
@@ -403,7 +407,10 @@ export function useSync() {
         } else if (status === 'CHANNEL_ERROR') {
           syncStatus.value = 'error';
           // 5 秒后重建频道
-          setTimeout(() => subscribeToChanges(onTaskChange, onDailyCompletionChange), 5000);
+          setTimeout(() => {
+            void channel.unsubscribe();
+            void subscribeToChanges(onTaskChange, onDailyCompletionChange);
+          }, 5000);
         }
       });
 

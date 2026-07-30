@@ -14,14 +14,19 @@ import { invokeWithDiagnostics as invoke } from '../../diagnostics/invoke-logged
 import { diagnosticsLogger } from '../../diagnostics/invoke-logged';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { listen } from '@tauri-apps/api/event';
-import type { FileEntry, FileTreeContextTarget, NotesLayoutState, Task } from '../../types';
+import type {
+  FileEntry,
+  FileTreeContextTarget,
+  NoteWorkspaceLayout,
+  NotesLayoutState,
+  Task,
+} from '../../types';
 import { compactFileTree } from '../../utils/note-tree';
 import { getMenuRegistrations, type EditorSelection } from '../../plugin-api/menus-impl';
 import InputDialog from '../overlays/InputDialog.vue';
 import ConfirmDialog from '../overlays/ConfirmDialog.vue';
 import TreeNode from './TreeNode.vue';
 import MarkdownEditor from './MarkdownEditor.vue';
-import MarkdownToolbar from './MarkdownToolbar.vue';
 import TaskPicker from '../tasks/TaskPicker.vue';
 import NoteQuickSwitcher from './NoteQuickSwitcher.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
@@ -35,6 +40,7 @@ import {
   type TaskReference,
 } from '../../notes/task-references';
 import { useNoteTaskSync } from '../../composables/useNoteTaskSync';
+import { useNoteDocumentStore } from '../../composables/useNoteDocumentStore';
 import { FILE_CHANGED_EXTERNALLY } from '../../utils/error-codes';
 
 const props = withDefaults(defineProps<{ active?: boolean }>(), { active: true });
@@ -67,12 +73,10 @@ const loadingDirectories = new Set<string>();
 const selectedPath = ref<string | null>(null);
 const openTabs = ref<string[]>([]);
 const noteSearch = ref('');
-const content = ref('');
 const titleDraft = ref('');
 const titleInput = ref<HTMLInputElement | null>(null);
 const saving = ref(false);
 const exporting = ref(false);
-const isDirty = ref(false);
 const cursorLine = ref(1);
 const cursorCol = ref(1);
 const contextPanelOpen = ref(false);
@@ -82,12 +86,27 @@ const noteContentCache = new Map<string, string>();
 const recentNotePaths = ref<string[]>([]);
 
 /** 当前打开文件读取时的版本标识，用于外部变更检测 */
-const currentFileMtime = ref<string | null>(null);
+const documentStore = useNoteDocumentStore();
+const content = computed({
+  get: () => (selectedPath.value ? documentStore.ensure(selectedPath.value).content : ''),
+  set: (value: string) => {
+    if (selectedPath.value) documentStore.updateContent(selectedPath.value, value);
+  },
+});
+const isDirty = computed(() =>
+  selectedPath.value ? documentStore.ensure(selectedPath.value).dirty : false,
+);
+const currentFileMtime = computed(() =>
+  selectedPath.value ? documentStore.ensure(selectedPath.value).mtime : null,
+);
 
 const { tasks, toggleTask, toggleDailyTask, updateTask, addTask, deleteTask } = useTaskStore();
 const {
   referenceIndex,
   setNoteContent,
+  refreshIndex,
+  refreshNoteIndex,
+  removeNote,
   resetNotes,
   removeNotesUnderPath,
   renameNote,
@@ -96,6 +115,7 @@ const {
 } = useNoteTaskSync();
 let projectingTaskReferences = false;
 let taskSyncTimer: ReturnType<typeof setTimeout> | null = null;
+let taskSnapshot = new Map<string, { title: string; completed: boolean }>();
 let focusTitleAfterOpen = false;
 
 const textareaRef = ref<InstanceType<typeof MarkdownEditor> | null>(null);
@@ -111,12 +131,53 @@ const previousWidth = ref(DEFAULT_SIDEBAR_WIDTH);
 
 // ═══ 自定义右键菜单 ═══
 
-const { openContextMenu, createClipboardMenuItems } = useContextMenu();
+const { openContextMenu, createClipboardMenuItems, visible: contextMenuVisible } = useContextMenu();
 
 /** 操作结果提示（临时显示） */
 const statusMsg = ref('');
 let statusTimer: ReturnType<typeof setTimeout> | null = null;
 const noteActionsMenuOpen = ref(false);
+const noteWorkspaceLayout = ref<NoteWorkspaceLayout>({
+  panes: [{ id: 'main', tabs: [], activeTab: null }],
+  activePaneId: 'main',
+  direction: null,
+});
+const secondaryTabs = ref<string[]>([]);
+const secondaryActiveTab = ref<string | null>(null);
+const secondaryLoading = ref(false);
+const secondaryContent = computed({
+  get: () =>
+    secondaryActiveTab.value ? documentStore.ensure(secondaryActiveTab.value).content : '',
+  set: (value: string) => {
+    if (secondaryActiveTab.value) documentStore.updateContent(secondaryActiveTab.value, value);
+  },
+});
+const secondaryDirty = computed(() =>
+  secondaryActiveTab.value ? documentStore.ensure(secondaryActiveTab.value).dirty : false,
+);
+const secondaryFileMtime = computed(() =>
+  secondaryActiveTab.value ? documentStore.ensure(secondaryActiveTab.value).mtime : null,
+);
+let openFileSequence = 0;
+type WorkspacePaneId = 'main' | 'secondary';
+let draggedTab: { path: string; pane: WorkspacePaneId } | null = null;
+const draggedTabPath = ref<string | null>(null);
+const splitDropPreview = ref(false);
+const tabDropIndicator = ref<{
+  left: number;
+  top: number;
+  height: number;
+} | null>(null);
+const dragGhostPosition = ref({ left: 0, top: 0 });
+let pointerDrag: {
+  path: string;
+  pane: WorkspacePaneId;
+  pointerId: number;
+  startX: number;
+  startY: number;
+  active: boolean;
+} | null = null;
+let suppressNextTabClick = false;
 
 function showStatus(msg: string) {
   statusMsg.value = msg;
@@ -132,6 +193,447 @@ function toggleNoteActionsMenu() {
 
 function closeNoteActionsMenu() {
   noteActionsMenuOpen.value = false;
+}
+
+function splitNoteWorkspace(direction: 'horizontal' | 'vertical') {
+  if (!selectedPath.value) {
+    showStatus('请先打开一篇笔记');
+    closeNoteActionsMenu();
+    return;
+  }
+
+  const secondaryPath =
+    openTabs.value.find((path) => path !== selectedPath.value) || selectedPath.value;
+  secondaryTabs.value = [...openTabs.value];
+  secondaryActiveTab.value = secondaryPath;
+  void loadSecondaryNote(secondaryPath);
+
+  noteWorkspaceLayout.value = {
+    panes: [
+      { id: 'main', tabs: [...openTabs.value], activeTab: selectedPath.value },
+      { id: 'secondary', tabs: [...secondaryTabs.value], activeTab: secondaryPath },
+    ],
+    activePaneId: 'main',
+    direction,
+  };
+  closeNoteActionsMenu();
+}
+
+function splitNoteWorkspaceWithTab(direction: 'horizontal' | 'vertical', tabPath: string) {
+  if (!selectedPath.value) return;
+
+  const remainingTabs = openTabs.value.filter((path) => path !== tabPath);
+  const mainTabs = remainingTabs.length > 0 ? remainingTabs : [...openTabs.value];
+  openTabs.value = mainTabs;
+  if (selectedPath.value === tabPath && remainingTabs.length > 0) {
+    void openFile(remainingTabs[0]);
+  }
+
+  secondaryTabs.value = [tabPath];
+  secondaryActiveTab.value = tabPath;
+  void loadSecondaryNote(tabPath);
+  noteWorkspaceLayout.value = {
+    panes: [
+      { id: 'main', tabs: [...mainTabs], activeTab: selectedPath.value },
+      { id: 'secondary', tabs: [tabPath], activeTab: tabPath },
+    ],
+    activePaneId: 'main',
+    direction,
+  };
+}
+
+function closeNoteWorkspaceSplit() {
+  noteWorkspaceLayout.value = {
+    panes: [{ id: 'main', tabs: [...openTabs.value], activeTab: selectedPath.value }],
+    activePaneId: 'main',
+    direction: null,
+  };
+  secondaryTabs.value = [];
+  secondaryActiveTab.value = null;
+  secondaryContent.value = '';
+  closeNoteActionsMenu();
+}
+
+function showSplitPaneMenu(event: MouseEvent) {
+  openContextMenu(event, [
+    {
+      id: 'split-pane.context-panel',
+      label: contextPanelOpen.value
+        ? `隐藏${outlinePanelLabel.value}`
+        : `显示${outlinePanelLabel.value}`,
+      action: () => {
+        contextPanelOpen.value = !contextPanelOpen.value;
+      },
+    },
+    {
+      id: 'split-pane.new-note',
+      label: '新建笔记',
+      action: () => createUntitledFile(),
+    },
+    {
+      id: 'split-pane.new-folder',
+      label: '新建文件夹',
+      action: () => createFolder(''),
+    },
+    {
+      id: 'split-pane.split-horizontal',
+      label: '左右分屏',
+      separatorBefore: true,
+      action: () => splitNoteWorkspace('horizontal'),
+    },
+    {
+      id: 'split-pane.split-vertical',
+      label: '上下分屏',
+      action: () => splitNoteWorkspace('vertical'),
+    },
+    {
+      id: 'split-pane.close',
+      label: '关闭分屏',
+      action: () => closeNoteWorkspaceSplit(),
+    },
+    {
+      id: 'split-pane.quick-switcher',
+      label: '查找笔记',
+      separatorBefore: true,
+      action: () => {
+        noteQuickSwitcherVisible.value = true;
+      },
+    },
+    {
+      id: 'split-pane.copy-path',
+      label: '复制路径',
+      action: async () => {
+        if (!selectedPath.value) return;
+        await navigator.clipboard?.writeText(selectedPath.value);
+        showStatus('路径已复制');
+      },
+    },
+    {
+      id: 'split-pane.export',
+      label: '导出为 Word',
+      separatorBefore: true,
+      action: () => exportCurrentNoteToDocx(),
+    },
+  ]);
+}
+
+async function loadSecondaryNote(path: string | null) {
+  if (!path) return;
+  secondaryLoading.value = true;
+  documentStore.beginLoading(path);
+  try {
+    const cached = noteContentCache.get(path);
+    if (cached !== undefined) {
+      let cachedMtime: string | null = null;
+      try {
+        cachedMtime = await invoke<string>('get_note_mtime', { path });
+      } catch {
+        cachedMtime = null;
+      }
+      documentStore.finishLoading(path, cached, cachedMtime);
+      return;
+    }
+    const meta = await invoke<{ content: string; mtime: string }>('read_note_meta', { path });
+    noteContentCache.set(path, meta.content);
+    documentStore.finishLoading(path, meta.content, meta.mtime);
+  } catch {
+    documentStore.failLoading(path);
+    showStatus('无法读取分栏笔记');
+  } finally {
+    secondaryLoading.value = false;
+  }
+}
+
+function selectSecondaryTab(path: string) {
+  secondaryActiveTab.value = path;
+  noteWorkspaceLayout.value.panes[1] = {
+    id: 'secondary',
+    tabs: [...secondaryTabs.value],
+    activeTab: path,
+  };
+  void loadSecondaryNote(path);
+}
+
+function closeSecondaryTab(path: string) {
+  const index = secondaryTabs.value.indexOf(path);
+  if (index < 0) return;
+  const nextTabs = secondaryTabs.value.filter((tab) => tab !== path);
+  if (nextTabs.length === 0) {
+    closeNoteWorkspaceSplit();
+    return;
+  }
+  secondaryTabs.value = nextTabs;
+  const nextPath =
+    secondaryActiveTab.value === path
+      ? nextTabs[index] || nextTabs[index - 1] || nextTabs[0]
+      : secondaryActiveTab.value;
+  if (nextPath) selectSecondaryTab(nextPath);
+}
+
+function syncWorkspacePaneTabs() {
+  noteWorkspaceLayout.value.panes[0].tabs = [...openTabs.value];
+  noteWorkspaceLayout.value.panes[0].activeTab = selectedPath.value;
+  if (noteWorkspaceLayout.value.direction && noteWorkspaceLayout.value.panes[1]) {
+    noteWorkspaceLayout.value.panes[1].tabs = [...secondaryTabs.value];
+    noteWorkspaceLayout.value.panes[1].activeTab = secondaryActiveTab.value;
+  }
+}
+
+function moveTabInList(tabs: string[], fromIndex: number, targetIndex: number) {
+  const nextTabs = [...tabs];
+  const [movedTab] = nextTabs.splice(fromIndex, 1);
+  const adjustedIndex = fromIndex < targetIndex ? targetIndex - 1 : targetIndex;
+  nextTabs.splice(Math.max(0, adjustedIndex), 0, movedTab);
+  return nextTabs;
+}
+
+function handleTabDrop(event: DragEvent, targetPane: WorkspacePaneId, targetIndex: number) {
+  event.preventDefault();
+  event.stopPropagation();
+  const source = draggedTab;
+  draggedTab = null;
+  if (!source) return;
+
+  const targetElement = event.currentTarget as HTMLElement | null;
+  if (targetElement?.classList.contains('workspace-tab')) {
+    const rect = targetElement.getBoundingClientRect();
+    const isAfterTarget =
+      targetPane === 'main'
+        ? event.clientX >= rect.left + rect.width / 2
+        : event.clientX >= rect.left + rect.width / 2;
+    if (isAfterTarget) targetIndex += 1;
+  }
+
+  const sourceTabs = source.pane === 'main' ? openTabs.value : secondaryTabs.value;
+  const sourceIndex = sourceTabs.indexOf(source.path);
+  if (sourceIndex < 0) return;
+
+  if (source.pane === targetPane) {
+    const nextTabs = moveTabInList(sourceTabs, sourceIndex, targetIndex);
+    if (targetPane === 'main') openTabs.value = nextTabs;
+    else secondaryTabs.value = nextTabs;
+    syncWorkspacePaneTabs();
+    return;
+  }
+
+  if (source.pane === 'main' && openTabs.value.length === 1) {
+    showStatus('主分栏至少保留一篇笔记');
+    return;
+  }
+
+  if (source.pane === 'main') {
+    openTabs.value = openTabs.value.filter((tab) => tab !== source.path);
+    if (selectedPath.value === source.path) {
+      const nextPath = openTabs.value[sourceIndex] || openTabs.value[sourceIndex - 1] || null;
+      if (nextPath) void openFile(nextPath);
+      else {
+        selectedPath.value = null;
+        content.value = '';
+      }
+    }
+
+    if (!secondaryTabs.value.includes(source.path)) {
+      secondaryTabs.value = [
+        ...secondaryTabs.value.slice(0, targetIndex),
+        source.path,
+        ...secondaryTabs.value.slice(targetIndex),
+      ];
+    }
+    secondaryActiveTab.value = source.path;
+    void loadSecondaryNote(source.path);
+  } else {
+    secondaryTabs.value = secondaryTabs.value.filter((tab) => tab !== source.path);
+    if (secondaryActiveTab.value === source.path) {
+      const nextPath =
+        secondaryTabs.value[sourceIndex] || secondaryTabs.value[sourceIndex - 1] || null;
+      secondaryActiveTab.value = nextPath;
+      if (nextPath) void loadSecondaryNote(nextPath);
+      else {
+        secondaryContent.value = '';
+        closeNoteWorkspaceSplit();
+      }
+    }
+
+    if (!openTabs.value.includes(source.path)) {
+      openTabs.value = [
+        ...openTabs.value.slice(0, targetIndex),
+        source.path,
+        ...openTabs.value.slice(targetIndex),
+      ];
+    }
+    void openFile(source.path);
+  }
+
+  syncWorkspacePaneTabs();
+}
+
+function handleTabClick(event: MouseEvent, path: string, pane: WorkspacePaneId) {
+  if (suppressNextTabClick) {
+    event.preventDefault();
+    suppressNextTabClick = false;
+    return;
+  }
+  if (pane === 'main') void openFile(path);
+  else selectSecondaryTab(path);
+}
+
+function getPointerDropTarget(clientX: number, clientY: number) {
+  const element = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+  const tab = element?.closest<HTMLElement>('[data-workspace-tab]');
+  if (tab) {
+    const pane = tab.dataset.workspacePane as WorkspacePaneId | undefined;
+    const path = tab.dataset.workspacePath;
+    if (!pane || !path) return null;
+    const tabs = pane === 'main' ? openTabs.value : secondaryTabs.value;
+    const index = tabs.indexOf(path);
+    if (index < 0) return null;
+    const rect = tab.getBoundingClientRect();
+    return {
+      pane,
+      index: index + (clientX >= rect.left + rect.width / 2 ? 1 : 0),
+      element: tab,
+    };
+  }
+
+  const strip = element?.closest<HTMLElement>('[data-workspace-tabs]');
+  if (!strip) return null;
+  const pane = strip.dataset.workspaceTabs as WorkspacePaneId | undefined;
+  if (!pane) return null;
+  return {
+    pane,
+    index: pane === 'main' ? openTabs.value.length : secondaryTabs.value.length,
+    element: strip,
+  };
+}
+
+function handleTabPointerDown(event: PointerEvent, path: string, pane: WorkspacePaneId) {
+  if (event.button !== 0) return;
+  if ((event.target as HTMLElement).closest('.workspace-tab-close')) return;
+  pointerDrag = {
+    path,
+    pane,
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    active: false,
+  };
+  (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+  window.addEventListener('pointermove', handleTabPointerMove, { passive: false });
+  window.addEventListener('pointerup', handleTabPointerUp);
+  window.addEventListener('pointercancel', handleTabPointerCancel);
+}
+
+function handleTabPointerMove(event: PointerEvent) {
+  if (!pointerDrag || event.pointerId !== pointerDrag.pointerId) return;
+  const distance = Math.hypot(
+    event.clientX - pointerDrag.startX,
+    event.clientY - pointerDrag.startY,
+  );
+  if (!pointerDrag.active && distance < 6) return;
+  if (!pointerDrag.active) {
+    pointerDrag.active = true;
+    draggedTab = { path: pointerDrag.path, pane: pointerDrag.pane };
+    draggedTabPath.value = pointerDrag.path;
+    document.body.classList.add('workspace-pointer-dragging');
+  }
+  dragGhostPosition.value = {
+    left: event.clientX + 14,
+    top: event.clientY + 14,
+  };
+  updateSplitDropPreview(event.clientX, event.clientY);
+  updateTabDropIndicator(event.clientX, event.clientY);
+  event.preventDefault();
+}
+
+function updateSplitDropPreview(clientX: number, clientY: number) {
+  if (!pointerDrag?.active || noteWorkspaceLayout.value.direction) {
+    splitDropPreview.value = false;
+    return;
+  }
+
+  const editorMain = document.querySelector<HTMLElement>('.editor-main');
+  const documentBody = editorMain?.querySelector<HTMLElement>('.editor-document-body');
+  if (!editorMain || !documentBody) {
+    splitDropPreview.value = false;
+    return;
+  }
+
+  const element = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+  const isOverTabArea = Boolean(element?.closest('[data-workspace-tab], [data-workspace-tabs]'));
+  const bodyRect = documentBody.getBoundingClientRect();
+  const isInsideDocumentBody =
+    clientX >= bodyRect.left &&
+    clientX <= bodyRect.right &&
+    clientY >= bodyRect.top &&
+    clientY <= bodyRect.bottom;
+  const rightDropZoneStart = bodyRect.left + bodyRect.width * 0.68;
+  const isInsideRightDropZone = clientX >= rightDropZoneStart;
+
+  splitDropPreview.value = !isOverTabArea && isInsideDocumentBody && isInsideRightDropZone;
+}
+
+function updateTabDropIndicator(clientX: number, clientY: number) {
+  if (!pointerDrag?.active || splitDropPreview.value) {
+    tabDropIndicator.value = null;
+    return;
+  }
+
+  const target = getPointerDropTarget(clientX, clientY);
+  if (!target) {
+    tabDropIndicator.value = null;
+    return;
+  }
+
+  const targetElement = target.element as HTMLElement;
+  const targetRect = targetElement.getBoundingClientRect();
+  const isTab = targetElement.matches('[data-workspace-tab]');
+  const isAfter = isTab && clientX >= targetRect.left + targetRect.width / 2;
+  tabDropIndicator.value = {
+    left: isAfter ? targetRect.right : targetRect.left,
+    top: targetRect.top,
+    height: targetRect.height,
+  };
+}
+
+function finishTabPointerDrag(event: PointerEvent) {
+  if (!pointerDrag || event.pointerId !== pointerDrag.pointerId) return;
+  const wasDragging = pointerDrag.active;
+  if (wasDragging) {
+    if (splitDropPreview.value && draggedTab) {
+      splitNoteWorkspaceWithTab('horizontal', draggedTab.path);
+      draggedTab = null;
+    } else {
+      const target = getPointerDropTarget(event.clientX, event.clientY);
+      if (target) {
+        const dropEvent = {
+          clientX: event.clientX,
+          currentTarget: target.element,
+          preventDefault: () => undefined,
+          stopPropagation: () => undefined,
+        } as unknown as DragEvent;
+        handleTabDrop(dropEvent, target.pane, target.index);
+      } else {
+        draggedTab = null;
+      }
+    }
+    suppressNextTabClick = true;
+  }
+  pointerDrag = null;
+  draggedTabPath.value = null;
+  splitDropPreview.value = false;
+  tabDropIndicator.value = null;
+  document.body.classList.remove('workspace-pointer-dragging');
+  window.removeEventListener('pointermove', handleTabPointerMove);
+  window.removeEventListener('pointerup', handleTabPointerUp);
+  window.removeEventListener('pointercancel', handleTabPointerCancel);
+}
+
+function handleTabPointerUp(event: PointerEvent) {
+  finishTabPointerDrag(event);
+}
+
+function handleTabPointerCancel(event: PointerEvent) {
+  finishTabPointerDrag(event);
 }
 
 function handleNoteActionsMenuOutside(event: MouseEvent) {
@@ -158,6 +660,11 @@ const selectedName = computed(() => {
   return selectedPath.value.split('/').pop() || '';
 });
 
+const outlinePanelLabel = computed(() => {
+  const noteName = selectedName.value.replace(/\.md$/i, '');
+  return noteName ? `${noteName}的大纲` : '笔记大纲';
+});
+
 /** 当前笔记中出现的正式任务引用。 */
 const currentTaskReferences = computed(() => {
   if (!selectedPath.value) return [];
@@ -172,11 +679,19 @@ function taskForReference(reference: TaskReference) {
 watch(
   tasks,
   (nextTasks) => {
-    if (!selectedPath.value || projectingTaskReferences) return;
+    if (projectingTaskReferences) return;
 
     // 任务 Store 可能来自本地编辑、Android 或 Supabase Realtime；统一投影到所有本地笔记。
-    for (const task of nextTasks) void projectTask(task);
+    const changedTasks = nextTasks.filter((task) => {
+      const previous = taskSnapshot.get(task.id);
+      return !previous || previous.title !== task.title || previous.completed !== task.completed;
+    });
+    taskSnapshot = new Map(
+      nextTasks.map((task) => [task.id, { title: task.title, completed: task.completed }]),
+    );
+    for (const task of changedTasks) void projectTask(task);
 
+    if (!selectedPath.value) return;
     let nextContent = content.value;
     for (const reference of currentTaskReferences.value) {
       const task = nextTasks.find((item) => item.id === reference.taskId);
@@ -369,7 +884,7 @@ function filterFileTree(entries: FileEntry[], query: string): FileEntry[] {
 
 const filteredDisplayTree = computed(() => filterFileTree(displayTree.value, noteSearch.value));
 
-/** 当前笔记中的 Markdown 标题，用于右侧上下文面板的大纲。
+/** 当前笔记中的 Markdown 标题，用于笔记大纲。
  *  代码块（``` 围栏）内的 # 不会被识别为标题。 */
 const outline = computed(() => {
   const codeFenceRe = /^\s{0,3}(`{3,}|~{3,})/;
@@ -479,6 +994,82 @@ function showContextMenu(event: MouseEvent) {
   }));
 
   const clipboardItems = createClipboardMenuItems(event.target as HTMLElement, !!text);
+  const formatItems = [
+    {
+      id: 'editor-format.bold',
+      label: '加粗',
+      separatorBefore: true,
+      action: () => editor.wrapSelection('**', '**'),
+    },
+    {
+      id: 'editor-format.italic',
+      label: '倾斜',
+      action: () => editor.wrapSelection('_', '_'),
+    },
+    {
+      id: 'editor-format.strikethrough',
+      label: '删除线',
+      action: () => editor.wrapSelection('~~', '~~'),
+    },
+    {
+      id: 'editor-format.inline-code',
+      label: '行内代码',
+      action: () => editor.wrapSelection('`', '`'),
+    },
+    {
+      id: 'editor-format.heading-1',
+      label: '一级标题',
+      separatorBefore: true,
+      action: () => editor.prependToLine('# '),
+    },
+    {
+      id: 'editor-format.heading-2',
+      label: '二级标题',
+      action: () => editor.prependToLine('## '),
+    },
+    {
+      id: 'editor-format.heading-3',
+      label: '三级标题',
+      action: () => editor.prependToLine('### '),
+    },
+    {
+      id: 'editor-format.bullet-list',
+      label: '无序列表',
+      separatorBefore: true,
+      action: () => editor.prependToLine('- '),
+    },
+    {
+      id: 'editor-format.ordered-list',
+      label: '有序列表',
+      action: () => editor.prependToLine('1. '),
+    },
+    {
+      id: 'editor-format.blockquote',
+      label: '引用块',
+      action: () => editor.prependToLine('> '),
+    },
+    {
+      id: 'editor-format.code-block',
+      label: '代码块',
+      action: () => editor.insertText('```\n\n```'),
+    },
+    {
+      id: 'editor-insert.link',
+      label: '链接',
+      separatorBefore: true,
+      action: () => (text ? editor.wrapSelection('[', '](url)') : editor.insertText('[文字](url)')),
+    },
+    {
+      id: 'editor-insert.image',
+      label: '图片',
+      action: () => editor.insertText('![替代文字](图片地址)'),
+    },
+    {
+      id: 'editor-insert.rule',
+      label: '分隔线',
+      action: () => editor.insertText('\n---\n'),
+    },
+  ];
   const taskItems = selectedPath.value
     ? [
         {
@@ -495,7 +1086,7 @@ function showContextMenu(event: MouseEvent) {
       ]
     : [];
 
-  openContextMenu(event, [...clipboardItems, ...pluginItems, ...taskItems]);
+  openContextMenu(event, [...clipboardItems, ...formatItems, ...pluginItems, ...taskItems]);
 }
 
 /** Ctrl+S 手动保存 */
@@ -508,8 +1099,7 @@ async function handleManualSave() {
       content: content.value,
       expectedMtime: currentFileMtime.value,
     });
-    isDirty.value = false;
-    currentFileMtime.value = writtenMtime;
+    documentStore.markSaved(selectedPath.value, writtenMtime);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     if (message.startsWith(FILE_CHANGED_EXTERNALLY)) {
@@ -525,7 +1115,7 @@ async function handleManualSave() {
   }
 }
 
-// ═══ 外部文件变更处理（Obsidian 式：静默加载最新版本） ═══
+// ═══ 外部文件变更处理 ═══
 
 /** 使用 Pandoc 将当前笔记导出为 Word 文档。 */
 async function exportCurrentNoteToDocx() {
@@ -585,11 +1175,7 @@ async function reloadFromDisk(path = selectedPath.value) {
     });
     noteContentCache.set(path, meta.content);
     setNoteContent(path, meta.content);
-    if (selectedPath.value === path) {
-      content.value = meta.content;
-      currentFileMtime.value = meta.mtime;
-      isDirty.value = false;
-    }
+    documentStore.finishLoading(path, meta.content, meta.mtime);
   } catch {
     // 文件可能被删除等，静默处理
   }
@@ -738,8 +1324,8 @@ async function switchNotesWorkspace(selected: string) {
     selectedPath.value = null;
     content.value = '';
     titleDraft.value = '';
-    isDirty.value = false;
     noteContentCache.clear();
+    documentStore.clearAll();
     resetNotes();
     expanded.value = new Set(['inbox']);
     await loadTree();
@@ -945,31 +1531,37 @@ function expandParentDirectories(filePath: string) {
 }
 
 async function openFile(path: string, initialContent?: string) {
+  const requestSequence = ++openFileSequence;
   try {
     await ensureParentDirectoriesLoaded(path);
+    if (requestSequence !== openFileSequence) return;
     if (!openTabs.value.includes(path)) openTabs.value = [...openTabs.value, path];
     selectedPath.value = path;
+    syncWorkspacePaneTabs();
     titleDraft.value = path.split('/').pop()?.replace(/\.md$/i, '') || '未命名';
     const cached = noteContentCache.get(path);
-    if (initialContent) {
-      content.value = initialContent;
-      currentFileMtime.value = await invoke<string>('get_note_mtime', { path });
+    if (initialContent !== undefined) {
+      const mtime = await invoke<string>('get_note_mtime', { path });
+      documentStore.finishLoading(path, initialContent, mtime);
+      if (requestSequence !== openFileSequence) return;
     } else if (cached) {
-      content.value = cached;
+      documentStore.beginLoading(path);
       // 从缓存恢复时仍从磁盘获取最新 mtime 用于冲突检测
       try {
-        currentFileMtime.value = await invoke<string>('get_note_mtime', { path });
+        documentStore.finishLoading(path, cached, await invoke<string>('get_note_mtime', { path }));
+        if (requestSequence !== openFileSequence) return;
       } catch {
-        currentFileMtime.value = null;
+        documentStore.finishLoading(path, cached, null);
       }
     } else {
       const meta = await invoke<{ content: string; mtime: string }>('read_note_meta', { path });
-      content.value = meta.content;
-      currentFileMtime.value = meta.mtime;
+      if (requestSequence !== openFileSequence) return;
+      documentStore.finishLoading(path, meta.content, meta.mtime);
     }
+    if (requestSequence !== openFileSequence) return;
     noteContentCache.set(path, content.value);
     setNoteContent(path, content.value);
-    isDirty.value = false;
+    documentStore.markSaved(path, documentStore.ensure(path).mtime);
     cursorLine.value = 1;
     cursorCol.value = 1;
     // 自动展开父级目录
@@ -1089,28 +1681,37 @@ async function closeTab(path: string) {
 
 // ═══ 自动保存（500ms 防抖） ═══
 
-let saveTimer: ReturnType<typeof setTimeout> | null = null;
+const noteSaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const noteSaveVersions = new Map<string, number>();
 
-function clearPendingSave() {
-  if (saveTimer) {
-    clearTimeout(saveTimer);
-    saveTimer = null;
-  }
+function clearPendingSave(path = selectedPath.value) {
+  if (!path) return;
+  const timer = noteSaveTimers.get(path);
+  if (timer) clearTimeout(timer);
+  noteSaveTimers.delete(path);
+  noteSaveVersions.set(path, (noteSaveVersions.get(path) ?? 0) + 1);
 }
 
 watch(content, (val) => {
-  isDirty.value = true;
+  if (selectedPath.value) {
+    const document = documentStore.ensure(selectedPath.value);
+    if (document.revision === document.hydratedRevision) return;
+  }
   if (selectedPath.value) {
     noteContentCache.set(selectedPath.value, val);
     setNoteContent(selectedPath.value, val);
   }
   scheduleTaskReferenceSync(val);
   if (!selectedPath.value) return;
-  clearPendingSave();
   const savePath = selectedPath.value;
   if (!savePath) return;
+  clearPendingSave(savePath);
   const expectedMtime = currentFileMtime.value;
-  saveTimer = setTimeout(async () => {
+  const version = (noteSaveVersions.get(savePath) ?? 0) + 1;
+  noteSaveVersions.set(savePath, version);
+  const timer = setTimeout(async () => {
+    if (noteSaveVersions.get(savePath) !== version) return;
+    noteSaveTimers.delete(savePath);
     saving.value = true;
     try {
       const writtenMtime = await invoke<string>('write_note', {
@@ -1118,11 +1719,14 @@ watch(content, (val) => {
         content: val,
         expectedMtime,
       });
+      if (noteSaveVersions.get(savePath) !== version) return;
       noteContentCache.set(savePath, val);
       setNoteContent(savePath, val);
       if (selectedPath.value === savePath) {
-        isDirty.value = false;
-        currentFileMtime.value = writtenMtime;
+        documentStore.markSaved(savePath, writtenMtime);
+      }
+      if (secondaryActiveTab.value === savePath) {
+        documentStore.markSaved(savePath, writtenMtime);
       }
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -1138,9 +1742,43 @@ watch(content, (val) => {
       saving.value = false;
     }
   }, 500);
+  noteSaveTimers.set(savePath, timer);
 });
 
 // ═══ 自定义对话框 ═══
+
+watch(secondaryContent, (val) => {
+  if (secondaryLoading.value || !secondaryActiveTab.value) return;
+  if (selectedPath.value === secondaryActiveTab.value) return;
+  const document = documentStore.ensure(secondaryActiveTab.value);
+  if (document.revision === document.hydratedRevision) return;
+  noteContentCache.set(secondaryActiveTab.value, val);
+  const savePath = secondaryActiveTab.value;
+  clearPendingSave(savePath);
+  const expectedMtime = secondaryFileMtime.value;
+  const version = (noteSaveVersions.get(savePath) ?? 0) + 1;
+  noteSaveVersions.set(savePath, version);
+  const timer = setTimeout(async () => {
+    if (noteSaveVersions.get(savePath) !== version) return;
+    noteSaveTimers.delete(savePath);
+    try {
+      const writtenMtime = await invoke<string>('write_note', {
+        path: savePath,
+        content: val,
+        expectedMtime,
+      });
+      if (noteSaveVersions.get(savePath) !== version) return;
+      noteContentCache.set(savePath, val);
+      setNoteContent(savePath, val);
+      if (secondaryActiveTab.value === savePath) {
+        documentStore.markSaved(savePath, writtenMtime);
+      }
+    } catch {
+      showStatus('分栏笔记保存失败');
+    }
+  }, 500);
+  noteSaveTimers.set(savePath, timer);
+});
 
 function showDialog(
   title: string,
@@ -1430,7 +2068,6 @@ async function deleteEntry(path: string) {
   if (selectedPath.value && isPathInside(selectedPath.value, path)) {
     selectedPath.value = null;
     content.value = '';
-    isDirty.value = false;
   }
   saveNoteSession();
   showStatus(`正在将「${name}」移入系统回收站…`);
@@ -1443,7 +2080,10 @@ async function deleteEntry(path: string) {
     openTabs.value = tabsSnapshot;
     selectedPath.value = selectedSnapshot;
     content.value = contentSnapshot;
-    isDirty.value = dirtySnapshot;
+    if (selectedSnapshot && dirtySnapshot) documentStore.markDirty(selectedSnapshot);
+    else if (selectedSnapshot) {
+      documentStore.markSaved(selectedSnapshot, documentStore.ensure(selectedSnapshot).mtime);
+    }
     saveNoteSession();
     const parentPath = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
     void refreshDirectory(parentPath);
@@ -1598,7 +2238,17 @@ let fileTreeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 function handleFileChangeEvent(event: { kind: string; path: string }) {
   switch (event.kind) {
     case 'create':
+      void refreshNoteIndex(event.path);
+      if (fileTreeDebounceTimer) clearTimeout(fileTreeDebounceTimer);
+      fileTreeDebounceTimer = setTimeout(() => {
+        const parentPath = event.path.includes('/')
+          ? event.path.slice(0, event.path.lastIndexOf('/'))
+          : '';
+        void refreshDirectory(parentPath);
+      }, 300);
+      break;
     case 'remove':
+      removeNote(event.path);
       // 文件创建或删除 → 防抖刷新文件树
       if (fileTreeDebounceTimer) clearTimeout(fileTreeDebounceTimer);
       fileTreeDebounceTimer = setTimeout(() => {
@@ -1617,6 +2267,7 @@ function handleFileChangeEvent(event: { kind: string; path: string }) {
         // 更新缓存中的旧版本
         noteContentCache.delete(event.path);
       }
+      void refreshNoteIndex(event.path);
       break;
   }
 }
@@ -1644,9 +2295,21 @@ async function initializeNotesWorkspace() {
   loadRecentNotePaths();
   await loadTree();
   await restoreNoteSession();
+  void refreshIndex();
 }
 
 watch([openTabs, selectedPath, notesDir], saveNoteSession, { deep: true });
+
+watch(
+  openTabs,
+  (tabs) => {
+    noteWorkspaceLayout.value.panes[0].tabs = [...tabs];
+    if (noteWorkspaceLayout.value.direction) {
+      noteWorkspaceLayout.value.panes[1].tabs = [...secondaryTabs.value];
+    }
+  },
+  { deep: true },
+);
 
 // 从其他视图切回笔记视图时，检测当前文件是否被外部修改
 watch(
@@ -1657,6 +2320,12 @@ watch(
 );
 
 onUnmounted(() => {
+  window.removeEventListener('pointermove', handleTabPointerMove);
+  window.removeEventListener('pointerup', handleTabPointerUp);
+  window.removeEventListener('pointercancel', handleTabPointerCancel);
+  document.body.classList.remove('workspace-pointer-dragging');
+  splitDropPreview.value = false;
+  tabDropIndicator.value = null;
   if (taskSyncTimer) clearTimeout(taskSyncTimer);
   if (fileTreeDebounceTimer) clearTimeout(fileTreeDebounceTimer);
   if (unlistenFileWatcher) unlistenFileWatcher();
@@ -1869,7 +2538,13 @@ onUnmounted(() => {
 
         <!-- 编辑区主内容（保持纵向 flex 布局） -->
         <div class="editor-main">
-          <div class="workspace-tabs editor-tabs" role="tablist" aria-label="打开的笔记">
+          <div
+            v-show="!noteWorkspaceLayout.direction"
+            class="workspace-tabs editor-tabs"
+            role="tablist"
+            aria-label="打开的笔记"
+            data-workspace-tabs="main"
+          >
             <button
               v-if="sidebarCollapsed"
               type="button"
@@ -1887,10 +2562,17 @@ onUnmounted(() => {
               :key="`editor-${tab}`"
               type="button"
               class="workspace-tab"
-              :class="{ active: selectedPath === tab }"
+              :class="{
+                active: selectedPath === tab,
+                'is-pointer-dragging': draggedTabPath === tab,
+              }"
+              data-workspace-tab
+              data-workspace-pane="main"
+              :data-workspace-path="tab"
               role="tab"
               :aria-selected="selectedPath === tab"
-              @click="openFile(tab)"
+              @pointerdown="handleTabPointerDown($event, tab, 'main')"
+              @click="handleTabClick($event, tab, 'main')"
             >
               <span class="workspace-tab-name">{{ tab.split('/').pop() }}</span>
               <span v-if="selectedPath === tab && isDirty" class="workspace-tab-dirty">•</span>
@@ -1916,21 +2598,23 @@ onUnmounted(() => {
           </div>
           <template v-if="selectedPath">
             <!-- 顶部工具栏 -->
-            <div class="editor-toolbar">
+            <div
+              class="editor-toolbar"
+              :class="{ 'editor-toolbar-split': noteWorkspaceLayout.direction }"
+            >
               <div class="toolbar-left">
                 <span class="toolbar-filename">{{ selectedName }}</span>
                 <span v-if="isDirty" class="toolbar-dirty" title="未保存的更改">&#9679;</span>
               </div>
-              <MarkdownToolbar :editor-ref="textareaRef" />
               <div class="toolbar-right">
                 <div class="note-toolbar-menu">
                   <button
                     class="toolbar-action-btn"
-                    :class="{ active: noteActionsMenuOpen }"
+                    :class="{ active: contextMenuVisible }"
                     title="更多操作"
                     aria-label="更多操作"
-                    :aria-expanded="noteActionsMenuOpen"
-                    @click.stop="toggleNoteActionsMenu"
+                    :aria-expanded="contextMenuVisible"
+                    @click.stop="showSplitPaneMenu"
                   >
                     <svg
                       width="14"
@@ -1970,6 +2654,31 @@ onUnmounted(() => {
                       <span>新建文件夹</span>
                     </button>
                     <div class="note-toolbar-menu-separator" aria-hidden="true" />
+                    <button type="button" @click="splitNoteWorkspace('horizontal')">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="4" y="4" width="16" height="16" rx="2" />
+                        <path d="M12 4v16" />
+                      </svg>
+                      <span>左右分屏</span>
+                    </button>
+                    <button type="button" @click="splitNoteWorkspace('vertical')">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="4" y="4" width="16" height="16" rx="2" />
+                        <path d="M4 12h16" />
+                      </svg>
+                      <span>上下分屏</span>
+                    </button>
+                    <button
+                      v-if="noteWorkspaceLayout.direction"
+                      type="button"
+                      @click="closeNoteWorkspaceSplit"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="4" y="4" width="16" height="16" rx="2" />
+                        <path d="m9 9 6 6m0-6-6 6" />
+                      </svg>
+                      <span>关闭分屏</span>
+                    </button>
                     <button
                       type="button"
                       :disabled="exporting"
@@ -2038,8 +2747,8 @@ onUnmounted(() => {
                   class="toolbar-action-btn context-toggle"
                   :class="{ active: contextPanelOpen }"
                   :aria-pressed="contextPanelOpen"
-                  title="显示上下文面板"
-                  aria-label="显示上下文面板"
+                  :title="`显示${outlinePanelLabel}`"
+                  :aria-label="`显示${outlinePanelLabel}`"
                   @click="contextPanelOpen = !contextPanelOpen"
                 >
                   <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -2051,7 +2760,11 @@ onUnmounted(() => {
             </div>
 
             <!-- 编辑区 -->
-            <div v-if="currentTaskReferences.length > 0" class="note-task-strip">
+            <div
+              v-if="currentTaskReferences.length > 0"
+              class="note-task-strip"
+              :class="{ 'note-task-strip-split': noteWorkspaceLayout.direction }"
+            >
               <button class="note-task-add" title="在正文中创建任务" @click="addTaskReference">
                 ＋
               </button>
@@ -2074,18 +2787,117 @@ onUnmounted(() => {
                 <span>{{ taskForReference(reference)?.title || reference.title }}</span>
               </button>
             </div>
-            <div v-else class="note-task-strip note-task-strip-empty">
+            <div
+              v-else
+              class="note-task-strip note-task-strip-empty"
+              :class="{ 'note-task-strip-split': noteWorkspaceLayout.direction }"
+            >
               <span class="note-task-strip-label">正文中的正式任务</span>
               <button class="note-task-add" @click="addTaskReference">创建任务</button>
               <button class="note-task-add" @click="linkExistingTask">关联已有任务</button>
             </div>
 
-            <div class="editor-panes" @contextmenu="showContextMenu">
+            <div
+              class="editor-panes"
+              :class="{
+                'editor-panes-split-horizontal': noteWorkspaceLayout.direction === 'horizontal',
+                'editor-panes-split-vertical': noteWorkspaceLayout.direction === 'vertical',
+              }"
+              @contextmenu="showContextMenu"
+            >
               <div class="editor-document">
+                <div
+                  v-if="noteWorkspaceLayout.direction"
+                  class="workspace-tabs editor-tabs split-pane-tabs"
+                  role="tablist"
+                  aria-label="主分栏中的笔记"
+                  data-workspace-tabs="main"
+                >
+                  <button
+                    v-for="tab in openTabs"
+                    :key="`main-split-${tab}`"
+                    type="button"
+                    class="workspace-tab"
+                    :class="{
+                      active: selectedPath === tab,
+                      'is-pointer-dragging': draggedTabPath === tab,
+                    }"
+                    data-workspace-tab
+                    data-workspace-pane="main"
+                    :data-workspace-path="tab"
+                    role="tab"
+                    :aria-selected="selectedPath === tab"
+                    @pointerdown="handleTabPointerDown($event, tab, 'main')"
+                    @click="handleTabClick($event, tab, 'main')"
+                  >
+                    <span class="workspace-tab-name">{{ tab.split('/').pop() }}</span>
+                    <span v-if="selectedPath === tab && isDirty" class="workspace-tab-dirty"
+                      >•</span
+                    >
+                    <span
+                      class="workspace-tab-close"
+                      role="button"
+                      tabindex="0"
+                      aria-label="关闭主分栏笔记标签"
+                      @click.stop="closeTab(tab)"
+                      @keydown.enter.stop="closeTab(tab)"
+                    >
+                      ×
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    class="workspace-tab-new"
+                    aria-label="新建笔记"
+                    @click="createUntitledFile()"
+                  >
+                    +
+                  </button>
+                </div>
+                <div v-if="noteWorkspaceLayout.direction" class="split-pane-document-header">
+                  <div class="split-pane-header-side">
+                    <button type="button" class="split-pane-nav-btn" disabled aria-label="后退">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m15 5-7 7 7 7" />
+                      </svg>
+                    </button>
+                    <button type="button" class="split-pane-nav-btn" disabled aria-label="前进">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m9 5 7 7-7 7" />
+                      </svg>
+                    </button>
+                  </div>
+                  <span class="split-pane-document-title">{{ selectedName }}</span>
+                  <div class="split-pane-header-side split-pane-header-actions">
+                    <button
+                      type="button"
+                      class="split-pane-nav-btn"
+                      aria-label="更多操作"
+                      @click.stop="showSplitPaneMenu"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="5" cy="12" r="1.5" />
+                        <circle cx="12" cy="12" r="1.5" />
+                        <circle cx="19" cy="12" r="1.5" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      class="split-pane-nav-btn"
+                      aria-label="关闭分屏"
+                      @click="closeNoteWorkspaceSplit"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M7 7l10 10M17 7 7 17" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
                 <input
                   ref="titleInput"
                   v-model="titleDraft"
                   class="note-document-title"
+                  :class="{ 'note-document-title-split': noteWorkspaceLayout.direction }"
                   type="text"
                   aria-label="笔记标题"
                   @blur="renameCurrentNoteTitle"
@@ -2103,9 +2915,137 @@ onUnmounted(() => {
                   />
                 </div>
               </div>
+              <div
+                v-if="noteWorkspaceLayout.direction"
+                class="editor-document split-editor-document"
+              >
+                <div
+                  class="workspace-tabs editor-tabs split-pane-tabs"
+                  role="tablist"
+                  aria-label="次分栏中的笔记"
+                  data-workspace-tabs="secondary"
+                >
+                  <button
+                    v-for="tab in secondaryTabs"
+                    :key="`secondary-${tab}`"
+                    type="button"
+                    class="workspace-tab split-pane-tab"
+                    :class="{
+                      active: secondaryActiveTab === tab,
+                      'is-pointer-dragging': draggedTabPath === tab,
+                    }"
+                    data-workspace-tab
+                    data-workspace-pane="secondary"
+                    :data-workspace-path="tab"
+                    role="tab"
+                    :aria-selected="secondaryActiveTab === tab"
+                    @pointerdown="handleTabPointerDown($event, tab, 'secondary')"
+                    @click="handleTabClick($event, tab, 'secondary')"
+                  >
+                    <span class="workspace-tab-name">{{ tab.split('/').pop() }}</span>
+                    <span
+                      class="workspace-tab-close"
+                      role="button"
+                      tabindex="0"
+                      aria-label="关闭分栏笔记标签"
+                      @click.stop="closeSecondaryTab(tab)"
+                      @keydown.enter.stop="closeSecondaryTab(tab)"
+                    >
+                      ×
+                    </span>
+                  </button>
+                  <span v-if="secondaryLoading" class="split-pane-label">读取中…</span>
+                </div>
+                <div class="split-pane-document-header">
+                  <div class="split-pane-header-side">
+                    <button type="button" class="split-pane-nav-btn" disabled aria-label="后退">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m15 5-7 7 7 7" />
+                      </svg>
+                    </button>
+                    <button type="button" class="split-pane-nav-btn" disabled aria-label="前进">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m9 5 7 7-7 7" />
+                      </svg>
+                    </button>
+                  </div>
+                  <span class="split-pane-document-title">
+                    {{ secondaryActiveTab?.split('/').pop() || '未选择笔记' }}
+                  </span>
+                  <div class="split-pane-header-side split-pane-header-actions">
+                    <button
+                      type="button"
+                      class="split-pane-nav-btn"
+                      aria-label="更多操作"
+                      @click.stop="showSplitPaneMenu"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="5" cy="12" r="1.5" />
+                        <circle cx="12" cy="12" r="1.5" />
+                        <circle cx="19" cy="12" r="1.5" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      class="split-pane-nav-btn"
+                      aria-label="关闭分屏"
+                      @click="closeNoteWorkspaceSplit"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M7 7l10 10M17 7 7 17" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="editor-document-body">
+                  <MarkdownEditor
+                    :key="`split-${secondaryActiveTab}`"
+                    :model-value="secondaryContent"
+                    placeholder="开始编辑 Markdown..."
+                    @update:model-value="secondaryContent = $event"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div v-if="splitDropPreview" class="split-drop-preview" aria-hidden="true">
+              <span class="split-drop-preview-label">
+                <svg viewBox="0 0 24 24">
+                  <path d="M6 4h12v16H6z" />
+                  <path d="M12 4v16" />
+                </svg>
+                {{ draggedTabPath?.split('/').pop() }}
+              </span>
             </div>
 
             <!-- 底部状态栏 -->
+            <div
+              v-if="tabDropIndicator"
+              class="tab-drop-indicator"
+              :style="{
+                left: `${tabDropIndicator.left}px`,
+                top: `${tabDropIndicator.top}px`,
+                height: `${tabDropIndicator.height}px`,
+              }"
+              aria-hidden="true"
+            />
+
+            <div
+              v-if="draggedTabPath"
+              class="tab-drag-ghost"
+              :style="{
+                left: `${dragGhostPosition.left}px`,
+                top: `${dragGhostPosition.top}px`,
+              }"
+              aria-hidden="true"
+            >
+              <svg viewBox="0 0 24 24">
+                <path d="M6 3.75h8l4 4V20.25H6z" />
+                <path d="M14 3.75v4h4M9 12h6M9 15.5h6" />
+              </svg>
+              <span>{{ draggedTabPath.split('/').pop() }}</span>
+            </div>
+
             <div class="editor-statusbar">
               <span>UTF-8</span>
               <span class="statusbar-sep">|</span>
@@ -2206,7 +3146,7 @@ onUnmounted(() => {
               </button>
             </section>
             <section v-if="outline.length > 0" class="context-section">
-              <div class="context-section-title">页面大纲</div>
+              <div class="context-section-title">{{ outlinePanelLabel }}</div>
               <div
                 v-for="item in outline"
                 :key="`${item.level}-${item.title}`"
@@ -2220,7 +3160,7 @@ onUnmounted(() => {
           <div v-else class="context-empty">
             <span class="context-eyebrow">CONTEXT</span>
             <h2>工作区概览</h2>
-            <p>选择一篇笔记后，这里会显示任务、反向链接和页面大纲。</p>
+            <p>选择一篇笔记后，这里会显示任务、反向链接和笔记大纲。</p>
           </div>
         </aside>
       </div>
@@ -2627,6 +3567,7 @@ onUnmounted(() => {
   flex-direction: column;
   overflow: hidden;
   min-width: 0;
+  position: relative;
 }
 
 .note-tabs {
@@ -2729,6 +3670,10 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
+.editor-toolbar-split {
+  display: none;
+}
+
 .toolbar-left {
   display: flex;
   align-items: center;
@@ -2768,7 +3713,7 @@ onUnmounted(() => {
   gap: var(--space-sm);
 }
 
-/* 低频笔记操作收纳为 Obsidian 风格的更多菜单。 */
+/* 低频笔记操作统一收纳到更多菜单。 */
 .toolbar-right > .toolbar-action-btn:not(.context-toggle) {
   display: none;
 }
@@ -2972,6 +3917,136 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   overflow: hidden;
+}
+
+.editor-panes-split-horizontal {
+  flex-direction: row;
+}
+
+.editor-panes-split-vertical {
+  flex-direction: column;
+}
+
+.editor-panes-split-horizontal .editor-document,
+.editor-panes-split-vertical .editor-document {
+  min-width: 0;
+  min-height: 0;
+}
+
+.editor-panes-split-horizontal .editor-document {
+  width: 50%;
+}
+
+.editor-panes-split-vertical .editor-document {
+  height: 50%;
+}
+
+.split-editor-document {
+  border-left: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-primary);
+}
+
+.split-pane-tabs {
+  display: flex;
+  align-items: stretch;
+  min-height: 38px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+}
+
+.split-pane-tab {
+  min-width: 128px;
+  max-width: 220px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-right: 1px solid var(--border-subtle);
+  border-radius: 0;
+  font-size: var(--text-xs);
+}
+
+.split-pane-tab.active {
+  background: var(--bg-primary);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.split-pane-document-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 38px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.split-pane-header-side {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 72px;
+}
+
+.split-pane-header-actions {
+  justify-content: flex-end;
+}
+
+.split-pane-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.split-pane-nav-btn:not(:disabled):hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.split-pane-nav-btn:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.split-pane-nav-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.split-pane-document-title {
+  min-width: 0;
+  max-width: 60%;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.split-pane-label {
+  color: var(--text-muted);
+}
+
+.note-document-title-split,
+.note-task-strip-split {
+  display: none;
 }
 
 /* ═══ 状态栏 ═══ */
@@ -3233,6 +4308,26 @@ onUnmounted(() => {
   font-size: 13px;
 }
 
+.workspace-tab {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.workspace-tab:active,
+.workspace-tab.is-pointer-dragging {
+  cursor: grabbing;
+}
+
+.workspace-tab.is-pointer-dragging {
+  opacity: 0.55;
+}
+
+:global(body.workspace-pointer-dragging) {
+  cursor: grabbing;
+  user-select: none;
+}
+
 .workspace-tab:hover,
 .workspace-tab.active {
   color: var(--text-primary);
@@ -3302,6 +4397,90 @@ onUnmounted(() => {
 
 .editor-main {
   background: var(--bg-primary);
+}
+
+.tab-drag-ghost {
+  position: fixed;
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 240px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.tab-drag-ghost svg {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tab-drag-ghost span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab-drop-indicator {
+  position: fixed;
+  z-index: 55;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent);
+  pointer-events: none;
+}
+
+.split-drop-preview {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 28px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 50%;
+  border: 2px solid var(--accent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent) 42%, transparent);
+  pointer-events: none;
+}
+
+.split-drop-preview-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: #fff;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  box-shadow: var(--shadow-md);
+}
+
+.split-drop-preview-label svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .editor-toolbar {

@@ -304,7 +304,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
         type="button"
         v-if="isEnabled('devtools')"
         :class="['rail-btn', { active: activeModule === 'devtools' }]"
-        data-tooltip="Toolbox"
+        data-tooltip="工具箱"
         aria-label="工具箱"
         :aria-current="activeModule === 'devtools' ? 'page' : undefined"
         @click="handleSwitchModule('devtools')"
@@ -319,7 +319,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
         type="button"
         v-if="isEnabled('floating')"
         class="rail-btn"
-        data-tooltip="Floating"
+        data-tooltip="悬浮窗"
         aria-label="打开悬浮窗"
         @click="handleSwitchModule('floating')"
       >
@@ -334,7 +334,7 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
       <button
         type="button"
         :class="['rail-btn', { active: activeModule === 'settings' }]"
-        data-tooltip="Settings"
+        data-tooltip="设置"
         aria-label="设置"
         :aria-current="activeModule === 'settings' ? 'page' : undefined"
         @click="handleSwitchModule('settings')"

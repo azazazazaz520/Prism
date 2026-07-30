@@ -39,7 +39,10 @@ import {
   type TaskReference,
 } from '../../notes/task-references';
 import { useNoteTaskSync } from '../../composables/useNoteTaskSync';
-import { useNoteDocumentStore } from '../../composables/useNoteDocumentStore';
+import {
+  shouldScheduleNoteSave,
+  useNoteDocumentStore,
+} from '../../composables/useNoteDocumentStore';
 import { useNoteSaveController } from '../../composables/useNoteSaveController';
 import { FILE_CHANGED_EXTERNALLY } from '../../utils/error-codes';
 
@@ -1550,6 +1553,7 @@ async function openFile(path: string, initialContent?: string) {
   try {
     await ensureParentDirectoriesLoaded(path);
     if (requestSequence !== openFileSequence) return;
+    documentStore.beginLoading(path);
     if (!openTabs.value.includes(path)) openTabs.value = [...openTabs.value, path];
     selectedPath.value = path;
     syncWorkspacePaneTabs();
@@ -1560,7 +1564,6 @@ async function openFile(path: string, initialContent?: string) {
       documentStore.finishLoading(path, initialContent, mtime);
       if (requestSequence !== openFileSequence) return;
     } else if (cached) {
-      documentStore.beginLoading(path);
       // 从缓存恢复时仍从磁盘获取最新 mtime 用于冲突检测
       try {
         documentStore.finishLoading(path, cached, await invoke<string>('get_note_mtime', { path }));
@@ -1590,6 +1593,7 @@ async function openFile(path: string, initialContent?: string) {
     rememberNotePath(path);
     saveNoteSession();
   } catch (e) {
+    documentStore.failLoading(path);
     diagnosticsLogger.error('notes', 'notes.read_file_failed', '读取文件失败', e, {
       path: selectedPath.value,
     });
@@ -1704,7 +1708,7 @@ function clearPendingSave(path = selectedPath.value) {
 watch(content, (val) => {
   if (selectedPath.value) {
     const document = documentStore.ensure(selectedPath.value);
-    if (document.revision === document.hydratedRevision) return;
+    if (!shouldScheduleNoteSave(document)) return;
   }
   if (selectedPath.value) {
     noteContentCache.set(selectedPath.value, val);
@@ -1784,7 +1788,7 @@ watch(secondaryContent, (val) => {
   if (secondaryLoading.value || !secondaryActiveTab.value) return;
   if (selectedPath.value === secondaryActiveTab.value) return;
   const document = documentStore.ensure(secondaryActiveTab.value);
-  if (document.revision === document.hydratedRevision) return;
+  if (!shouldScheduleNoteSave(document)) return;
   noteContentCache.set(secondaryActiveTab.value, val);
   const savePath = secondaryActiveTab.value;
   const expectedMtime = secondaryFileMtime.value;

@@ -9,6 +9,15 @@ export interface NoteDocumentState {
   hydratedRevision: number;
 }
 
+/** 只有完成加载且发生过用户修改的文档才允许进入自动保存流程。 */
+export function shouldScheduleNoteSave(document: NoteDocumentState): boolean {
+  return (
+    !document.loading &&
+    document.hydratedRevision >= 0 &&
+    document.revision !== document.hydratedRevision
+  );
+}
+
 /**
  * 维护笔记文件的唯一运行时状态。
  * 主编辑器、分栏编辑器以及任务投影都通过路径访问同一份文档对象。

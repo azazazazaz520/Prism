@@ -9,7 +9,7 @@
  *
  * 侧边栏宽度、目录展开状态通过 localStorage 持久化。
  */
-import { ref, watch, computed, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, watch, computed, onMounted, onUnmounted, nextTick, defineAsyncComponent } from 'vue';
 import { invokeWithDiagnostics as invoke } from '../../diagnostics/invoke-logged';
 import { diagnosticsLogger } from '../../diagnostics/invoke-logged';
 import { open, save } from '@tauri-apps/plugin-dialog';
@@ -26,7 +26,6 @@ import { getMenuRegistrations, type EditorSelection } from '../../plugin-api/men
 import InputDialog from '../overlays/InputDialog.vue';
 import ConfirmDialog from '../overlays/ConfirmDialog.vue';
 import TreeNode from './TreeNode.vue';
-import MarkdownEditor from './MarkdownEditor.vue';
 import TaskPicker from '../tasks/TaskPicker.vue';
 import NoteQuickSwitcher from './NoteQuickSwitcher.vue';
 import { useContextMenu } from '../../composables/useContextMenu';
@@ -41,7 +40,22 @@ import {
 } from '../../notes/task-references';
 import { useNoteTaskSync } from '../../composables/useNoteTaskSync';
 import { useNoteDocumentStore } from '../../composables/useNoteDocumentStore';
+import { useNoteSaveController } from '../../composables/useNoteSaveController';
 import { FILE_CHANGED_EXTERNALLY } from '../../utils/error-codes';
+
+interface MarkdownEditorApi {
+  wrapSelection: (before: string, after: string) => void;
+  insertText: (text: string) => void;
+  prependToLine: (text: string) => void;
+  getSelection: () => string;
+  replaceSelection: (text: string) => void;
+  focus: () => void;
+}
+
+const MarkdownEditor = defineAsyncComponent({
+  loader: () => import('./MarkdownEditor.vue'),
+  suspensible: false,
+});
 
 const props = withDefaults(defineProps<{ active?: boolean }>(), { active: true });
 
@@ -87,6 +101,7 @@ const recentNotePaths = ref<string[]>([]);
 
 /** 当前打开文件读取时的版本标识，用于外部变更检测 */
 const documentStore = useNoteDocumentStore();
+const noteSaveController = useNoteSaveController();
 const content = computed({
   get: () => (selectedPath.value ? documentStore.ensure(selectedPath.value).content : ''),
   set: (value: string) => {
@@ -118,7 +133,7 @@ let taskSyncTimer: ReturnType<typeof setTimeout> | null = null;
 let taskSnapshot = new Map<string, { title: string; completed: boolean }>();
 let focusTitleAfterOpen = false;
 
-const textareaRef = ref<InstanceType<typeof MarkdownEditor> | null>(null);
+const textareaRef = ref<MarkdownEditorApi | null>(null);
 
 /** 侧边栏宽度 */
 const treeWidth = ref(DEFAULT_SIDEBAR_WIDTH);
@@ -1681,15 +1696,9 @@ async function closeTab(path: string) {
 
 // ═══ 自动保存（500ms 防抖） ═══
 
-const noteSaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
-const noteSaveVersions = new Map<string, number>();
-
 function clearPendingSave(path = selectedPath.value) {
   if (!path) return;
-  const timer = noteSaveTimers.get(path);
-  if (timer) clearTimeout(timer);
-  noteSaveTimers.delete(path);
-  noteSaveVersions.set(path, (noteSaveVersions.get(path) ?? 0) + 1);
+  noteSaveController.cancel(path);
 }
 
 watch(content, (val) => {
@@ -1705,13 +1714,36 @@ watch(content, (val) => {
   if (!selectedPath.value) return;
   const savePath = selectedPath.value;
   if (!savePath) return;
-  clearPendingSave(savePath);
-  const expectedMtime = currentFileMtime.value;
-  const version = (noteSaveVersions.get(savePath) ?? 0) + 1;
-  noteSaveVersions.set(savePath, version);
-  const timer = setTimeout(async () => {
-    if (noteSaveVersions.get(savePath) !== version) return;
-    noteSaveTimers.delete(savePath);
+  noteSaveController.schedule(
+    savePath,
+    { content: val, expectedMtime: currentFileMtime.value },
+    async (snapshot) => {
+      saving.value = true;
+      return invoke<string>('write_note', {
+        path: savePath,
+        content: snapshot.content,
+        expectedMtime: snapshot.expectedMtime,
+      });
+    },
+    (writtenMtime) => {
+      noteContentCache.set(savePath, val);
+      setNoteContent(savePath, val);
+      documentStore.markSaved(savePath, writtenMtime);
+      saving.value = false;
+    },
+    async (e) => {
+      const message = e instanceof Error ? e.message : String(e);
+      if (message.startsWith(FILE_CHANGED_EXTERNALLY)) {
+        await reloadFromDisk(savePath);
+      } else {
+        diagnosticsLogger.error('notes', 'notes.save_failed', '淇濆瓨绗旇澶辫触', e, {
+          path: savePath,
+        });
+      }
+      saving.value = false;
+    },
+  );
+  /*
     saving.value = true;
     try {
       const writtenMtime = await invoke<string>('write_note', {
@@ -1743,6 +1775,7 @@ watch(content, (val) => {
     }
   }, 500);
   noteSaveTimers.set(savePath, timer);
+  */
 });
 
 // ═══ 自定义对话框 ═══
@@ -1754,11 +1787,24 @@ watch(secondaryContent, (val) => {
   if (document.revision === document.hydratedRevision) return;
   noteContentCache.set(secondaryActiveTab.value, val);
   const savePath = secondaryActiveTab.value;
-  clearPendingSave(savePath);
   const expectedMtime = secondaryFileMtime.value;
-  const version = (noteSaveVersions.get(savePath) ?? 0) + 1;
-  noteSaveVersions.set(savePath, version);
-  const timer = setTimeout(async () => {
+  noteSaveController.schedule(
+    savePath,
+    { content: val, expectedMtime },
+    (snapshot) =>
+      invoke<string>('write_note', {
+        path: savePath,
+        content: snapshot.content,
+        expectedMtime: snapshot.expectedMtime,
+      }),
+    (writtenMtime) => {
+      noteContentCache.set(savePath, val);
+      setNoteContent(savePath, val);
+      documentStore.markSaved(savePath, writtenMtime);
+    },
+    () => showStatus('鍒嗘爮绗旇淇濆瓨澶辫触'),
+  );
+  /* const timer = setTimeout(async () => {
     if (noteSaveVersions.get(savePath) !== version) return;
     noteSaveTimers.delete(savePath);
     try {
@@ -1777,7 +1823,7 @@ watch(secondaryContent, (val) => {
       showStatus('分栏笔记保存失败');
     }
   }, 500);
-  noteSaveTimers.set(savePath, timer);
+  noteSaveTimers.set(savePath, timer); */
 });
 
 function showDialog(
@@ -2327,6 +2373,7 @@ onUnmounted(() => {
   splitDropPreview.value = false;
   tabDropIndicator.value = null;
   if (taskSyncTimer) clearTimeout(taskSyncTimer);
+  noteSaveController.dispose();
   if (fileTreeDebounceTimer) clearTimeout(fileTreeDebounceTimer);
   if (unlistenFileWatcher) unlistenFileWatcher();
   window.removeEventListener('resize', constrainOnResize);

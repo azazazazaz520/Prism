@@ -23,12 +23,17 @@ function loadOfflineQueue(): OfflineQueueItem[] {
 }
 
 function persistOfflineQueue(queue: OfflineQueueItem[]) {
-  localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
   offlineQueueCount.value = queue.length;
+  if (offlinePersistTimer) return;
+  offlinePersistTimer = setTimeout(() => {
+    offlinePersistTimer = null;
+    localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(offlineQueue));
+  }, 100);
 }
 
 const offlineQueue: OfflineQueueItem[] = loadOfflineQueue();
 const offlineQueueCount = ref(offlineQueue.length);
+let offlinePersistTimer: ReturnType<typeof setTimeout> | null = null;
 /** 同步状态指示器 */
 const isOnline = ref(navigator.onLine);
 /** 同步状态：启动时根据实际网络状态初始化，避免离线启动显示"已同步" */

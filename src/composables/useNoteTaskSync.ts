@@ -1,8 +1,9 @@
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 import { invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
 import type { FileEntry, Task } from '../types';
 import {
   buildTaskReferenceIndex,
+  parseTaskReferences,
   removeTaskReference,
   referencesForTask,
   updateTaskReferences,
@@ -28,9 +29,32 @@ function noteFiles(entries: FileEntry[]): string[] {
 
 /** 本地 Markdown 笔记的任务引用索引与投影服务。 */
 export function useNoteTaskSync() {
-  const referenceIndex = computed<TaskReferenceIndex>(() =>
-    buildTaskReferenceIndex(noteContents.value),
-  );
+  const referenceIndex = ref<TaskReferenceIndex>({
+    byTaskId: new Map(),
+    byNotePath: new Map(),
+  });
+
+  function replaceIndexNote(path: string, content: string | null) {
+    const byTaskId = new Map(referenceIndex.value.byTaskId);
+    const byNotePath = new Map(referenceIndex.value.byNotePath);
+    for (const reference of byNotePath.get(path) ?? []) {
+      const next = (byTaskId.get(reference.taskId) ?? []).filter(
+        (item) => item.notePath !== path || item.line !== reference.line,
+      );
+      if (next.length > 0) byTaskId.set(reference.taskId, next);
+      else byTaskId.delete(reference.taskId);
+    }
+
+    if (content === null) byNotePath.delete(path);
+    else {
+      const references = parseTaskReferences(content, path);
+      byNotePath.set(path, references);
+      for (const reference of references) {
+        byTaskId.set(reference.taskId, [...(byTaskId.get(reference.taskId) ?? []), reference]);
+      }
+    }
+    referenceIndex.value = { byTaskId, byNotePath };
+  }
 
   async function refreshIndex(tree?: FileEntry[]) {
     isIndexing.value = true;
@@ -58,6 +82,7 @@ export function useNoteTaskSync() {
         if ((noteRevisions.get(path) ?? 0) === revision) nextContents[path] = content;
       }
       noteContents.value = nextContents;
+      referenceIndex.value = buildTaskReferenceIndex(nextContents);
     } catch (error) {
       indexError.value = error instanceof Error ? error.message : String(error);
     } finally {
@@ -68,6 +93,7 @@ export function useNoteTaskSync() {
   function setNoteContent(path: string, content: string) {
     noteRevisions.set(path, (noteRevisions.get(path) ?? 0) + 1);
     noteContents.value = { ...noteContents.value, [path]: content };
+    replaceIndexNote(path, content);
   }
 
   /** 增量刷新单篇笔记，供文件监听器维护任务引用索引。 */
@@ -83,6 +109,7 @@ export function useNoteTaskSync() {
 
   function resetNotes() {
     noteContents.value = {};
+    referenceIndex.value = { byTaskId: new Map(), byNotePath: new Map() };
   }
 
   /** 使用文件版本校验写入任务引用，避免覆盖外部编辑。 */
@@ -106,6 +133,7 @@ export function useNoteTaskSync() {
     const next = { ...noteContents.value };
     delete next[path];
     noteContents.value = next;
+    replaceIndexNote(path, null);
   }
 
   function removeNotesUnderPath(path: string) {
@@ -114,6 +142,7 @@ export function useNoteTaskSync() {
       if (notePath === path || notePath.startsWith(`${path}/`)) delete next[notePath];
     }
     noteContents.value = next;
+    referenceIndex.value = buildTaskReferenceIndex(next);
   }
 
   function renameNote(oldPath: string, newPath: string) {
@@ -122,6 +151,8 @@ export function useNoteTaskSync() {
     const next = { ...noteContents.value, [newPath]: content };
     delete next[oldPath];
     noteContents.value = next;
+    replaceIndexNote(oldPath, null);
+    replaceIndexNote(newPath, content);
   }
 
   async function projectTask(task: Pick<Task, 'id' | 'title' | 'completed'>) {

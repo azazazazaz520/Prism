@@ -255,97 +255,114 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   </svg>
   <div :class="['app-layout', { 'tasks-layout': activeModule === 'tasks' && !isPluginPageActive }]">
     <!-- 工作区导航轨：笔记与任务优先，辅助功能分组放置 -->
-    <nav class="icon-rail">
-      <button
-        type="button"
-        v-if="isEnabled('notes')"
-        :class="['rail-btn', { active: activeModule === 'notes' }]"
-        data-tooltip="笔记工作区"
-        aria-label="笔记工作区"
-        :aria-current="activeModule === 'notes' ? 'page' : undefined"
-        @click="handleSwitchModule('notes')"
-      >
-        <svg viewBox="0 0 24 24">
-          <path d="M6 3.5h8l4 4V20a.5.5 0 0 1-.5.5h-11A.5.5 0 0 1 6 20z" />
-          <path d="M14 3.5v4h4M9 12h6M9 16h5" />
-        </svg>
-      </button>
-      <button
-        type="button"
-        v-if="isEnabled('tasks')"
-        :class="['rail-btn', { active: activeModule === 'tasks' }]"
-        data-tooltip="任务"
-        aria-label="任务"
-        :aria-current="activeModule === 'tasks' ? 'page' : undefined"
-        @click="handleSwitchModule('tasks')"
-      >
-        <svg viewBox="0 0 24 24">
-          <rect x="4" y="4" width="16" height="16" rx="2" />
-          <path d="m8 9 1.5 1.5L12 8M14 9h3M8 15l1.5 1.5L12 14M14 15h3" />
-        </svg>
-      </button>
+    <nav class="icon-rail" aria-label="工作区导航">
+      <div class="rail-section" role="group" aria-label="核心工作区">
+        <button
+          type="button"
+          v-if="isEnabled('notes')"
+          :class="['rail-btn', { active: activeModule === 'notes' }]"
+          data-tooltip="笔记工作区"
+          title="笔记工作区"
+          aria-label="笔记工作区"
+          :aria-current="activeModule === 'notes' ? 'page' : undefined"
+          @click="handleSwitchModule('notes')"
+        >
+          <svg viewBox="0 0 24 24">
+            <path d="M6 3.5h8l4 4V20a.5.5 0 0 1-.5.5h-11A.5.5 0 0 1 6 20z" />
+            <path d="M14 3.5v4h4M9 12h6M9 16h5" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          v-if="isEnabled('tasks')"
+          :class="['rail-btn', { active: activeModule === 'tasks' }]"
+          data-tooltip="任务"
+          title="任务"
+          aria-label="任务"
+          :aria-current="activeModule === 'tasks' ? 'page' : undefined"
+          @click="handleSwitchModule('tasks')"
+        >
+          <svg viewBox="0 0 24 24">
+            <rect x="4" y="4" width="16" height="16" rx="2" />
+            <path d="m8 9 1.5 1.5L12 8M14 9h3M8 15l1.5 1.5L12 14M14 15h3" />
+          </svg>
+        </button>
+      </div>
 
       <div class="rail-divider" aria-hidden="true"></div>
 
-      <button
-        type="button"
-        v-if="isEnabled('ai-assistant')"
-        :class="['rail-btn', { active: activeModule === 'ai-assistant' }]"
-        data-tooltip="AI 助手"
-        aria-label="AI 助手"
-        :aria-current="activeModule === 'ai-assistant' ? 'page' : undefined"
-        @click="handleSwitchModule('ai-assistant')"
-      >
-        <svg viewBox="0 0 24 24">
-          <path d="M12 2l2.5 5.5L20 10l-5.5 2.5L12 18l-2.5-5.5L4 10l5.5-2.5z" />
-        </svg>
-      </button>
-      <button
-        type="button"
-        v-if="isEnabled('devtools')"
-        :class="['rail-btn', { active: activeModule === 'devtools' }]"
-        data-tooltip="工具箱"
-        aria-label="工具箱"
-        :aria-current="activeModule === 'devtools' ? 'page' : undefined"
-        @click="handleSwitchModule('devtools')"
-      >
-        <svg viewBox="0 0 24 24">
-          <path
-            d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
-          />
-        </svg>
-      </button>
-      <button
-        type="button"
-        v-if="isEnabled('floating')"
-        class="rail-btn"
-        data-tooltip="悬浮窗"
-        aria-label="打开悬浮窗"
-        @click="handleSwitchModule('floating')"
-      >
-        <svg viewBox="0 0 24 24">
-          <rect x="4" y="4" width="16" height="16" rx="2" />
-          <rect x="8" y="8" width="8" height="8" rx="1" />
-        </svg>
-      </button>
+      <div class="rail-section" role="group" aria-label="辅助工作区">
+        <button
+          type="button"
+          v-if="isEnabled('ai-assistant')"
+          :class="['rail-btn', { active: activeModule === 'ai-assistant' }]"
+          data-tooltip="AI 助手"
+          title="AI 助手"
+          aria-label="AI 助手"
+          :aria-current="activeModule === 'ai-assistant' ? 'page' : undefined"
+          @click="handleSwitchModule('ai-assistant')"
+        >
+          <svg viewBox="0 0 24 24">
+            <path d="M12 2l2.5 5.5L20 10l-5.5 2.5L12 18l-2.5-5.5L4 10l5.5-2.5z" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          v-if="isEnabled('devtools')"
+          :class="['rail-btn', { active: activeModule === 'devtools' }]"
+          data-tooltip="工具箱"
+          title="工具箱"
+          aria-label="工具箱"
+          :aria-current="activeModule === 'devtools' ? 'page' : undefined"
+          @click="handleSwitchModule('devtools')"
+        >
+          <svg viewBox="0 0 24 24">
+            <path
+              d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
+            />
+          </svg>
+        </button>
+      </div>
+
+      <div class="rail-section" role="group" aria-label="系统动作">
+        <button
+          type="button"
+          v-if="isEnabled('floating')"
+          class="rail-btn"
+          data-tooltip="悬浮窗"
+          title="打开悬浮窗"
+          aria-label="打开悬浮窗"
+          @click="handleSwitchModule('floating')"
+        >
+          <svg viewBox="0 0 24 24">
+            <rect x="4" y="4" width="16" height="16" rx="2" />
+            <rect x="8" y="8" width="8" height="8" rx="1" />
+          </svg>
+        </button>
+      </div>
       <div class="rail-spacer"></div>
-      <!-- 插件图标轨按钮 -->
-      <PluginViewHost location="rail" />
-      <button
-        type="button"
-        :class="['rail-btn', { active: activeModule === 'settings' }]"
-        data-tooltip="设置"
-        aria-label="设置"
-        :aria-current="activeModule === 'settings' ? 'page' : undefined"
-        @click="handleSwitchModule('settings')"
-      >
-        <svg viewBox="0 0 24 24">
-          <circle cx="12" cy="12" r="3" />
-          <path
-            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
-          />
-        </svg>
-      </button>
+      <div class="rail-section rail-section-extensions" role="group" aria-label="插件扩展">
+        <PluginViewHost location="rail" />
+      </div>
+      <div class="rail-divider" aria-hidden="true"></div>
+      <div class="rail-section" role="group" aria-label="系统设置">
+        <button
+          type="button"
+          :class="['rail-btn', { active: activeModule === 'settings' }]"
+          data-tooltip="设置"
+          title="设置"
+          aria-label="设置"
+          :aria-current="activeModule === 'settings' ? 'page' : undefined"
+          @click="handleSwitchModule('settings')"
+        >
+          <svg viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="3" />
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+            />
+          </svg>
+        </button>
+      </div>
     </nav>
 
     <!-- Sidebar: 任务搜索与入口 -->
@@ -557,6 +574,18 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   gap: 4px;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border-subtle);
+}
+
+.rail-section {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.rail-section-extensions:empty {
+  display: none;
 }
 
 [data-theme='hud'] .icon-rail {

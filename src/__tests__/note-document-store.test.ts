@@ -18,4 +18,23 @@ describe('笔记文档保存门禁', () => {
     store.updateContent('notes/example.md', '# 用户修改');
     expect(shouldScheduleNoteSave(document)).toBe(true);
   });
+
+  it('外部冲突同时保留本地内容与磁盘内容', () => {
+    const store = useNoteDocumentStore();
+    store.finishLoading('notes/example.md', '本地初始内容', 'mtime-1');
+    store.updateContent('notes/example.md', '本地编辑内容');
+
+    store.setConflict('notes/example.md', '磁盘新内容', 'mtime-2');
+    const document = store.ensure('notes/example.md');
+    expect(document.conflict).toEqual({
+      localContent: '本地编辑内容',
+      diskContent: '磁盘新内容',
+      diskMtime: 'mtime-2',
+    });
+    expect(document.content).toBe('本地编辑内容');
+
+    store.acceptConflictForOverwrite('notes/example.md');
+    expect(store.ensure('notes/example.md').mtime).toBe('mtime-2');
+    expect(store.ensure('notes/example.md').content).toBe('本地编辑内容');
+  });
 });

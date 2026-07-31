@@ -24,6 +24,7 @@ import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
 import { bracketMatching } from '@codemirror/language';
 import { oneDarkTheme } from '@codemirror/theme-one-dark';
+import { replaceEditorDocument } from './editor-document-sync';
 
 // ── Props & Emits ──────────────────────────
 
@@ -589,10 +590,7 @@ watch(
     }
     const current = view.state.doc.toString();
     if (newVal !== current) {
-      view.dispatch({
-        changes: { from: 0, to: current.length, insert: newVal },
-        effects: historyComp.reconfigure(history()),
-      });
+      replaceEditorDocument(view, historyComp, newVal);
     }
     lastEmittedValue = null;
   },

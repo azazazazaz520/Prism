@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
@@ -241,9 +242,57 @@ pub fn write_note_content(
     if let Some(parent) = full.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("创建父目录失败: {}", e))?;
     }
-    fs::write(&full, content).map_err(|e| format!("写入失败: {}", e))?;
+    let file_name = full
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| "写入失败：文件名无效".to_string())?;
+    let temporary =
+        full.with_file_name(format!(".{}.prism-{}.tmp", file_name, uuid::Uuid::new_v4()));
+
+    let write_result = (|| -> Result<(), String> {
+        let mut file =
+            fs::File::create(&temporary).map_err(|e| format!("创建临时文件失败: {}", e))?;
+        file.write_all(content.as_bytes())
+            .map_err(|e| format!("写入临时文件失败: {}", e))?;
+        file.sync_all()
+            .map_err(|e| format!("刷新临时文件失败: {}", e))?;
+        replace_note_file(&temporary, &full)
+    })();
+
+    if write_result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    write_result?;
     let metadata = fs::metadata(&full).map_err(|e| format!("读取写入后文件元信息失败: {}", e))?;
     file_mtime(&metadata)
+}
+
+fn replace_note_file(temporary: &Path, target: &Path) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        use windows::core::PCWSTR;
+        use windows::Win32::Storage::FileSystem::{
+            MoveFileExW, MOVEFILE_COPY_ALLOWED, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+        };
+
+        let temporary: Vec<u16> = temporary.as_os_str().encode_wide().chain(Some(0)).collect();
+        let target: Vec<u16> = target.as_os_str().encode_wide().chain(Some(0)).collect();
+        unsafe {
+            MoveFileExW(
+                PCWSTR(temporary.as_ptr()),
+                PCWSTR(target.as_ptr()),
+                MOVEFILE_COPY_ALLOWED | MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+            )
+        }
+        .map_err(|e| format!("替换笔记文件失败: {}", e))?;
+        Ok(())
+    }
+
+    #[cfg(not(windows))]
+    {
+        fs::rename(temporary, target).map_err(|e| format!("替换笔记文件失败: {}", e))
+    }
 }
 
 /// 创建文件夹
@@ -362,6 +411,32 @@ mod tests {
         let json = serde_json::to_string(&entry).unwrap();
         assert!(json.contains("inbox"));
         assert!(json.contains("children"));
+    }
+
+    #[test]
+    fn test_write_note_content_replaces_target_without_leaving_temporary_file() {
+        let tmp = std::env::temp_dir().join(format!("prism-test-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&tmp).unwrap();
+
+        assert!(write_note_content(&tmp, "example.md", "第一版", None).is_ok());
+        assert_eq!(
+            fs::read_to_string(tmp.join("example.md")).unwrap(),
+            "第一版"
+        );
+
+        assert!(write_note_content(&tmp, "example.md", "第二版", None).is_ok());
+        assert_eq!(
+            fs::read_to_string(tmp.join("example.md")).unwrap(),
+            "第二版"
+        );
+        let temporary_files = fs::read_dir(&tmp)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().contains(".prism-"))
+            .count();
+        assert_eq!(temporary_files, 0);
+
+        fs::remove_dir_all(&tmp).ok();
     }
 
     #[test]

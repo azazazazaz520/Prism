@@ -1110,27 +1110,11 @@ function showContextMenu(event: MouseEvent) {
 /** Ctrl+S 手动保存 */
 async function handleManualSave() {
   if (!selectedPath.value) return;
-  saving.value = true;
-  try {
-    const writtenMtime = await invoke<string>('write_note', {
-      path: selectedPath.value,
-      content: content.value,
-      expectedMtime: currentFileMtime.value,
-    });
-    documentStore.markSaved(selectedPath.value, writtenMtime);
-  } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    if (message.startsWith(FILE_CHANGED_EXTERNALLY)) {
-      // 文件在外部被修改，静默加载外部最新版本
-      await reloadFromDisk();
-    } else {
-      diagnosticsLogger.error('notes', 'notes.save_failed', '保存笔记失败', e, {
-        path: selectedPath.value,
-      });
-    }
-  } finally {
-    saving.value = false;
-  }
+  await queueNoteSave(
+    selectedPath.value,
+    { content: content.value, expectedMtime: currentFileMtime.value },
+    true,
+  );
 }
 
 // ═══ 外部文件变更处理 ═══
@@ -1199,13 +1183,42 @@ async function reloadFromDisk(path = selectedPath.value) {
   }
 }
 
+async function presentNoteConflict(path: string) {
+  const document = documentStore.ensure(path);
+  if (document.conflict || conflictPath.value === path) return;
+
+  try {
+    const meta = await invoke<{ content: string; mtime: string }>('read_note_meta', { path });
+    if (!document.dirty) {
+      await reloadFromDisk(path);
+      return;
+    }
+
+    noteSaveController.cancel(path);
+    documentStore.setConflict(path, meta.content, meta.mtime);
+    conflictPath.value = path;
+    confirmTitle.value = '文件已在外部修改';
+    confirmMessage.value =
+      '磁盘中的内容已经发生变化。请选择加载磁盘版本，或保留当前编辑内容并覆盖磁盘版本。';
+    confirmActionText.value = '加载磁盘版本';
+    confirmCancelText.value = '保留本地内容';
+    confirmDanger.value = false;
+    confirmVisible.value = true;
+  } catch (error) {
+    diagnosticsLogger.error('notes', 'notes.conflict_read_failed', '读取外部修改失败', error, {
+      path,
+    });
+  }
+}
+
 /** 检查当前文件是否被外部修改，若变化则自动加载最新版本 */
 async function checkExternalModification() {
   if (!selectedPath.value) return;
   try {
     const diskMtime = await invoke<string>('get_note_mtime', { path: selectedPath.value });
     if (currentFileMtime.value && diskMtime !== currentFileMtime.value) {
-      await reloadFromDisk();
+      if (isDirty.value) await presentNoteConflict(selectedPath.value);
+      else await reloadFromDisk();
     }
   } catch {
     // 文件可能被删除等，静默处理
@@ -1227,7 +1240,9 @@ const confirmVisible = ref(false);
 const confirmTitle = ref('');
 const confirmMessage = ref('');
 const confirmActionText = ref('删除');
+const confirmCancelText = ref('取消');
 const confirmDanger = ref(true);
+const conflictPath = ref<string | null>(null);
 let confirmCallback: (() => void) | null = null;
 
 function showConfirm(
@@ -1247,6 +1262,19 @@ function showConfirm(
 }
 
 function handleConfirmOk() {
+  if (conflictPath.value) {
+    const path = conflictPath.value;
+    const conflict = documentStore.ensure(path).conflict;
+    confirmVisible.value = false;
+    conflictPath.value = null;
+    confirmCancelText.value = '取消';
+    if (conflict) {
+      documentStore.finishLoading(path, conflict.diskContent, conflict.diskMtime);
+      noteContentCache.set(path, conflict.diskContent);
+      setNoteContent(path, conflict.diskContent);
+    }
+    return;
+  }
   confirmVisible.value = false;
   if (confirmCallback) {
     confirmCallback();
@@ -1255,6 +1283,23 @@ function handleConfirmOk() {
 }
 
 function handleConfirmCancel() {
+  if (conflictPath.value) {
+    const path = conflictPath.value;
+    const conflict = documentStore.ensure(path).conflict;
+    confirmVisible.value = false;
+    conflictPath.value = null;
+    confirmCancelText.value = '取消';
+    if (conflict) {
+      documentStore.acceptConflictForOverwrite(path);
+      const document = documentStore.ensure(path);
+      queueNoteSave(
+        path,
+        { content: document.content, expectedMtime: conflict.diskMtime },
+        true,
+      ).catch(() => undefined);
+    }
+    return;
+  }
   confirmVisible.value = false;
   confirmCallback = null;
 }
@@ -1705,6 +1750,40 @@ function clearPendingSave(path = selectedPath.value) {
   noteSaveController.cancel(path);
 }
 
+function queueNoteSave(
+  path: string,
+  snapshot: { content: string; expectedMtime: string | null },
+  flushNow = false,
+) {
+  saving.value = true;
+  noteSaveController.schedule(
+    path,
+    snapshot,
+    (nextSnapshot) =>
+      invoke<string>('write_note', {
+        path,
+        content: nextSnapshot.content,
+        expectedMtime: nextSnapshot.expectedMtime,
+      }),
+    (writtenMtime, savedSnapshot) => {
+      noteContentCache.set(path, savedSnapshot.content);
+      setNoteContent(path, savedSnapshot.content);
+      documentStore.markSaved(path, writtenMtime);
+      saving.value = false;
+    },
+    async (error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.startsWith(FILE_CHANGED_EXTERNALLY)) {
+        await presentNoteConflict(path);
+      } else {
+        diagnosticsLogger.error('notes', 'notes.save_failed', '保存笔记失败', error, { path });
+      }
+      saving.value = false;
+    },
+  );
+  return flushNow ? noteSaveController.flush(path) : Promise.resolve();
+}
+
 watch(content, (val) => {
   if (selectedPath.value) {
     const document = documentStore.ensure(selectedPath.value);
@@ -1718,35 +1797,7 @@ watch(content, (val) => {
   if (!selectedPath.value) return;
   const savePath = selectedPath.value;
   if (!savePath) return;
-  noteSaveController.schedule(
-    savePath,
-    { content: val, expectedMtime: currentFileMtime.value },
-    async (snapshot) => {
-      saving.value = true;
-      return invoke<string>('write_note', {
-        path: savePath,
-        content: snapshot.content,
-        expectedMtime: snapshot.expectedMtime,
-      });
-    },
-    (writtenMtime) => {
-      noteContentCache.set(savePath, val);
-      setNoteContent(savePath, val);
-      documentStore.markSaved(savePath, writtenMtime);
-      saving.value = false;
-    },
-    async (e) => {
-      const message = e instanceof Error ? e.message : String(e);
-      if (message.startsWith(FILE_CHANGED_EXTERNALLY)) {
-        await reloadFromDisk(savePath);
-      } else {
-        diagnosticsLogger.error('notes', 'notes.save_failed', '淇濆瓨绗旇澶辫触', e, {
-          path: savePath,
-        });
-      }
-      saving.value = false;
-    },
-  );
+  queueNoteSave(savePath, { content: val, expectedMtime: currentFileMtime.value });
   /*
     saving.value = true;
     try {
@@ -1801,12 +1852,19 @@ watch(secondaryContent, (val) => {
         content: snapshot.content,
         expectedMtime: snapshot.expectedMtime,
       }),
-    (writtenMtime) => {
-      noteContentCache.set(savePath, val);
-      setNoteContent(savePath, val);
+    (writtenMtime, savedSnapshot) => {
+      noteContentCache.set(savePath, savedSnapshot.content);
+      setNoteContent(savePath, savedSnapshot.content);
       documentStore.markSaved(savePath, writtenMtime);
     },
-    () => showStatus('鍒嗘爮绗旇淇濆瓨澶辫触'),
+    async (error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.startsWith(FILE_CHANGED_EXTERNALLY)) {
+        await presentNoteConflict(savePath);
+      } else {
+        showStatus('分栏笔记保存失败');
+      }
+    },
   );
   /* const timer = setTimeout(async () => {
     if (noteSaveVersions.get(savePath) !== version) return;
@@ -2311,8 +2369,8 @@ function handleFileChangeEvent(event: { kind: string; path: string }) {
     case 'modify':
       // 文件内容被外部修改 → 仅当不是当前正在编辑的文件时更新
       if (event.path === selectedPath.value) {
-        if (!isDirty.value) reloadFromDisk();
-        // 有未保存修改时，交由保存时的 mtime 校验处理冲突
+        if (!isDirty.value) void reloadFromDisk();
+        else void presentNoteConflict(event.path);
       } else {
         // 更新缓存中的旧版本
         noteContentCache.delete(event.path);
@@ -3234,7 +3292,7 @@ onUnmounted(() => {
       :title="confirmTitle"
       :message="confirmMessage"
       :confirm-text="confirmActionText"
-      cancel-text="取消"
+      :cancel-text="confirmCancelText"
       :danger="confirmDanger"
       @confirm="handleConfirmOk"
       @cancel="handleConfirmCancel"

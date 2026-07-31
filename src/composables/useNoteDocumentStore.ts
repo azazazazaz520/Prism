@@ -1,5 +1,11 @@
 import { reactive } from 'vue';
 
+export interface NoteConflict {
+  localContent: string;
+  diskContent: string;
+  diskMtime: string | null;
+}
+
 export interface NoteDocumentState {
   content: string;
   mtime: string | null;
@@ -7,6 +13,7 @@ export interface NoteDocumentState {
   loading: boolean;
   revision: number;
   hydratedRevision: number;
+  conflict: NoteConflict | null;
 }
 
 /** 只有完成加载且发生过用户修改的文档才允许进入自动保存流程。 */
@@ -36,6 +43,7 @@ export function useNoteDocumentStore() {
       loading: false,
       revision: 0,
       hydratedRevision: -1,
+      conflict: null,
     };
     documents.set(path, document);
     return document;
@@ -50,6 +58,7 @@ export function useNoteDocumentStore() {
     document.content = content;
     document.mtime = mtime;
     document.dirty = false;
+    document.conflict = null;
     queueMicrotask(() => {
       document.loading = false;
     });
@@ -73,6 +82,26 @@ export function useNoteDocumentStore() {
     const document = ensure(path);
     document.mtime = mtime;
     document.dirty = false;
+    document.conflict = null;
+  }
+
+  function setConflict(path: string, diskContent: string, diskMtime: string | null) {
+    const document = ensure(path);
+    document.conflict = {
+      localContent: document.content,
+      diskContent,
+      diskMtime,
+    };
+  }
+
+  function clearConflict(path: string) {
+    ensure(path).conflict = null;
+  }
+
+  function acceptConflictForOverwrite(path: string) {
+    const document = ensure(path);
+    if (document.conflict) document.mtime = document.conflict.diskMtime;
+    document.conflict = null;
   }
 
   function markDirty(path: string) {
@@ -95,6 +124,9 @@ export function useNoteDocumentStore() {
     failLoading,
     updateContent,
     markSaved,
+    setConflict,
+    clearConflict,
+    acceptConflictForOverwrite,
     markDirty,
     clear,
     clearAll,

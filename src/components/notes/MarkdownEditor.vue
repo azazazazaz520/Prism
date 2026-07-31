@@ -80,7 +80,10 @@ const customTheme = EditorView.theme({
     backgroundColor: 'var(--bg-primary)',
     border: 'none',
     outline: 'none',
-    height: 'auto',
+    width: '100%',
+    height: '100%',
+    minWidth: '0',
+    minHeight: '0',
   },
   '&.cm-focused': {
     outline: 'none',
@@ -95,11 +98,13 @@ const customTheme = EditorView.theme({
   '.cm-scroller': {
     fontFamily: 'inherit',
     lineHeight: 'inherit',
-    overflowY: 'visible',
+    overflowY: 'auto',
     overflowX: 'hidden',
     width: '100%',
-    display: 'flex',
-    justifyContent: 'center',
+    height: '100%',
+    minWidth: '0',
+    minHeight: '0',
+    display: 'block',
   },
   '.cm-content': {
     width: 'min(100%, 820px)',
@@ -108,7 +113,7 @@ const customTheme = EditorView.theme({
     padding: '28px 32px 120px',
     fontFamily: 'inherit',
     caretColor: 'var(--accent)',
-    margin: '0',
+    margin: '0 auto',
     whiteSpace: 'pre-wrap',
     overflowWrap: 'anywhere',
   },
@@ -714,7 +719,11 @@ defineExpose({
 
 <style scoped>
 .codemirror-wrapper {
-  flex: 1;
+  display: flex;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
 }
 

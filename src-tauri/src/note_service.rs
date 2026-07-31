@@ -36,14 +36,11 @@ pub struct FileEntry {
 /// 支持不存在的路径：会先规范化最长的存在祖先目录，再拼接剩余部分。
 pub fn resolve_note_path(base: &Path, rel: &str) -> Result<PathBuf, String> {
     let full = base.join(rel);
+    let root = canonical_base_path(base)?;
 
     // 尝试规范化完整路径（路径存在时）
     if let Ok(canonical) = full.canonicalize() {
-        let root = base.canonicalize().unwrap_or_default();
-        if !canonical.starts_with(&root) {
-            return Err("路径越界，拒绝访问".into());
-        }
-        return Ok(canonical);
+        return ensure_path_inside(canonical, &root);
     }
 
     // 路径不存在：找到最长存在的祖先目录进行规范化
@@ -60,23 +57,32 @@ pub fn resolve_note_path(base: &Path, rel: &str) -> Result<PathBuf, String> {
         }
     }
 
-    let canonical_base = existing
+    let canonical_existing = existing
         .canonicalize()
         .map_err(|e| format!("路径解析失败: {}", e))?;
-    let root = base.canonicalize().unwrap_or_default();
 
     // 拼接回剩余路径段
-    let mut resolved = canonical_base;
+    let mut resolved = canonical_existing;
     while let Some(segment) = trailing.pop() {
         resolved = resolved.join(segment);
     }
 
     // 再次规范化（如果拼接后的路径碰巧存在）并校验越界
     let final_path = resolved.canonicalize().unwrap_or(resolved);
-    if !final_path.starts_with(&root) {
-        return Err("路径越界，拒绝访问".into());
+    ensure_path_inside(final_path, &root)
+}
+
+fn canonical_base_path(base: &Path) -> Result<PathBuf, String> {
+    base.canonicalize()
+        .map_err(|e| format!("笔记目录解析失败: {}", e))
+}
+
+fn ensure_path_inside(path: PathBuf, root: &Path) -> Result<PathBuf, String> {
+    if path.starts_with(root) {
+        Ok(path)
+    } else {
+        Err("路径越界，拒绝访问".into())
     }
-    Ok(final_path)
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -84,7 +90,7 @@ pub fn resolve_note_path(base: &Path, rel: &str) -> Result<PathBuf, String> {
 // ═══════════════════════════════════════════════════════════════
 
 /// 递归读取目录结构（仅 .md 文件）
-pub fn read_dir_recursive(base: &PathBuf, rel: &str) -> Vec<FileEntry> {
+pub fn read_dir_recursive(base: &Path, rel: &str) -> Vec<FileEntry> {
     let dir = base.join(rel);
     let mut entries = Vec::new();
 
@@ -103,28 +109,17 @@ pub fn read_dir_recursive(base: &PathBuf, rel: &str) -> Vec<FileEntry> {
         let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
 
         if is_dir {
-            entries.push(FileEntry {
+            entries.push(directory_entry(
                 name,
-                path: entry_rel.clone(),
-                is_dir: true,
-                children: Some(read_dir_recursive(base, &entry_rel)),
-            });
-        } else if entry_rel.ends_with(".md") {
-            entries.push(FileEntry {
-                name,
-                path: entry_rel,
-                is_dir: false,
-                children: None,
-            });
+                entry_rel.clone(),
+                Some(read_dir_recursive(base, &entry_rel)),
+            ));
+        } else if name.to_lowercase().ends_with(".md") {
+            entries.push(note_file_entry(name, entry_rel));
         }
     }
 
-    // 目录在前，文件在后；均按名称排序
-    entries.sort_by(|a, b| {
-        b.is_dir
-            .cmp(&a.is_dir)
-            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
-    });
+    sort_file_entries(&mut entries);
 
     entries
 }
@@ -152,28 +147,41 @@ pub fn read_dir_entries(base: &Path, rel: &str) -> Result<Vec<FileEntry>, String
             .map_err(|e| format!("读取目录项类型失败: {}", e))?;
 
         if file_type.is_dir() {
-            entries.push(FileEntry {
-                name,
-                path: entry_rel,
-                is_dir: true,
-                children: None,
-            });
+            entries.push(directory_entry(name, entry_rel, None));
         } else if file_type.is_file() && name.to_lowercase().ends_with(".md") {
-            entries.push(FileEntry {
-                name,
-                path: entry_rel,
-                is_dir: false,
-                children: None,
-            });
+            entries.push(note_file_entry(name, entry_rel));
         }
     }
 
+    sort_file_entries(&mut entries);
+    Ok(entries)
+}
+
+fn directory_entry(name: String, path: String, children: Option<Vec<FileEntry>>) -> FileEntry {
+    FileEntry {
+        name,
+        path,
+        is_dir: true,
+        children,
+    }
+}
+
+fn note_file_entry(name: String, path: String) -> FileEntry {
+    FileEntry {
+        name,
+        path,
+        is_dir: false,
+        children: None,
+    }
+}
+
+fn sort_file_entries(entries: &mut [FileEntry]) {
+    // 目录在前，文件在后；均按名称排序。
     entries.sort_by(|a, b| {
         b.is_dir
             .cmp(&a.is_dir)
             .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
     });
-    Ok(entries)
 }
 
 /// 读取笔记文件内容
@@ -220,51 +228,61 @@ pub fn write_note_content(
     content: &str,
     expected_mtime: Option<String>,
 ) -> Result<String, String> {
-    let full = base.join(rel_path);
-    // 确保目标路径在笔记目录内
-    let _ = resolve_note_path(base, rel_path)?;
-
-    // 外部变更检测：若文件已存在且调用方提供了期望的 mtime，则校验
-    if let Some(expected) = expected_mtime {
-        match fs::metadata(&full) {
-            Ok(meta) => {
-                if file_mtime(&meta)? != expected {
-                    return Err(FILE_CHANGED_EXTERNALLY.into());
-                }
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Err(FILE_CHANGED_EXTERNALLY.into());
-            }
-            Err(error) => return Err(format!("读取文件元信息失败: {}", error)),
-        }
-    }
+    let full = resolve_note_path(base, rel_path)?;
+    check_expected_mtime(&full, expected_mtime)?;
 
     if let Some(parent) = full.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("创建父目录失败: {}", e))?;
     }
-    let file_name = full
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or_else(|| "写入失败：文件名无效".to_string())?;
-    let temporary =
-        full.with_file_name(format!(".{}.prism-{}.tmp", file_name, uuid::Uuid::new_v4()));
+    write_note_atomically(&full, content)?;
+    let metadata = fs::metadata(&full).map_err(|e| format!("读取写入后文件元信息失败: {}", e))?;
+    file_mtime(&metadata)
+}
 
-    let write_result = (|| -> Result<(), String> {
+fn check_expected_mtime(path: &Path, expected_mtime: Option<String>) -> Result<(), String> {
+    let Some(expected) = expected_mtime else {
+        return Ok(());
+    };
+
+    match fs::metadata(path) {
+        Ok(metadata) => {
+            if file_mtime(&metadata)? == expected {
+                Ok(())
+            } else {
+                Err(FILE_CHANGED_EXTERNALLY.into())
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            Err(FILE_CHANGED_EXTERNALLY.into())
+        }
+        Err(error) => Err(format!("读取文件元信息失败: {}", error)),
+    }
+}
+
+fn write_note_atomically(target: &Path, content: &str) -> Result<(), String> {
+    let temporary = temporary_note_path(target)?;
+    let result = (|| -> Result<(), String> {
         let mut file =
             fs::File::create(&temporary).map_err(|e| format!("创建临时文件失败: {}", e))?;
         file.write_all(content.as_bytes())
             .map_err(|e| format!("写入临时文件失败: {}", e))?;
         file.sync_all()
             .map_err(|e| format!("刷新临时文件失败: {}", e))?;
-        replace_note_file(&temporary, &full)
+        replace_note_file(&temporary, target)
     })();
 
-    if write_result.is_err() {
+    if result.is_err() {
         let _ = fs::remove_file(&temporary);
     }
-    write_result?;
-    let metadata = fs::metadata(&full).map_err(|e| format!("读取写入后文件元信息失败: {}", e))?;
-    file_mtime(&metadata)
+    result
+}
+
+fn temporary_note_path(target: &Path) -> Result<PathBuf, String> {
+    let file_name = target
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| "写入失败：文件名无效".to_string())?;
+    Ok(target.with_file_name(format!(".{}.prism-{}.tmp", file_name, uuid::Uuid::new_v4())))
 }
 
 fn replace_note_file(temporary: &Path, target: &Path) -> Result<(), String> {
@@ -297,29 +315,7 @@ fn replace_note_file(temporary: &Path, target: &Path) -> Result<(), String> {
 
 /// 创建文件夹
 pub fn create_note_dir_at(base: &Path, rel_path: &str) -> Result<(), String> {
-    let full = base.join(rel_path);
-    if let Some(parent) = full.parent() {
-        let parent_rel = parent
-            .strip_prefix(base)
-            .map_err(|_| "路径越界".to_string())?;
-        if !parent_rel.as_os_str().is_empty() {
-            fs::create_dir_all(parent).map_err(|e| format!("创建父目录失败: {}", e))?;
-        }
-    }
-    // 校验目标路径在笔记目录内
-    if full
-        .canonicalize()
-        .or_else(|_| {
-            full.parent()
-                .map(|p| p.to_path_buf())
-                .unwrap_or(full.clone())
-                .canonicalize()
-        })
-        .map(|c| !c.starts_with(base.canonicalize().unwrap_or_default()))
-        .unwrap_or(true)
-    {
-        return Err("路径越界，拒绝访问".into());
-    }
+    let full = resolve_note_path(base, rel_path)?;
     fs::create_dir_all(&full).map_err(|e| format!("创建目录失败: {}", e))
 }
 

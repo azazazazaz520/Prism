@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use tauri::{Emitter, Manager};
+use tauri::{Emitter, Manager, Runtime, UriSchemeResponder};
 
 pub(crate) mod ai;
 pub(crate) mod logging;
@@ -152,6 +152,74 @@ where
     state.read_data(|data| f(&settings, data))
 }
 
+async fn handle_api_request<R: Runtime>(
+    app_handle: tauri::AppHandle<R>,
+    request: tauri::http::Request<Vec<u8>>,
+    responder: UriSchemeResponder,
+    registry: Arc<plugin_protocol::TokenRegistry>,
+) {
+    let state = app_handle.state::<AppState>();
+    let module_name = request
+        .uri()
+        .path()
+        .trim_start_matches('/')
+        .trim_end_matches(".js");
+    let (plugin_id, token) = parse_api_credentials(&request.uri().to_string());
+
+    if module_name == "module" {
+        respond_with_plugin_module(&state, &token, responder);
+        return;
+    }
+
+    let response =
+        match plugin_protocol::handle_api_request(&registry, module_name, &plugin_id, &token) {
+            Ok(body) => javascript_response(200, body),
+            Err(error) => javascript_response(403, format!("// Error: {error}")),
+        };
+    responder.respond(response);
+}
+
+fn parse_api_credentials(uri: &str) -> (String, String) {
+    let params: HashMap<String, String> = uri
+        .split('?')
+        .nth(1)
+        .unwrap_or("")
+        .split('&')
+        .filter_map(|part| {
+            let (key, value) = part.split_once('=')?;
+            Some((key.to_string(), value.to_string()))
+        })
+        .collect();
+    (
+        params.get("pluginId").cloned().unwrap_or_default(),
+        params.get("token").cloned().unwrap_or_default(),
+    )
+}
+
+fn respond_with_plugin_module(
+    state: &tauri::State<'_, AppState>,
+    token: &str,
+    responder: UriSchemeResponder,
+) {
+    let source = state.plugin_modules.lock().unwrap().remove(token);
+    let response = match source {
+        Some(body) => javascript_response(200, body),
+        None => javascript_response(404, "// Error: module not found or token expired".into()),
+    };
+    responder.respond(response);
+}
+
+fn javascript_response(status: u16, body: String) -> tauri::http::Response<Vec<u8>> {
+    let mut builder =
+        tauri::http::Response::builder().header("Content-Type", "application/javascript");
+    if status != 200 {
+        builder = builder.status(status);
+    }
+    builder
+        .body(body.into_bytes())
+        .expect("固定的 JavaScript 响应头应始终有效")
+}
+
 // ═══════════════════════════════════════════════════════════════
 //  应用入口
 // ═══════════════════════════════════════════════════════════════
@@ -228,73 +296,9 @@ pub fn run() {
         .register_asynchronous_uri_scheme_protocol("prism-api", move |ctx, request, responder| {
             let registry = token_registry_clone.clone();
             let app_handle = ctx.app_handle().clone();
-            tauri::async_runtime::spawn(async move {
-                let state = app_handle.state::<AppState>();
-                let uri = request.uri().to_string();
-                // 解析 prism-api://localhost/api.js?pluginId=X&token=Y
-                // 提取模块名（路径部分）和查询参数
-                let path = request.uri().path().trim_start_matches('/');
-                let module_name = path.trim_end_matches(".js");
-
-                // 解析查询参数
-                let query = uri.split('?').nth(1).unwrap_or("");
-                let params: std::collections::HashMap<String, String> = query
-                    .split('&')
-                    .filter_map(|p| {
-                        let mut parts = p.splitn(2, '=');
-                        Some((parts.next()?.to_string(), parts.next()?.to_string()))
-                    })
-                    .collect();
-
-                let plugin_id = params.get("pluginId").cloned().unwrap_or_default();
-                let token = params.get("token").cloned().unwrap_or_default();
-
-                // 插件主模块端点：从内存中取出存储的源码并返回
-                if module_name == "module" {
-                    let modules = state.plugin_modules.lock().unwrap();
-                    let source = modules.get(&token).cloned();
-                    drop(modules);
-                    match source {
-                        Some(body) => {
-                            // 一次性消费：取出后立即删除
-                            state.plugin_modules.lock().unwrap().remove(&token);
-                            let response = tauri::http::Response::builder()
-                                .header("Content-Type", "application/javascript")
-                                .body(body.as_bytes().to_vec())
-                                .unwrap();
-                            responder.respond(response);
-                        }
-                        None => {
-                            let response = tauri::http::Response::builder()
-                                .status(404)
-                                .body(b"// Error: module not found or token expired".to_vec())
-                                .unwrap();
-                            responder.respond(response);
-                        }
-                    }
-                    return;
-                }
-
-                let result =
-                    plugin_protocol::handle_api_request(&registry, module_name, &plugin_id, &token);
-
-                match result {
-                    Ok(body) => {
-                        let response = tauri::http::Response::builder()
-                            .header("Content-Type", "application/javascript")
-                            .body(body.as_bytes().to_vec())
-                            .unwrap();
-                        responder.respond(response);
-                    }
-                    Err(e) => {
-                        let response = tauri::http::Response::builder()
-                            .status(403)
-                            .body(format!("// Error: {}", e).as_bytes().to_vec())
-                            .unwrap();
-                        responder.respond(response);
-                    }
-                }
-            });
+            tauri::async_runtime::spawn(handle_api_request(
+                app_handle, request, responder, registry,
+            ));
         })
         .invoke_handler(tauri::generate_handler![
             // 日志命令

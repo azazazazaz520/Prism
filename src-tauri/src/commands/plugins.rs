@@ -81,83 +81,87 @@ pub fn scan_plugins() -> Vec<PluginManifestInfo> {
     };
 
     for entry in entries.flatten() {
-        let path = entry.path();
-        if !path.is_dir() {
-            continue;
+        if let Some(manifest) = read_plugin_manifest(&entry.path()) {
+            manifests.push(manifest);
         }
-
-        let plugin_id = match path.file_name().and_then(|n| n.to_str()) {
-            Some(id) => id.to_string(),
-            None => continue,
-        };
-
-        // 读取 manifest.json（路径已在插件目录内，无需额外沙箱检查）
-        let manifest_path = path.join("manifest.json");
-        let content = match fs::read_to_string(&manifest_path) {
-            Ok(c) => c,
-            Err(_) => continue,
-        };
-
-        let manifest: serde_json::Value = match serde_json::from_str(&content) {
-            Ok(m) => m,
-            Err(e) => {
-                eprintln!("[plugins] {} 的 manifest.json 解析失败: {}", plugin_id, e);
-                continue;
-            }
-        };
-
-        // 提取必要字段
-        let id = manifest
-            .get("id")
-            .and_then(|v| v.as_str())
-            .unwrap_or(&plugin_id);
-        let name = manifest.get("name").and_then(|v| v.as_str()).unwrap_or(id);
-        let version = manifest
-            .get("version")
-            .and_then(|v| v.as_str())
-            .unwrap_or("0.0.0");
-        let description = manifest
-            .get("description")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-        let author = manifest
-            .get("author")
-            .and_then(|v| v.as_str())
-            .unwrap_or("unknown");
-        let main = manifest
-            .get("main")
-            .and_then(|v| v.as_str())
-            .unwrap_or("main.js");
-        let engines_prism = manifest
-            .get("engines")
-            .and_then(|v| v.get("prism"))
-            .and_then(|v| v.as_str())
-            .unwrap_or(">=0.1.0");
-        let permissions: Vec<String> = manifest
-            .get("permissions")
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|p| p.as_str().map(|s| s.to_string()))
-                    .collect()
-            })
-            .unwrap_or_default();
-
-        manifests.push(PluginManifestInfo {
-            id: id.to_string(),
-            name: name.to_string(),
-            version: version.to_string(),
-            description,
-            author: author.to_string(),
-            main: main.to_string(),
-            engines: EnginesInfo {
-                prism: engines_prism.to_string(),
-            },
-            permissions,
-        });
     }
 
     manifests
+}
+
+fn read_plugin_manifest(plugin_dir: &std::path::Path) -> Option<PluginManifestInfo> {
+    if !plugin_dir.is_dir() {
+        return None;
+    }
+
+    let plugin_id = plugin_dir.file_name()?.to_str()?.to_string();
+    let manifest_path = plugin_dir.join("manifest.json");
+    let content = fs::read_to_string(&manifest_path).ok()?;
+    let manifest = match serde_json::from_str::<serde_json::Value>(&content) {
+        Ok(value) => value,
+        Err(error) => {
+            eprintln!(
+                "[plugins] {} 的 manifest.json 解析失败: {}",
+                plugin_id, error
+            );
+            return None;
+        }
+    };
+
+    Some(parse_plugin_manifest(&plugin_id, &manifest))
+}
+
+fn parse_plugin_manifest(plugin_id: &str, manifest: &serde_json::Value) -> PluginManifestInfo {
+    let id = manifest
+        .get("id")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or(plugin_id);
+    let name = string_field(manifest, "name", id);
+    let version = string_field(manifest, "version", "0.0.0");
+    let description = manifest
+        .get("description")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string);
+    let author = string_field(manifest, "author", "unknown");
+    let main = string_field(manifest, "main", "main.js");
+    let prism_engine = manifest
+        .get("engines")
+        .and_then(|engines| engines.get("prism"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or(">=0.1.0");
+
+    PluginManifestInfo {
+        id: id.to_string(),
+        name: name.to_string(),
+        version: version.to_string(),
+        description,
+        author: author.to_string(),
+        main: main.to_string(),
+        engines: EnginesInfo {
+            prism: prism_engine.to_string(),
+        },
+        permissions: read_permissions(manifest),
+    }
+}
+
+fn string_field<'a>(manifest: &'a serde_json::Value, field: &str, default: &'a str) -> &'a str {
+    manifest
+        .get(field)
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or(default)
+}
+
+fn read_permissions(manifest: &serde_json::Value) -> Vec<String> {
+    manifest
+        .get("permissions")
+        .and_then(serde_json::Value::as_array)
+        .map(|permissions| {
+            permissions
+                .iter()
+                .filter_map(|permission| permission.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// 获取所有已存储的插件配置

@@ -92,6 +92,8 @@ const BOOTSTRAP = String.raw`(() => {
       for (const [name, value] of Object.entries(message.variables || {})) {
         document.documentElement.style.setProperty(name, String(value));
       }
+      document.documentElement.style.colorScheme =
+        document.documentElement.style.getPropertyValue('--theme-color-scheme') || 'light';
     }
   });
 
@@ -254,7 +256,7 @@ const BOOTSTRAP = String.raw`(() => {
 function createSrcdoc(pluginId: string, permissions: string[], source: string): string {
   const config = JSON.stringify({ pluginId, permissions });
   const pluginSource = JSON.stringify(source);
-  return `<!doctype html><html><head><meta charset="utf-8"><style>html,body,#prism-plugin-view{margin:0;min-height:100%;height:100%;overflow:auto;font-family:system-ui,sans-serif}</style><script>${vueRuntime}</script></head><body><div id="prism-plugin-view"></div><script>const __PRISM_CONFIG__=${config};const __PRISM_SOURCE__=${pluginSource};${BOOTSTRAP}</script></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><style>:root{--theme-color-scheme:light}html,body,#prism-plugin-view{margin:0;min-height:100%;height:100%;overflow:auto;font-family:system-ui,sans-serif;background:var(--bg-primary,#f8fdfb);color:var(--text-primary,#1a2e2b)}</style><script>${vueRuntime}</script></head><body><div id="prism-plugin-view"></div><script>const __PRISM_CONFIG__=${config};const __PRISM_SOURCE__=${pluginSource};${BOOTSTRAP}</script></body></html>`;
 }
 
 export class SandboxPluginSession implements SandboxViewSession {
@@ -383,6 +385,12 @@ export class SandboxPluginSession implements SandboxViewSession {
       const name = styles.item(index);
       if (name?.startsWith('--')) variables[name] = styles.getPropertyValue(name).trim();
     }
+    const theme = document.documentElement.dataset.theme;
+    variables['--theme-color-scheme'] =
+      theme === 'light' ||
+      (theme === 'auto' && !window.matchMedia('(prefers-color-scheme: dark)').matches)
+        ? 'light'
+        : 'dark';
     this.iframe.contentWindow?.postMessage({ kind: 'theme-update', variables }, '*');
   }
 
@@ -425,55 +433,80 @@ export class SandboxPluginSession implements SandboxViewSession {
   }
 
   private async handleHostRequest(request: RpcRequest): Promise<unknown> {
-    const [first, second] = request.args;
-    if (request.method === 'storage.snapshot') return readStorage(this.pluginId);
-    if (request.method === 'storage.get') return readStorage(this.pluginId)[String(first)] ?? null;
-    if (request.method === 'storage.set') {
-      writeStorage(this.pluginId, String(first), String(second));
-      return null;
+    if (request.method.startsWith('storage.')) return this.handleStorageRequest(request);
+    if (request.method.startsWith('tasks.')) return this.handleTaskRequest(request);
+    if (request.method === 'open-url') {
+      return invoke('open_url', { url: String(request.args[0]) });
     }
-    if (request.method === 'storage.delete') {
-      deleteStorage(this.pluginId, String(first));
-      return null;
-    }
-    if (request.method === 'storage.keys') return Object.keys(readStorage(this.pluginId));
-    if (request.method === 'storage.binary.get')
-      return binaryStorageGet(this.pluginId, String(first));
-    if (request.method === 'storage.binary.set') {
-      await binaryStorageSet(this.pluginId, String(first), second);
-      return null;
-    }
-    if (request.method === 'storage.binary.delete') {
-      await binaryStorageDelete(this.pluginId, String(first));
-      return null;
-    }
-    if (request.method === 'storage.binary.keys') return binaryStorageKeys(this.pluginId);
-    if (request.method === 'open-url') return invoke('open_url', { url: String(first) });
-    if (request.method === 'tasks.list')
-      return invoke('plugin_tasks_list', { pluginId: this.pluginId });
-    if (request.method === 'tasks.list-by-date')
-      return invoke('plugin_tasks_list_by_date', { pluginId: this.pluginId, date: String(first) });
-    if (request.method === 'tasks.create')
-      return invoke('plugin_tasks_create', {
-        pluginId: this.pluginId,
-        args: { title: first, ...((second as object) || {}) },
-      });
-    if (request.method === 'tasks.update')
-      return invoke('plugin_tasks_update', {
-        pluginId: this.pluginId,
-        args: { id: first, ...((second as object) || {}) },
-      });
-    if (request.method === 'tasks.toggle')
-      return invoke('plugin_tasks_toggle', { pluginId: this.pluginId, id: first });
-    if (request.method === 'tasks.delete')
-      return invoke('plugin_tasks_delete', { pluginId: this.pluginId, id: first });
-    if (request.method === 'network.fetch')
-      return invoke('plugin_network_fetch', {
-        pluginId: this.pluginId,
-        url: first,
-        options: second,
-      });
+    if (request.method === 'network.fetch') return this.handleNetworkRequest(request);
     throw new Error(`未知的插件 RPC：${request.method}`);
+  }
+
+  private async handleStorageRequest(request: RpcRequest): Promise<unknown> {
+    const [first, second] = request.args;
+    switch (request.method) {
+      case 'storage.snapshot':
+        return readStorage(this.pluginId);
+      case 'storage.get':
+        return readStorage(this.pluginId)[String(first)] ?? null;
+      case 'storage.set':
+        writeStorage(this.pluginId, String(first), String(second));
+        return null;
+      case 'storage.delete':
+        deleteStorage(this.pluginId, String(first));
+        return null;
+      case 'storage.keys':
+        return Object.keys(readStorage(this.pluginId));
+      case 'storage.binary.get':
+        return binaryStorageGet(this.pluginId, String(first));
+      case 'storage.binary.set':
+        await binaryStorageSet(this.pluginId, String(first), second);
+        return null;
+      case 'storage.binary.delete':
+        await binaryStorageDelete(this.pluginId, String(first));
+        return null;
+      case 'storage.binary.keys':
+        return binaryStorageKeys(this.pluginId);
+      default:
+        throw new Error(`未知的存储请求：${request.method}`);
+    }
+  }
+
+  private handleTaskRequest(request: RpcRequest): Promise<unknown> {
+    const [first, second] = request.args;
+    switch (request.method) {
+      case 'tasks.list':
+        return invoke('plugin_tasks_list', { pluginId: this.pluginId });
+      case 'tasks.list-by-date':
+        return invoke('plugin_tasks_list_by_date', {
+          pluginId: this.pluginId,
+          date: String(first),
+        });
+      case 'tasks.create':
+        return invoke('plugin_tasks_create', {
+          pluginId: this.pluginId,
+          args: { title: first, ...((second as object) || {}) },
+        });
+      case 'tasks.update':
+        return invoke('plugin_tasks_update', {
+          pluginId: this.pluginId,
+          args: { id: first, ...((second as object) || {}) },
+        });
+      case 'tasks.toggle':
+        return invoke('plugin_tasks_toggle', { pluginId: this.pluginId, id: first });
+      case 'tasks.delete':
+        return invoke('plugin_tasks_delete', { pluginId: this.pluginId, id: first });
+      default:
+        return Promise.reject(new Error(`未知的任务请求：${request.method}`));
+    }
+  }
+
+  private handleNetworkRequest(request: RpcRequest): Promise<unknown> {
+    return invoke('plugin_network_fetch', {
+      pluginId: this.pluginId,
+      url: request.args[0],
+      options: request.args[1],
+    });
   }
 
   private reply(response: RpcResponse): void {

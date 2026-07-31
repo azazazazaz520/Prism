@@ -22,6 +22,18 @@ import type {
   Task,
 } from '../../types';
 import { compactFileTree } from '../../utils/note-tree';
+import {
+  countDescendantEntries,
+  countNoteWords,
+  filterFileTree,
+  findNoteEntry,
+  isPathInside,
+  moveTabInList,
+  normalizeWorkspacePath,
+  parseNoteOutline,
+  removeNoteEntry,
+  replacePathPrefix,
+} from '../../utils/note-editor';
 import { getMenuRegistrations, type EditorSelection } from '../../plugin-api/menus-impl';
 import InputDialog from '../overlays/InputDialog.vue';
 import ConfirmDialog from '../overlays/ConfirmDialog.vue';
@@ -395,14 +407,6 @@ function syncWorkspacePaneTabs() {
     noteWorkspaceLayout.value.panes[1].tabs = [...secondaryTabs.value];
     noteWorkspaceLayout.value.panes[1].activeTab = secondaryActiveTab.value;
   }
-}
-
-function moveTabInList(tabs: string[], fromIndex: number, targetIndex: number) {
-  const nextTabs = [...tabs];
-  const [movedTab] = nextTabs.splice(fromIndex, 1);
-  const adjustedIndex = fromIndex < targetIndex ? targetIndex - 1 : targetIndex;
-  nextTabs.splice(Math.max(0, adjustedIndex), 0, movedTab);
-  return nextTabs;
 }
 
 function handleTabDrop(event: DragEvent, targetPane: WorkspacePaneId, targetIndex: number) {
@@ -873,11 +877,7 @@ function showTaskReferenceMenu(event: MouseEvent, reference: TaskReference) {
 
 /** 字数统计（中文字 + 英文单词） */
 const wordCount = computed(() => {
-  const text = content.value;
-  if (!text) return 0;
-  const chineseChars = (text.match(/[一-鿿]/g) || []).length;
-  const englishWords = (text.match(/[a-zA-Z]+/g) || []).length;
-  return chineseChars + englishWords;
+  return countNoteWords(content.value);
 });
 
 /** 侧边栏实际显示宽度（收起时为 0） */
@@ -888,51 +888,11 @@ const effectiveTreeWidth = computed(() => {
 /** 文件树展示数据，保留 tree 中的真实路径用于文件操作 */
 const displayTree = computed(() => compactFileTree(tree.value));
 
-function filterFileTree(entries: FileEntry[], query: string): FileEntry[] {
-  if (!query.trim()) return entries;
-  const normalized = query.trim().toLocaleLowerCase();
-  return entries.flatMap((entry) => {
-    if (entry.isDir) {
-      const children = filterFileTree(entry.children ?? [], normalized);
-      return children.length > 0 ? [{ ...entry, children }] : [];
-    }
-    return entry.name.toLocaleLowerCase().includes(normalized) ? [entry] : [];
-  });
-}
-
 const filteredDisplayTree = computed(() => filterFileTree(displayTree.value, noteSearch.value));
 
 /** 当前笔记中的 Markdown 标题，用于笔记大纲。
  *  代码块（``` 围栏）内的 # 不会被识别为标题。 */
-const outline = computed(() => {
-  const codeFenceRe = /^\s{0,3}(`{3,}|~{3,})/;
-  const result: { level: number; title: string }[] = [];
-  let inCodeFence = false;
-  let fenceChar = '';
-  let fenceLen = 0;
-
-  for (const line of content.value.split(/\r?\n/)) {
-    const fence = codeFenceRe.exec(line);
-    if (fence) {
-      if (!inCodeFence) {
-        inCodeFence = true;
-        fenceChar = fence[1][0];
-        fenceLen = fence[1].length;
-      } else if (fence[1][0] === fenceChar && fence[1].length >= fenceLen) {
-        inCodeFence = false;
-      }
-      continue;
-    }
-    if (inCodeFence) continue;
-
-    const match = /^(#{1,3})\s+(.+?)\s*$/.exec(line);
-    if (match) {
-      result.push({ level: match[1].length, title: match[2] });
-    }
-  }
-
-  return result;
-});
+const outline = computed(() => parseNoteOutline(content.value));
 
 /** 当前笔记任务引用所在的其他笔记路径，用于反向链接提示。 */
 const backlinkPaths = computed(() => {
@@ -1317,10 +1277,6 @@ async function loadNotesDir() {
   }
 }
 
-function normalizeWorkspacePath(path: string) {
-  return path.replace(/\\/g, '/').replace(/\/$/, '').toLocaleLowerCase();
-}
-
 function loadRecentWorkspaces() {
   try {
     const value = JSON.parse(localStorage.getItem(RECENT_WORKSPACES_STORAGE_KEY) || '[]');
@@ -1457,7 +1413,7 @@ function updateDirectoryChildren(
 
 async function loadDirectory(directoryPath: string) {
   if (loadingDirectories.has(directoryPath)) return false;
-  const entry = findEntry(tree.value, directoryPath);
+  const entry = findNoteEntry(tree.value, directoryPath);
   if (!entry || !entry.isDir || entry.children) return true;
 
   loadingDirectories.add(directoryPath);
@@ -1487,7 +1443,7 @@ function invalidateDirectory(entries: FileEntry[], directoryPath: string): FileE
 
 async function refreshDirectory(directoryPath: string) {
   if (!directoryPath) return loadTree();
-  const entry = findEntry(tree.value, directoryPath);
+  const entry = findNoteEntry(tree.value, directoryPath);
   if (!entry?.isDir || !entry.children) return true;
   tree.value = invalidateDirectory(tree.value, directoryPath);
   return loadDirectory(directoryPath);
@@ -1502,7 +1458,7 @@ async function ensureParentDirectoriesLoaded(filePath: string) {
 }
 
 async function loadDisplayedDirectory(directoryPath: string) {
-  let entry = findEntry(tree.value, directoryPath);
+  let entry = findNoteEntry(tree.value, directoryPath);
   while (entry?.isDir && entry.children?.length === 1 && entry.children[0].isDir) {
     entry = entry.children[0];
   }
@@ -1704,7 +1660,7 @@ async function renameCurrentNoteTitle() {
     : '';
   const newPath = `${parentDir ? `${parentDir}/` : ''}${nextTitle.endsWith('.md') ? nextTitle : `${nextTitle}.md`}`;
   if (newPath === selectedPath.value) return;
-  if (findEntry(tree.value, newPath)) {
+  if (findNoteEntry(tree.value, newPath)) {
     showStatus('目标文件已存在');
     titleDraft.value = currentTitle;
     return;
@@ -2088,44 +2044,6 @@ async function renameEntry(path: string, isDir: boolean) {
 
 // ═══ 删除辅助函数 ═══
 
-/** 统计文件夹下所有子项数量（不含自身） */
-function countDescendants(entry: FileEntry): number {
-  if (!entry.children) return 0;
-  return entry.children.reduce((count, child) => count + 1 + countDescendants(child), 0);
-}
-
-/** 判断路径是否位于指定目录内 */
-function isPathInside(path: string, directory: string): boolean {
-  return path === directory || path.startsWith(`${directory}/`);
-}
-
-/** 将路径前缀替换为重命名后的路径。 */
-function replacePathPrefix(path: string, oldPrefix: string, newPrefix: string): string {
-  return path === oldPrefix ? newPrefix : `${newPrefix}${path.slice(oldPrefix.length)}`;
-}
-
-/** 从文件树中递归查找条目 */
-function findEntry(entries: FileEntry[], targetPath: string): FileEntry | null {
-  for (const e of entries) {
-    if (e.path === targetPath) return e;
-    if (e.children) {
-      const found = findEntry(e.children, targetPath);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-
-function removeTreeEntry(entries: FileEntry[], targetPath: string): FileEntry[] {
-  return entries
-    .filter((entry) => entry.path !== targetPath)
-    .map((entry) =>
-      entry.isDir && entry.children
-        ? { ...entry, children: removeTreeEntry(entry.children, targetPath) }
-        : entry,
-    );
-}
-
 /** 清理已删除路径及其子路径的展开状态 */
 function cleanExpandedForPath(deletedPath: string) {
   const next = new Set(expanded.value);
@@ -2142,12 +2060,12 @@ function cleanExpandedForPath(deletedPath: string) {
  *  删除后先更新本地界面，再等待系统回收站操作结果；失败时恢复界面快照。 */
 async function deleteEntry(path: string) {
   const name = path.split('/').pop() || '';
-  const entry = findEntry(tree.value, path);
+  const entry = findNoteEntry(tree.value, path);
   const openPathIsAffected = Boolean(selectedPath.value && isPathInside(selectedPath.value, path));
 
   let message: string;
   if (entry?.isDir) {
-    const count = countDescendants(entry);
+    const count = countDescendantEntries(entry);
     message = `确定将文件夹「${name}」及其中的 ${count} 个项目移入系统回收站吗？`;
   } else {
     message = `确定将文件「${name}」移入系统回收站吗？`;
@@ -2166,7 +2084,7 @@ async function deleteEntry(path: string) {
   const dirtySnapshot = isDirty.value;
 
   if (openPathIsAffected) clearPendingSave();
-  tree.value = removeTreeEntry(tree.value, path);
+  tree.value = removeNoteEntry(tree.value, path);
   cleanExpandedForPath(path);
   openTabs.value = openTabs.value.filter((tab) => !isPathInside(tab, path));
   for (const tab of tabsSnapshot) {
@@ -2690,10 +2608,13 @@ onUnmounted(() => {
                 role="button"
                 tabindex="0"
                 aria-label="关闭笔记标签"
+                title="关闭"
                 @click.stop="closeTab(tab)"
                 @keydown.enter.stop="closeTab(tab)"
               >
-                ×
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M6 6l12 12M18 6 6 18" />
+                </svg>
               </span>
             </button>
             <button
@@ -2948,10 +2869,13 @@ onUnmounted(() => {
                       role="button"
                       tabindex="0"
                       aria-label="关闭主分栏笔记标签"
+                      title="关闭"
                       @click.stop="closeTab(tab)"
                       @keydown.enter.stop="closeTab(tab)"
                     >
-                      ×
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M6 6l12 12M18 6 6 18" />
+                      </svg>
                     </span>
                   </button>
                   <button
@@ -3057,10 +2981,13 @@ onUnmounted(() => {
                       role="button"
                       tabindex="0"
                       aria-label="关闭分栏笔记标签"
+                      title="关闭"
                       @click.stop="closeSecondaryTab(tab)"
                       @keydown.enter.stop="closeSecondaryTab(tab)"
                     >
-                      ×
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M6 6l12 12M18 6 6 18" />
+                      </svg>
                     </span>
                   </button>
                   <span v-if="secondaryLoading" class="split-pane-label">读取中…</span>
@@ -4418,12 +4345,11 @@ onUnmounted(() => {
 }
 
 .workspace-tab {
-  cursor: grab;
+  cursor: default;
   user-select: none;
   touch-action: none;
 }
 
-.workspace-tab:active,
 .workspace-tab.is-pointer-dragging {
   cursor: grabbing;
 }
@@ -4448,9 +4374,39 @@ onUnmounted(() => {
 }
 
 .workspace-tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  padding: 0;
   color: var(--text-muted);
-  font-size: 17px;
-  line-height: 1;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease;
+}
+
+.workspace-tab-close svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+  transform: translateX(-0.6px);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.workspace-tab-close:hover,
+.workspace-tab-close:focus-visible {
+  background: var(--bg-active);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-md);
 }
 
 .workspace-tab-dirty {
@@ -4849,10 +4805,7 @@ onUnmounted(() => {
 }
 
 .editor-tabs .workspace-tab-close {
-  width: 18px;
-  height: 18px;
   margin-left: auto;
-  font-size: 14px;
 }
 
 .editor-tabs .workspace-tab-new {

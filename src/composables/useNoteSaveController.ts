@@ -6,12 +6,14 @@ export interface NoteSaveSnapshot {
 type WriteNote = (snapshot: NoteSaveSnapshot) => Promise<string>;
 type SaveSuccess = (mtime: string, snapshot: NoteSaveSnapshot) => void;
 type SaveFailure = (error: unknown) => void;
+type SaveSettled = () => void;
 
 interface PendingSave {
   snapshot: NoteSaveSnapshot;
   write: WriteNote;
   onSuccess: SaveSuccess;
   onFailure: SaveFailure;
+  onSettled?: SaveSettled;
   generation: number;
 }
 
@@ -51,6 +53,7 @@ export function useNoteSaveController(delay = 500) {
           job.onFailure(error);
         }
       } finally {
+        job.onSettled?.();
         running.delete(path);
         if (pending.has(path) && !timers.has(path)) {
           void drain(path);
@@ -76,13 +79,14 @@ export function useNoteSaveController(delay = 500) {
     write: WriteNote,
     onSuccess: SaveSuccess,
     onFailure: SaveFailure,
+    onSettled?: SaveSettled,
   ) {
     const generation = (generations.get(path) ?? 0) + 1;
     generations.set(path, generation);
     const timer = timers.get(path);
     if (timer) clearTimeout(timer);
     timers.delete(path);
-    pending.set(path, { snapshot, write, onSuccess, onFailure, generation });
+    pending.set(path, { snapshot, write, onSuccess, onFailure, onSettled, generation });
     scheduleDrain(path);
   }
 

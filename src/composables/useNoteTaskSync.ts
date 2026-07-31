@@ -10,6 +10,7 @@ import {
   type TaskReferenceIndex,
 } from '../notes/task-references';
 import { FILE_CHANGED_EXTERNALLY } from '../utils/error-codes';
+import { beginNoteSelfWrite, endNoteSelfWrite } from './useNoteSelfWriteTracker';
 
 const noteContents = ref<Record<string, string>>({});
 const isIndexing = ref(false);
@@ -115,6 +116,7 @@ export function useNoteTaskSync() {
   /** 使用文件版本校验写入任务引用，避免覆盖外部编辑。 */
   async function writeNoteSafely(path: string, content: string): Promise<string | null> {
     const expectedMtime = await invoke<string>('get_note_mtime', { path });
+    const selfWriteToken = beginNoteSelfWrite(path);
     try {
       return await invoke<string>('write_note', { path, content, expectedMtime });
     } catch (error) {
@@ -125,6 +127,8 @@ export function useNoteTaskSync() {
         return null;
       }
       throw error;
+    } finally {
+      endNoteSelfWrite(path, selfWriteToken);
     }
   }
 

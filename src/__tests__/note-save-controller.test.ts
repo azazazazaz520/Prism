@@ -96,4 +96,23 @@ describe('笔记保存队列', () => {
     controller.dispose();
     vi.useRealTimers();
   });
+
+  it('写入结束时调用收尾回调，释放自身写入标识', async () => {
+    const controller = useNoteSaveController(0);
+    const settled = vi.fn();
+
+    controller.schedule(
+      'notes/example.md',
+      { content: '内容', expectedMtime: 'mtime-1' },
+      async () => 'mtime-2',
+      () => undefined,
+      () => undefined,
+      settled,
+    );
+
+    await controller.flush('notes/example.md');
+
+    expect(settled).toHaveBeenCalledOnce();
+    controller.dispose();
+  });
 });

@@ -78,6 +78,26 @@ export function useNoteDocumentStore() {
     document.revision += 1;
   }
 
+  /** 文件重命名后迁移运行时状态，避免新路径被初始化为空文档。 */
+  function rename(oldPath: string, newPath: string) {
+    if (oldPath === newPath) return;
+    const document = documents.get(oldPath);
+    if (!document) return;
+    documents.set(newPath, document);
+    documents.delete(oldPath);
+  }
+
+  /** 目录重命名后迁移目录及其子路径下的全部运行时状态。 */
+  function renamePrefix(oldPrefix: string, newPrefix: string) {
+    if (oldPrefix === newPrefix) return;
+    const affected = [...documents.keys()].filter(
+      (path) => path === oldPrefix || path.startsWith(`${oldPrefix}/`),
+    );
+    for (const oldPath of affected) {
+      rename(oldPath, `${newPrefix}${oldPath.slice(oldPrefix.length)}`);
+    }
+  }
+
   function markSaved(path: string, mtime: string | null) {
     const document = ensure(path);
     document.mtime = mtime;
@@ -123,6 +143,8 @@ export function useNoteDocumentStore() {
     finishLoading,
     failLoading,
     updateContent,
+    rename,
+    renamePrefix,
     markSaved,
     setConflict,
     clearConflict,

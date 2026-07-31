@@ -37,4 +37,28 @@ describe('笔记文档保存门禁', () => {
     expect(store.ensure('notes/example.md').mtime).toBe('mtime-2');
     expect(store.ensure('notes/example.md').content).toBe('本地编辑内容');
   });
+
+  it('重命名笔记时迁移正文状态而不是创建空文档', () => {
+    const store = useNoteDocumentStore();
+    store.finishLoading('notes/old-name.md', '正文内容', 'mtime-1');
+    store.updateContent('notes/old-name.md', '已编辑正文');
+
+    store.rename('notes/old-name.md', 'notes/new-name.md');
+
+    expect(store.ensure('notes/new-name.md').content).toBe('已编辑正文');
+    expect(store.ensure('notes/new-name.md').dirty).toBe(true);
+    expect(store.ensure('notes/old-name.md').content).toBe('');
+  });
+
+  it('重命名目录时迁移目录下所有笔记状态', () => {
+    const store = useNoteDocumentStore();
+    store.finishLoading('notes/old-folder/a.md', 'A', 'mtime-a');
+    store.finishLoading('notes/old-folder/nested/b.md', 'B', 'mtime-b');
+
+    store.renamePrefix('notes/old-folder', 'notes/new-folder');
+
+    expect(store.ensure('notes/new-folder/a.md').content).toBe('A');
+    expect(store.ensure('notes/new-folder/nested/b.md').content).toBe('B');
+    expect(store.ensure('notes/old-folder/a.md').content).toBe('');
+  });
 });

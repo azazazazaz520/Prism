@@ -155,6 +155,24 @@ export function useNoteTaskSync() {
     replaceIndexNote(newPath, content);
   }
 
+  function renameNotesUnderPath(oldPrefix: string, newPrefix: string) {
+    const next = { ...noteContents.value };
+    let changed = false;
+    for (const [oldPath, content] of Object.entries(noteContents.value)) {
+      if (oldPath !== oldPrefix && !oldPath.startsWith(`${oldPrefix}/`)) continue;
+      const newPath = `${newPrefix}${oldPath.slice(oldPrefix.length)}`;
+      delete next[oldPath];
+      next[newPath] = content;
+      noteRevisions.set(newPath, (noteRevisions.get(oldPath) ?? 0) + 1);
+      noteRevisions.delete(oldPath);
+      changed = true;
+    }
+    if (changed) {
+      noteContents.value = next;
+      referenceIndex.value = buildTaskReferenceIndex(next);
+    }
+  }
+
   async function projectTask(task: Pick<Task, 'id' | 'title' | 'completed'>) {
     const references = referencesForTask(referenceIndex.value, task.id);
     const paths = [...new Set(references.map((reference) => reference.notePath))];
@@ -217,6 +235,7 @@ export function useNoteTaskSync() {
     removeNote,
     removeNotesUnderPath,
     renameNote,
+    renameNotesUnderPath,
     projectTask,
     removeTaskFromAllNotes,
     isProjecting,

@@ -75,12 +75,12 @@ const customTheme = EditorView.theme({
   '&': {
     fontSize: '16px',
     fontFamily: "'Segoe UI', 'Microsoft YaHei', sans-serif",
-    lineHeight: '1.75',
+    lineHeight: '1.8',
     color: 'var(--text-primary)',
     backgroundColor: 'var(--bg-primary)',
     border: 'none',
     outline: 'none',
-    height: '100%',
+    height: 'auto',
   },
   '&.cm-focused': {
     outline: 'none',
@@ -95,17 +95,17 @@ const customTheme = EditorView.theme({
   '.cm-scroller': {
     fontFamily: 'inherit',
     lineHeight: 'inherit',
-    overflowY: 'auto',
+    overflowY: 'visible',
     overflowX: 'hidden',
     width: '100%',
     display: 'flex',
     justifyContent: 'center',
   },
   '.cm-content': {
-    width: 'min(100%, 860px)',
-    maxWidth: '860px',
+    width: 'min(100%, 820px)',
+    maxWidth: '820px',
     boxSizing: 'border-box',
-    padding: '28px 40px 120px',
+    padding: '28px 32px 120px',
     fontFamily: 'inherit',
     caretColor: 'var(--accent)',
     margin: '0',
@@ -746,12 +746,12 @@ defineExpose({
 }
 
 .codemirror-wrapper :deep(.cm-live-heading-1) {
-  font-size: 1.85em;
+  font-size: 2em;
   line-height: 1.35;
 }
 
 .codemirror-wrapper :deep(.cm-live-heading-2) {
-  font-size: 1.45em;
+  font-size: 1.5em;
   line-height: 1.45;
 }
 
@@ -895,5 +895,11 @@ defineExpose({
   text-decoration: underline;
   text-decoration-color: var(--accent-muted);
   text-underline-offset: 3px;
+}
+
+@media (max-width: 720px) {
+  .codemirror-wrapper :deep(.cm-content) {
+    padding: 24px 20px 96px;
+  }
 }
 </style>

@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 use std::fs;
+use std::net::{IpAddr, Ipv6Addr};
 use std::path::PathBuf;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use url::Url;
 
 use crate::models::PluginConfig;
 use crate::persistence;
@@ -351,48 +353,101 @@ pub struct NetworkFetchResponse {
     body: String,
 }
 
-/// 从 URL 字符串中提取主机名（手动解析，无额外依赖）
-fn extract_host(url: &str) -> Option<&str> {
-    let pos = url.find("://")?;
-    let after = &url[pos + 3..];
-    let end = after
-        .find(|c: char| ['/', '?', '#', ':'].contains(&c))
-        .unwrap_or(after.len());
-    Some(&after[..end])
+/// 判断 IP 是否为本地/私有地址。
+///
+/// 覆盖范围：
+/// - IPv4：环回（127.0.0.0/8）、私网（10/8、172.16/12、192.168/16）、
+///   链路本地（169.254/16）、未指定（0.0.0.0）、组播（224.0.0.0/4）
+/// - IPv6：环回（::1）、未指定（::）、组播、唯一本地（fc00::/7）、
+///   链路本地（fe80::/10），以及 IPv4 映射地址（::ffff:0:0/96）按映射的 IPv4 判定
+fn is_local_ip(ip: &IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => {
+            v4.is_loopback()
+                || v4.is_private()
+                || v4.is_link_local()
+                || v4.is_unspecified()
+                || v4.is_multicast()
+        }
+        IpAddr::V6(v6) => {
+            v6.is_loopback()
+                || v6.is_unspecified()
+                || v6.is_multicast()
+                || v6.is_unicast_link_local()
+                || is_unique_local_v6(v6)
+                || v6
+                    .to_ipv4_mapped()
+                    .is_some_and(|v4| is_local_ip(&IpAddr::V4(v4)))
+        }
+    }
+}
+
+/// 判断 IPv6 是否属于唯一本地地址段 fc00::/7
+fn is_unique_local_v6(v6: &Ipv6Addr) -> bool {
+    let octets = v6.octets();
+    octets[0] & 0xfe == 0xfc
+}
+
+/// 判断主机名是否为合法的公网域名。
+///
+/// 仅允许 ASCII 字母数字与连字符构成的标签，且：
+/// - 标签不得以连字符开头或结尾；
+/// - 标签不得为纯数字（纯数字标签会被系统解析为 IP 字面量变体，
+///   如 `127.1`、`2130706433`，属于 SSRF 绕过手段）；
+/// - 标签不得以 `0x` 开头（十六进制 IP 字面量，如 `0x7f000001`）；
+/// - 允许末尾单个点（完全限定域名）。
+fn is_valid_public_domain(host: &str) -> bool {
+    let trimmed = host.trim_end_matches('.');
+    if trimmed.is_empty() {
+        return false;
+    }
+    trimmed.split('.').all(|label| {
+        !label.is_empty()
+            && label.len() <= 63
+            && !label.starts_with('-')
+            && !label.ends_with('-')
+            && !label.starts_with("0x")
+            && !label.starts_with("0X")
+            && label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+            && !label.chars().all(|c| c.is_ascii_digit())
+    })
 }
 
 /// 校验目标 URL 是否合法。
 /// - `network` 权限：仅允许公网地址
 /// - `network:local` 权限：额外允许 localhost / LAN 地址
-fn validate_network_url(url: &str, has_local_perm: bool) -> Result<(), String> {
-    let host = extract_host(url).ok_or_else(|| "URL 格式无效，缺少 :// 标记".to_string())?;
+///
+/// 校验规则：
+/// 1. 使用 `url` crate 严格解析，拒绝带用户凭据的 URL（`user:pass@host` 可绕过主机校验）；
+/// 2. IP 地址按标准解析后检查本地/私网段，拒绝 `169.254.0.0/16`、IPv4 映射 IPv6 等变体；
+/// 3. 域名仅接受标准公网域名形态，`localhost`（含 `.localhost`、`.local` 后缀）按本地处理；
+/// 4. 纯数字标签等 IP 字面量变体（`127.1`、`2130706433`）直接拒绝。
+fn validate_network_url(url_str: &str, has_local_perm: bool) -> Result<(), String> {
+    let url = Url::parse(url_str).map_err(|e| format!("URL 格式无效: {}", e))?;
 
-    if host.is_empty() {
-        return Err("URL 主机名为空".to_string());
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err("URL 不允许包含用户凭据".to_string());
     }
 
-    // 判断是否为本地/私有地址
-    let is_local = match host {
-        "localhost" | "127.0.0.1" | "0.0.0.0" | "[::1]" | "::1" => true,
-        other => {
-            other.starts_with("10.") || other.starts_with("192.168.") || {
-                // 172.16.0.0/12
-                if other.starts_with("172.") && other.len() > 4 {
-                    let rest = &other[4..]; // skip "172."
-                    let parts: Vec<&str> = rest.split('.').collect();
-                    parts.len() >= 2
-                        && parts[0]
-                            .parse::<u8>()
-                            .map(|n| (16..=31).contains(&n))
-                            .unwrap_or(false)
-                } else {
-                    false
-                }
+    let is_local = match url.host() {
+        // url crate 已按 WHATWG 规范将 IP 字面量变体（127.1、2130706433、0x7f000001 等）
+        // 规范化为标准 IPv4 地址，此处按标准地址判定
+        Some(url::Host::Ipv4(v4)) => is_local_ip(&IpAddr::V4(v4)),
+        Some(url::Host::Ipv6(v6)) => is_local_ip(&IpAddr::V6(v6)),
+        Some(url::Host::Domain(domain)) => {
+            let lower = domain.to_ascii_lowercase();
+            let is_local_hostname =
+                lower == "localhost" || lower.ends_with(".localhost") || lower.ends_with(".local");
+            if !is_local_hostname && !is_valid_public_domain(&lower) {
+                return Err(format!("主机名无效: {}", domain));
             }
+            is_local_hostname
         }
+        None => return Err("URL 缺少主机名".to_string()),
     };
 
     if is_local && !has_local_perm {
+        let host = url.host_str().unwrap_or_default();
         return Err(format!(
             "禁止访问内网地址 '{}'，需 network:local 权限",
             host
@@ -424,8 +479,21 @@ pub async fn plugin_network_fetch(
         body: None,
     });
 
+    // 重定向每跳重新执行安全校验，防止服务端 302 跳转到内网绕过检查；
+    // 最多跟随 4 跳，避免重定向环
+    let redirect_policy = reqwest::redirect::Policy::custom(move |attempt| {
+        if attempt.previous().len() >= 4 {
+            return attempt.error("重定向次数过多".to_string());
+        }
+        match validate_network_url(attempt.url().as_str(), has_local) {
+            Ok(()) => attempt.follow(),
+            Err(e) => attempt.error(format!("重定向目标被安全策略拒绝: {}", e)),
+        }
+    });
+
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
+        .redirect(redirect_policy)
         .build()
         .map_err(|e| format!("创建 HTTP 客户端失败: {}", e))?;
 
@@ -604,4 +672,84 @@ fn urlencoding(s: &str) -> String {
         .replace('&', "%26")
         .replace('=', "%3D")
         .replace('?', "%3F")
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  测试
+// ═══════════════════════════════════════════════════════════════
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_public_url_allowed_without_local_perm() {
+        assert!(validate_network_url("https://api.example.com/v1/tasks", false).is_ok());
+        assert!(validate_network_url("https://8.8.8.8/dns", false).is_ok());
+        assert!(validate_network_url("https://example.com./path", false).is_ok());
+    }
+
+    #[test]
+    fn test_localhost_blocked_without_local_perm() {
+        assert!(validate_network_url("http://localhost:3000", false).is_err());
+        assert!(validate_network_url("http://127.0.0.1:8080", false).is_err());
+        assert!(validate_network_url("http://[::1]:8080", false).is_err());
+        assert!(validate_network_url("http://mybox.local/", false).is_err());
+        assert!(validate_network_url("http://svc.localhost/", false).is_err());
+    }
+
+    #[test]
+    fn test_localhost_allowed_with_local_perm() {
+        assert!(validate_network_url("http://localhost:3000", true).is_ok());
+        assert!(validate_network_url("http://192.168.1.10:8080", true).is_ok());
+        assert!(validate_network_url("http://[::1]:8080", true).is_ok());
+    }
+
+    #[test]
+    fn test_private_and_link_local_networks_blocked() {
+        assert!(validate_network_url("http://10.0.0.1/", false).is_err());
+        assert!(validate_network_url("http://172.16.0.1/", false).is_err());
+        assert!(validate_network_url("http://172.31.255.254/", false).is_err());
+        assert!(validate_network_url("http://192.168.0.1/", false).is_err());
+        // 云元数据服务（链路本地）
+        assert!(validate_network_url("http://169.254.169.254/latest/meta-data", false).is_err());
+        // IPv6 唯一本地与链路本地
+        assert!(validate_network_url("http://[fc00::1]/", false).is_err());
+        assert!(validate_network_url("http://[fe80::1]/", false).is_err());
+        // 未指定与组播地址
+        assert!(validate_network_url("http://0.0.0.0/", false).is_err());
+        assert!(validate_network_url("http://224.0.0.1/", false).is_err());
+    }
+
+    #[test]
+    fn test_ip_variant_bypasses_blocked() {
+        // IPv4 映射 IPv6（::ffff:127.0.0.1 等价于 127.0.0.1）
+        assert!(validate_network_url("http://[::ffff:127.0.0.1]/", false).is_err());
+        assert!(validate_network_url("http://[::ffff:10.0.0.1]/", false).is_err());
+        // 非标准 IP 字面量变体
+        assert!(validate_network_url("http://127.1/", false).is_err());
+        assert!(validate_network_url("http://2130706433/", false).is_err());
+        assert!(validate_network_url("http://0x7f000001/", false).is_err());
+    }
+
+    #[test]
+    fn test_url_with_credentials_blocked() {
+        assert!(validate_network_url("http://admin:secret@127.0.0.1:8080/", false).is_err());
+        assert!(validate_network_url("http://user@example.com/", false).is_err());
+    }
+
+    #[test]
+    fn test_invalid_hosts_blocked() {
+        assert!(validate_network_url("", false).is_err());
+        assert!(validate_network_url("not-a-url", false).is_err());
+        // 域名标签非法（下划线、纯数字标签）
+        assert!(validate_network_url("http://bad_host.com/", false).is_err());
+        assert!(validate_network_url("http://999.999.1.1/", false).is_err());
+    }
+
+    #[test]
+    fn test_localhost_case_insensitive() {
+        assert!(validate_network_url("http://LOCALHOST/", false).is_err());
+        assert!(validate_network_url("http://LoCaLhOsT/", true).is_ok());
+    }
 }

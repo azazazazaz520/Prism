@@ -145,32 +145,94 @@ fn record_workspace_error(
 //  JSON 持久化
 // ═══════════════════════════════════════════════════════════════
 
-/// 从磁盘加载任务数据，文件不存在或解析失败时返回默认空数据
-pub fn load_data(logger: &LogWriter) -> DataStore {
-    let path = get_data_path();
-    match fs::read_to_string(&path) {
-        Ok(content) => serde_json::from_str(&content).unwrap_or_else(|error| {
+/// 解析失败时将损坏文件备份为 `<文件名>.corrupt-<时间戳>`，保留用户数据以便手动恢复。
+/// 备份成功后原文件被移走，后续写入将创建新文件。
+fn backup_corrupt_file(path: &std::path::Path, logger: &LogWriter) {
+    if !path.exists() {
+        return;
+    }
+    let file_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "data".to_string());
+    let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
+    let backup = path.with_file_name(format!("{}.corrupt-{}", file_name, timestamp));
+    match fs::rename(path, &backup) {
+        Ok(()) => {
             let _ = logger.append_internal(
                 LogLevel::Error,
                 "persistence",
-                "persistence.data_parse_failed",
-                "任务数据解析失败，已使用默认数据",
-                serde_json::json!({ "path": path.display().to_string(), "error": error.to_string() }),
+                "persistence.backup_created",
+                "损坏数据文件已备份",
+                serde_json::json!({ "backup": backup.display().to_string() }),
             );
-            default_data_store()
-        }),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => default_data_store(),
+        }
         Err(error) => {
             let _ = logger.append_internal(
                 LogLevel::Error,
                 "persistence",
-                "persistence.data_read_failed",
-                "读取任务数据失败，已使用默认数据",
-                serde_json::json!({ "path": path.display().to_string(), "error": error.to_string() }),
+                "persistence.backup_failed",
+                "备份损坏数据文件失败",
+                serde_json::json!({
+                    "path": path.display().to_string(),
+                    "error": error.to_string()
+                }),
             );
-            default_data_store()
         }
     }
+}
+
+/// 读取并解析 JSON 文件：文件不存在时返回默认值；
+/// 解析失败时记录日志、备份损坏文件并返回默认值。
+fn load_json_or_default<T>(
+    path: &std::path::Path,
+    logger: &LogWriter,
+    default: T,
+    parse_event: &str,
+    parse_description: &str,
+    read_event: &str,
+    read_description: &str,
+) -> T
+where
+    T: serde::de::DeserializeOwned,
+{
+    match fs::read_to_string(path) {
+        Ok(content) => serde_json::from_str(&content).unwrap_or_else(|error| {
+            let _ = logger.append_internal(
+                LogLevel::Error,
+                "persistence",
+                parse_event,
+                parse_description,
+                serde_json::json!({ "path": path.display().to_string(), "error": error.to_string() }),
+            );
+            backup_corrupt_file(path, logger);
+            default
+        }),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => default,
+        Err(error) => {
+            let _ = logger.append_internal(
+                LogLevel::Error,
+                "persistence",
+                read_event,
+                read_description,
+                serde_json::json!({ "path": path.display().to_string(), "error": error.to_string() }),
+            );
+            default
+        }
+    }
+}
+
+/// 从磁盘加载任务数据，文件不存在或解析失败时返回默认空数据
+pub fn load_data(logger: &LogWriter) -> DataStore {
+    load_json_or_default(
+        &get_data_path(),
+        logger,
+        default_data_store(),
+        "persistence.data_parse_failed",
+        "任务数据解析失败，已使用默认数据",
+        "persistence.data_read_failed",
+        "读取任务数据失败，已使用默认数据",
+    )
 }
 
 /// 将任务数据序列化写入磁盘
@@ -182,30 +244,15 @@ pub fn save_data(store: &DataStore) -> Result<(), String> {
 
 /// 从磁盘加载应用配置，文件不存在或解析失败时返回默认配置
 pub fn load_config(logger: &LogWriter) -> ConfigStore {
-    let path = get_config_path();
-    match fs::read_to_string(&path) {
-        Ok(content) => serde_json::from_str(&content).unwrap_or_else(|error| {
-            let _ = logger.append_internal(
-                LogLevel::Error,
-                "persistence",
-                "persistence.config_parse_failed",
-                "应用配置解析失败，已使用默认配置",
-                serde_json::json!({ "path": path.display().to_string(), "error": error.to_string() }),
-            );
-            default_config_store()
-        }),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => default_config_store(),
-        Err(error) => {
-            let _ = logger.append_internal(
-                LogLevel::Error,
-                "persistence",
-                "persistence.config_read_failed",
-                "读取应用配置失败，已使用默认配置",
-                serde_json::json!({ "path": path.display().to_string(), "error": error.to_string() }),
-            );
-            default_config_store()
-        }
-    }
+    load_json_or_default(
+        &get_config_path(),
+        logger,
+        default_config_store(),
+        "persistence.config_parse_failed",
+        "应用配置解析失败，已使用默认配置",
+        "persistence.config_read_failed",
+        "读取应用配置失败，已使用默认配置",
+    )
 }
 
 /// 将应用配置序列化写入磁盘
@@ -217,30 +264,15 @@ pub fn save_config(store: &ConfigStore) -> Result<(), String> {
 
 /// 从磁盘加载同步状态，文件不存在或解析失败时返回默认空状态
 pub fn load_sync(logger: &LogWriter) -> SyncStore {
-    let path = get_sync_path();
-    match fs::read_to_string(&path) {
-        Ok(content) => serde_json::from_str(&content).unwrap_or_else(|error| {
-            let _ = logger.append_internal(
-                LogLevel::Error,
-                "persistence",
-                "persistence.sync_parse_failed",
-                "同步状态解析失败，已使用默认状态",
-                serde_json::json!({ "path": path.display().to_string(), "error": error.to_string() }),
-            );
-            default_sync_store()
-        }),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => default_sync_store(),
-        Err(error) => {
-            let _ = logger.append_internal(
-                LogLevel::Error,
-                "persistence",
-                "persistence.sync_read_failed",
-                "读取同步状态失败，已使用默认状态",
-                serde_json::json!({ "path": path.display().to_string(), "error": error.to_string() }),
-            );
-            default_sync_store()
-        }
-    }
+    load_json_or_default(
+        &get_sync_path(),
+        logger,
+        default_sync_store(),
+        "persistence.sync_parse_failed",
+        "同步状态解析失败，已使用默认状态",
+        "persistence.sync_read_failed",
+        "读取同步状态失败，已使用默认状态",
+    )
 }
 
 /// 将同步状态序列化写入磁盘
@@ -257,5 +289,84 @@ mod tests {
     #[test]
     fn logs_dir_is_inside_workspace() {
         assert_eq!(get_logs_dir(), get_workspace_dir().join("logs"));
+    }
+
+    fn temp_dir() -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "prism-persist-test-{}",
+            uuid::Uuid::new_v4().simple()
+        ))
+    }
+
+    #[test]
+    fn load_json_or_default_parses_valid_content() {
+        let dir = temp_dir();
+        fs::create_dir_all(&dir).unwrap();
+        let logger = LogWriter::new(dir.clone()).unwrap();
+        let path = dir.join("data.json");
+        fs::write(&path, r#"{"version":1,"tasks":[]}"#).unwrap();
+
+        let loaded: serde_json::Value = load_json_or_default(
+            &path,
+            &logger,
+            serde_json::json!(null),
+            "e1",
+            "d1",
+            "e2",
+            "d2",
+        );
+        assert_eq!(loaded["version"], 1);
+        assert!(path.exists());
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn load_json_or_default_returns_default_when_missing() {
+        let dir = temp_dir();
+        fs::create_dir_all(&dir).unwrap();
+        let logger = LogWriter::new(dir.clone()).unwrap();
+        let path = dir.join("missing.json");
+
+        let loaded: serde_json::Value = load_json_or_default(
+            &path,
+            &logger,
+            serde_json::json!({"fallback": true}),
+            "e1",
+            "d1",
+            "e2",
+            "d2",
+        );
+        assert_eq!(loaded, serde_json::json!({"fallback": true}));
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn load_json_or_default_backs_up_corrupt_file() {
+        let dir = temp_dir();
+        fs::create_dir_all(&dir).unwrap();
+        let logger = LogWriter::new(dir.clone()).unwrap();
+        let path = dir.join("data.json");
+        fs::write(&path, "{ not valid json ]").unwrap();
+
+        let loaded: serde_json::Value = load_json_or_default(
+            &path,
+            &logger,
+            serde_json::json!(null),
+            "e1",
+            "d1",
+            "e2",
+            "d2",
+        );
+        assert_eq!(loaded, serde_json::json!(null));
+        // 原文件已被移走，替换为备份文件
+        assert!(!path.exists());
+        let backups: Vec<String> = fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().to_string())
+            .filter(|name| name.contains(".corrupt-"))
+            .collect();
+        assert_eq!(backups.len(), 1);
+        fs::remove_dir_all(&dir).unwrap();
     }
 }

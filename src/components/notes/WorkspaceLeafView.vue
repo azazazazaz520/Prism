@@ -15,6 +15,7 @@ interface MarkdownEditorApi {
   focus: () => void;
   getSelection: () => string;
   replaceSelection: (text: string) => void;
+  selectAll: () => void;
 }
 
 const editorRef = ref<MarkdownEditorApi | null>(null);
@@ -55,6 +56,7 @@ const emit = defineEmits<{
   'create-note': [leafId: string];
   'open-workspace': [];
   'open-menu': [event: MouseEvent];
+  'open-context-menu': [event: MouseEvent];
 }>();
 
 const activeTab = computed(
@@ -300,6 +302,7 @@ defineExpose({
   focusEditor: () => editorRef.value?.focus(),
   getSelection: () => editorRef.value?.getSelection() ?? '',
   replaceSelection: (text: string) => editorRef.value?.replaceSelection(text),
+  selectAll: () => editorRef.value?.selectAll(),
 });
 </script>
 
@@ -451,6 +454,7 @@ defineExpose({
         placeholder="开始编写 Markdown..."
         @update:model-value="emit('update-content', activeTab.path, $event)"
         @save="emit('save-path', activeTab.path)"
+        @contextmenu="emit('open-context-menu', $event)"
       />
       <div v-else class="split-pane-empty">
         <div class="split-pane-welcome">
@@ -599,10 +603,12 @@ defineExpose({
 <style>
 .workspace-leaf-view .workspace-tabs {
   display: flex;
-  align-items: stretch;
+  align-items: center;
+  gap: 4px;
   min-height: 40px;
   flex: 0 0 auto;
   overflow-x: auto;
+  padding: 4px 6px;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-secondary);
   scrollbar-width: none;
@@ -615,6 +621,7 @@ defineExpose({
 .workspace-leaf-view .workspace-tab,
 .workspace-leaf-view .workspace-tab-new {
   border: 0;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-muted);
   cursor: default;
@@ -624,13 +631,13 @@ defineExpose({
 .workspace-leaf-view .workspace-tab {
   min-width: 128px;
   max-width: 220px;
-  min-height: 36px;
+  min-height: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 0 12px;
-  border-right: 1px solid var(--border-subtle);
+  border: 1px solid transparent;
   font-size: var(--text-xs);
   user-select: none;
   touch-action: none;
@@ -658,6 +665,7 @@ defineExpose({
 }
 
 .workspace-leaf-view .workspace-tab.active {
+  border-color: var(--border-subtle);
   box-shadow: inset 0 -2px 0 var(--accent);
 }
 
@@ -712,7 +720,8 @@ defineExpose({
 }
 
 .workspace-leaf-view .workspace-tab-new {
-  min-width: 48px;
+  min-width: 40px;
+  min-height: 32px;
   font-size: 18px;
   cursor: pointer;
 }

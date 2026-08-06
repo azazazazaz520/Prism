@@ -37,6 +37,7 @@ const emit = defineEmits<{
   'create-note': [leafId: string];
   'open-workspace': [];
   'open-menu': [event: MouseEvent];
+  'open-context-menu': [event: MouseEvent];
   'state-change': [state: NoteWorkspaceState];
 }>();
 
@@ -60,6 +61,7 @@ type WorkspaceLeafApi = {
   focusEditor: () => void;
   getSelection: () => string;
   replaceSelection: (text: string) => void;
+  selectAll: () => void;
 };
 const leafRefs = new Map<string, WorkspaceLeafApi>();
 
@@ -220,6 +222,7 @@ defineExpose({
   getSelection: () => leafRefs.get(state.value.activeLeafId)?.getSelection() ?? '',
   replaceSelection: (text: string) =>
     leafRefs.get(state.value.activeLeafId)?.replaceSelection(text),
+  selectAll: () => leafRefs.get(state.value.activeLeafId)?.selectAll(),
 });
 </script>
 
@@ -254,6 +257,7 @@ defineExpose({
           @create-note="handleCreateNote"
           @open-workspace="emit('open-workspace')"
           @open-menu="emit('open-menu', $event)"
+          @open-context-menu="emit('open-context-menu', $event)"
         >
           <template #leaf-tools="{ leaf }">
             <slot name="leaf-tools" :leaf="leaf" />

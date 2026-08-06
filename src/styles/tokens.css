@@ -47,6 +47,8 @@
   --accent-hover: #0f766e;
   --accent-light: #f0fdfa;
   --selection-bg: rgba(13, 148, 136, 0.28);
+  --editor-selection-bg: rgba(129, 96, 226, 0.26);
+  --editor-selection-text: #1f1b3d;
   --accent-muted: rgba(13, 148, 136, 0.15);
   --accent-bg: #ccfbf1;
   --accent-bg-active: #99f6e4;
@@ -126,6 +128,8 @@
   --accent-hover: #5eead4;
   --accent-light: rgba(45, 212, 191, 0.08);
   --selection-bg: rgba(45, 212, 191, 0.32);
+  --editor-selection-bg: rgba(155, 135, 245, 0.38);
+  --editor-selection-text: #f5f3ff;
   --accent-muted: rgba(45, 212, 191, 0.18);
   --accent-bg: rgba(45, 212, 191, 0.1);
   --accent-bg-active: rgba(45, 212, 191, 0.2);
@@ -175,6 +179,8 @@
     --accent-hover: #5eead4;
     --accent-light: rgba(45, 212, 191, 0.08);
     --selection-bg: rgba(45, 212, 191, 0.32);
+    --editor-selection-bg: rgba(155, 135, 245, 0.38);
+    --editor-selection-text: #f5f3ff;
     --accent-muted: rgba(45, 212, 191, 0.18);
     --accent-bg: rgba(45, 212, 191, 0.1);
     --accent-bg-active: rgba(45, 212, 191, 0.2);
@@ -239,6 +245,8 @@
   --accent-glow-s: rgba(245, 197, 24, 0.06);
   --accent-light: rgba(245, 197, 24, 0.08);
   --selection-bg: rgba(245, 197, 24, 0.34);
+  --editor-selection-bg: rgba(245, 197, 24, 0.42);
+  --editor-selection-text: #1a1e27;
   --accent-muted: rgba(245, 197, 24, 0.18);
   --accent-bg: rgba(245, 197, 24, 0.1);
   --accent-bg-active: rgba(245, 197, 24, 0.2);

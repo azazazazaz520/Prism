@@ -17,7 +17,6 @@ import {
   ViewPlugin,
   WidgetType,
   keymap,
-  drawSelection,
   dropCursor,
 } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
@@ -88,13 +87,11 @@ const customTheme = EditorView.theme({
   '&.cm-focused': {
     outline: 'none',
   },
-  '& .cm-selectionBackground, &.cm-focused .cm-selectionBackground': {
-    backgroundColor: 'var(--selection-bg) !important',
-  },
-  '& .cm-content::selection, & .cm-line::selection': {
-    backgroundColor: 'var(--selection-bg)',
-    color: 'var(--text-primary)',
-  },
+  '& .cm-content::selection, & .cm-content *::selection, & .cm-line::selection, & .cm-line *::selection':
+    {
+      backgroundColor: 'var(--editor-selection-bg) !important',
+      color: 'var(--editor-selection-text) !important',
+    },
   '.cm-scroller': {
     fontFamily: 'inherit',
     lineHeight: 'inherit',
@@ -557,7 +554,7 @@ const livePreviewPlugin = ViewPlugin.fromClass(
 function buildExtensions(codeLanguages: readonly LanguageDescription[] = []) {
   return [
     historyComp.of(history()),
-    drawSelection(),
+    // 使用浏览器原生文字选区，避免 Live Preview 的块级装饰把选区扩展成整块背景。
     dropCursor(),
     bracketMatching(),
     markdown({ codeLanguages }),
@@ -685,6 +682,12 @@ function getSelection(): string {
   return view.state.doc.sliceString(from, to);
 }
 
+function selectAll() {
+  if (!view) return;
+  view.dispatch({ selection: { anchor: 0, head: view.state.doc.length } });
+  view.focus();
+}
+
 function replaceSelection(text: string) {
   if (!view) return;
   view.dispatch(view.state.replaceSelection(text));
@@ -709,6 +712,7 @@ defineExpose({
   focus,
   getSelection,
   replaceSelection,
+  selectAll,
   prependToLine,
 });
 </script>

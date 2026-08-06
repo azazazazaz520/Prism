@@ -50,6 +50,7 @@ import {
   useNoteDocumentStore,
 } from '../../composables/useNoteDocumentStore';
 import { useNoteSaveController } from '../../composables/useNoteSaveController';
+import { useNoteSidebarLayout } from '../../composables/useNoteSidebarLayout';
 import {
   beginNoteSelfWrite,
   endNoteSelfWrite,
@@ -67,21 +68,8 @@ import {
 
 const props = withDefaults(defineProps<{ active?: boolean }>(), { active: true });
 
-// ═══ 布局常量 ═══
+// ═══ 工作区存储常量 ═══
 
-/** 侧边栏初始宽度 */
-const DEFAULT_SIDEBAR_WIDTH = 260;
-/** 侧边栏最小宽度 */
-const MIN_SIDEBAR_WIDTH = 220;
-/** 侧边栏最大宽度 */
-const MAX_SIDEBAR_WIDTH = 420;
-/** 整体布局最小宽度 */
-/** 编辑区最小宽度 */
-const EDITOR_MIN_WIDTH = 360;
-/** 分隔条宽度 */
-const RESIZER_WIDTH = 4;
-/** localStorage 键名 */
-const LAYOUT_STORAGE_KEY = 'prism-notes-layout';
 const RECENT_WORKSPACES_STORAGE_KEY = 'prism-recent-note-workspaces';
 const NOTE_SESSION_STORAGE_PREFIX = 'prism-note-session:';
 const NOTE_RECENT_STORAGE_PREFIX = 'prism-note-recent:';
@@ -145,15 +133,6 @@ let projectingTaskReferences = false;
 let taskSyncTimer: ReturnType<typeof setTimeout> | null = null;
 let taskSnapshot = new Map<string, { title: string; completed: boolean }>();
 let focusTitleAfterOpen = false;
-
-/** 侧边栏宽度 */
-const treeWidth = ref(DEFAULT_SIDEBAR_WIDTH);
-/** 是否正在拖动分隔条 */
-const isResizing = ref(false);
-/** 侧边栏是否被手动收起 */
-const sidebarCollapsed = ref(false);
-/** 收起前的宽度，用于恢复 */
-const previousWidth = ref(DEFAULT_SIDEBAR_WIDTH);
 
 // ═══ 自定义右键菜单 ═══
 
@@ -322,6 +301,22 @@ const workspaceMenuOpen = ref(false);
 
 /** 文件树中展开的文件夹路径集合 */
 const expanded = ref<Set<string>>(new Set(['inbox']));
+
+// ═══ 侧边栏布局（宽度、收起、拖动与持久化） ═══
+
+const {
+  treeWidth,
+  sidebarCollapsed,
+  effectiveTreeWidth,
+  constrainOnResize,
+  saveLayoutState,
+  loadLayoutState,
+  startResize,
+  handleResizerKeydown,
+  toggleSidebar,
+  MIN_SIDEBAR_WIDTH,
+  MAX_SIDEBAR_WIDTH,
+} = useNoteSidebarLayout(expanded);
 
 /** 当前选中文件的名称 */
 const selectedName = computed(() => {
@@ -527,11 +522,6 @@ const wordCount = computed(() => {
   return countNoteWords(content.value);
 });
 
-/** 侧边栏实际显示宽度（收起时为 0） */
-const effectiveTreeWidth = computed(() => {
-  return sidebarCollapsed.value ? 0 : treeWidth.value;
-});
-
 /** 文件树展示数据，保留 tree 中的真实路径用于文件操作 */
 const displayTree = computed(() => compactFileTree(tree.value));
 
@@ -551,38 +541,6 @@ const backlinkPaths = computed(() => {
   }
   return [...paths];
 });
-
-// ═══ 布局持久化 ═══
-
-/** 保存布局状态到 localStorage */
-function saveLayoutState() {
-  try {
-    const state: NotesLayoutState = {
-      sidebarWidth: treeWidth.value,
-      expandedPaths: Array.from(expanded.value),
-    };
-    localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // localStorage 不可用时静默忽略
-  }
-}
-
-/** 从 localStorage 加载布局状态 */
-function loadLayoutState() {
-  try {
-    const raw = localStorage.getItem(LAYOUT_STORAGE_KEY);
-    if (!raw) return;
-    const state = JSON.parse(raw) as NotesLayoutState;
-    if (typeof state.sidebarWidth === 'number' && Number.isFinite(state.sidebarWidth)) {
-      treeWidth.value = clampWidth(state.sidebarWidth);
-    }
-    if (state.expandedPaths && Array.isArray(state.expandedPaths)) {
-      expanded.value = new Set(state.expandedPaths);
-    }
-  } catch {
-    // 解析失败时使用默认值
-  }
-}
 
 // ═══ 光标与右键菜单 ═══
 
@@ -1360,18 +1318,7 @@ async function restoreNoteSession() {
   saveNoteSession();
 }
 
-/** 返回当前窗口下允许的最大侧边栏宽度。 */
-function getMaxSidebarWidth(): number {
-  return Math.max(MIN_SIDEBAR_WIDTH, window.innerWidth - EDITOR_MIN_WIDTH - RESIZER_WIDTH);
-}
-
-/** 将宽度限制在侧边栏和编辑区都可用的范围内。 */
-function getSafeSidebarWidth(width: number): number {
-  return Math.min(clampWidth(width), getMaxSidebarWidth());
-}
-
-/** 展开指定文件路径的所有父级目录 */
-function expandParentDirectories(filePath: string) {
+/** 展开指定文件路径的所有父级目录 */ function expandParentDirectories(filePath: string) {
   const parts = filePath.split('/');
   const next = new Set(expanded.value);
 
@@ -1963,85 +1910,7 @@ async function deleteEntry(path: string) {
   }
 }
 
-// ═══ 侧边栏拖动 ═══
-
-/** 约束宽度到有效范围内 */
-function clampWidth(w: number): number {
-  return Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, Math.round(w)));
-}
-
-/** 窗口缩放时重新约束宽度 */
-function constrainOnResize() {
-  const safeWidth = getSafeSidebarWidth(treeWidth.value);
-  if (treeWidth.value !== safeWidth) {
-    treeWidth.value = safeWidth;
-    saveLayoutState();
-  }
-}
-
-function startResize(event: PointerEvent) {
-  event.preventDefault();
-  isResizing.value = true;
-
-  const startX = event.clientX;
-  const startWidth = treeWidth.value;
-
-  // 拖动期间禁止文本选择
-  document.body.style.userSelect = 'none';
-  document.body.style.cursor = 'col-resize';
-
-  function onMove(e: PointerEvent) {
-    if (!isResizing.value) return;
-    const delta = e.clientX - startX;
-    const newWidth = getSafeSidebarWidth(startWidth + delta);
-    // 确保不挤压编辑区
-    treeWidth.value = newWidth;
-  }
-
-  function onUp() {
-    isResizing.value = false;
-    document.body.style.userSelect = '';
-    document.body.style.cursor = '';
-    document.removeEventListener('pointermove', onMove);
-    document.removeEventListener('pointerup', onUp);
-    saveLayoutState();
-  }
-
-  document.addEventListener('pointermove', onMove);
-  document.addEventListener('pointerup', onUp);
-}
-
-/** 分隔条键盘调整 */
-function handleResizerKeydown(event: KeyboardEvent) {
-  if (event.key === 'ArrowLeft') {
-    event.preventDefault();
-    treeWidth.value = clampWidth(treeWidth.value - 20);
-    saveLayoutState();
-  } else if (event.key === 'ArrowRight') {
-    event.preventDefault();
-    treeWidth.value = getSafeSidebarWidth(treeWidth.value + 20);
-    saveLayoutState();
-  } else if (event.key === 'Home') {
-    event.preventDefault();
-    treeWidth.value = MIN_SIDEBAR_WIDTH;
-    saveLayoutState();
-  } else if (event.key === 'End') {
-    event.preventDefault();
-    treeWidth.value = getSafeSidebarWidth(MAX_SIDEBAR_WIDTH);
-    saveLayoutState();
-  }
-}
-
-/** 切换侧边栏收起/展开 */
-function toggleSidebar() {
-  if (sidebarCollapsed.value) {
-    sidebarCollapsed.value = false;
-    treeWidth.value = getSafeSidebarWidth(previousWidth.value);
-  } else {
-    sidebarCollapsed.value = true;
-    previousWidth.value = treeWidth.value;
-  }
-}
+// ═══ 全局快捷键与工作区菜单 ═══
 
 /** 打开全局笔记快速切换器。 */
 function openFileLibrary() {

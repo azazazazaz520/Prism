@@ -613,7 +613,9 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   color: var(--text-tertiary);
   cursor: pointer;
   position: relative;
-  transition: all 0.2s;
+  transition:
+    background-color var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard);
   border-radius: var(--radius-sm);
 }
 

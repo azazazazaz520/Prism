@@ -476,7 +476,9 @@ async function handlePluginMenuAction(action: () => void | Promise<void>) {
   align-items: flex-start;
   padding: 15px var(--space-xl);
   border-radius: var(--radius-lg);
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast) var(--easing-standard),
+    box-shadow var(--transition-fast) var(--easing-standard);
   gap: var(--space-sm);
   background: var(--bg-primary);
   margin-bottom: var(--space-xs);
@@ -495,35 +497,6 @@ async function handlePluginMenuAction(action: () => void | Promise<void>) {
     0% 6px
   );
   border: 1px solid transparent;
-  animation: fadeSlideIn 0.3s ease both;
-}
-
-[data-theme='hud'] .task-item:nth-child(2),
-[data-theme='hud'] .task-item:nth-child(2) {
-  animation-delay: 0.05s;
-}
-[data-theme='hud'] .task-item:nth-child(3),
-[data-theme='hud'] .task-item:nth-child(3) {
-  animation-delay: 0.1s;
-}
-[data-theme='hud'] .task-item:nth-child(4),
-[data-theme='hud'] .task-item:nth-child(4) {
-  animation-delay: 0.15s;
-}
-[data-theme='hud'] .task-item:nth-child(5),
-[data-theme='hud'] .task-item:nth-child(5) {
-  animation-delay: 0.2s;
-}
-
-@keyframes fadeSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .task-item:hover {
@@ -553,7 +526,9 @@ async function handlePluginMenuAction(action: () => void | Promise<void>) {
   border-radius: 50%;
   border: 2px solid var(--gray-400);
   background: transparent;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast) var(--easing-standard),
+    border-color var(--transition-fast) var(--easing-standard);
   position: relative;
 }
 
@@ -703,7 +678,9 @@ async function handlePluginMenuAction(action: () => void | Promise<void>) {
   background: var(--bg-tertiary);
   border-radius: var(--radius-sm);
   font-weight: 500;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard);
 }
 
 [data-theme='hud'] .tag-badge,
@@ -756,7 +733,10 @@ async function handlePluginMenuAction(action: () => void | Promise<void>) {
   line-height: 1;
   flex-shrink: 0;
   border-radius: var(--radius-sm);
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast) var(--easing-standard),
+    border-color var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard);
 }
 
 .task-delete-btn:hover {
@@ -803,7 +783,10 @@ async function handlePluginMenuAction(action: () => void | Promise<void>) {
   padding: 2px 4px;
   line-height: 1;
   border-radius: var(--radius-sm);
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast) var(--easing-standard),
+    border-color var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard);
 }
 
 .task-menu-btn:hover {
@@ -948,7 +931,7 @@ async function handlePluginMenuAction(action: () => void | Promise<void>) {
   font-size: var(--text-xs);
   padding: var(--space-xs) var(--space-sm);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background-color var(--transition-fast) var(--easing-standard);
 }
 
 .menu-tag-add:hover {

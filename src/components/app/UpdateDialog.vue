@@ -110,18 +110,6 @@ function formatReleaseBody(body: string): string {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
   min-width: 420px;
   max-width: 520px;
-  animation: dialog-slide 0.2s ease-out;
-}
-
-@keyframes dialog-slide {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .dialog-header {
@@ -196,7 +184,11 @@ function formatReleaseBody(body: string): string {
   font-size: var(--text-sm);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color var(--transition-fast) var(--easing-standard),
+    border-color var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard),
+    box-shadow var(--transition-fast) var(--easing-standard);
   border: 1px solid var(--border-default);
   background: var(--bg-secondary);
   color: var(--text-primary);
@@ -293,12 +285,4 @@ function formatReleaseBody(body: string): string {
 }
 
 /* 过渡动画 */
-.dialog-fade-enter-active,
-.dialog-fade-leave-active {
-  transition: opacity 0.2s;
-}
-.dialog-fade-enter-from,
-.dialog-fade-leave-to {
-  opacity: 0;
-}
 </style>

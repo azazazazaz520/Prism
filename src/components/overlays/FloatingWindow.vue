@@ -563,7 +563,9 @@ function onPointerUp() {
   padding: 3px 7px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard);
   -webkit-app-region: no-drag;
   font-family: var(--font-sans);
 }
@@ -593,7 +595,7 @@ function onPointerUp() {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   padding: var(--space-xs) var(--space-md);
-  animation: fadeIn 0.3s ease;
+  animation: fadeIn var(--transition-normal) var(--easing-out);
 }
 
 @keyframes fadeIn {
@@ -733,7 +735,9 @@ function onPointerUp() {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard);
 }
 
 .arrow-btn:hover {
@@ -751,7 +755,9 @@ function onPointerUp() {
   height: 6px;
   border-radius: 50%;
   background: var(--text-disabled);
-  transition: all var(--transition-normal);
+  transition:
+    background-color var(--transition-normal) var(--easing-standard),
+    box-shadow var(--transition-normal) var(--easing-standard);
   cursor: pointer;
 }
 
@@ -826,7 +832,10 @@ function onPointerUp() {
   border-radius: var(--radius-sm);
   font-size: 11px;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast) var(--easing-standard),
+    border-color var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard);
   font-family: var(--font-sans);
   display: flex;
   align-items: center;
@@ -843,7 +852,9 @@ function onPointerUp() {
 /* ── 面板进出场 ────────────────────── */
 .panel-slide-enter-active,
 .panel-slide-leave-active {
-  transition: all 0.2s ease;
+  transition:
+    opacity var(--transition-dialog) var(--easing-out),
+    transform var(--transition-dialog) var(--easing-out);
 }
 
 .panel-slide-enter-from,

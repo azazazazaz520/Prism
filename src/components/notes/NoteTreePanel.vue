@@ -249,7 +249,9 @@ function isActiveWorkspace(path: string): boolean {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard);
 }
 
 .tree-header-btn:hover {
@@ -479,7 +481,9 @@ function isActiveWorkspace(path: string): boolean {
   border-radius: var(--radius-full);
   flex-shrink: 0;
   white-space: nowrap;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard);
 }
 
 .dir-change-btn:hover {

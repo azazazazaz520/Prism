@@ -134,71 +134,69 @@ watch(normalizedQuery, () => {
 
 <template>
   <Teleport to="body">
-    <Transition name="note-switcher-fade">
-      <div v-if="visible" class="note-switcher-layer" @mousedown.self="emit('cancel')">
-        <section
-          class="note-switcher"
-          role="dialog"
-          aria-modal="true"
-          aria-label="快速切换笔记"
-          @mousedown.stop
-        >
-          <div class="note-switcher-search">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="11" cy="11" r="6.5" />
-              <path d="m16 16 4.5 4.5" />
-            </svg>
-            <input
-              ref="searchInput"
-              v-model="query"
-              type="search"
-              autocomplete="off"
-              placeholder="搜索笔记标题或路径"
-              aria-label="搜索笔记标题或路径"
-              @keydown="handleKeydown"
-            />
-            <kbd>Esc</kbd>
-          </div>
+    <div v-if="visible" class="note-switcher-layer" @mousedown.self="emit('cancel')">
+      <section
+        class="note-switcher"
+        role="dialog"
+        aria-modal="true"
+        aria-label="快速切换笔记"
+        @mousedown.stop
+      >
+        <div class="note-switcher-search">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="11" cy="11" r="6.5" />
+            <path d="m16 16 4.5 4.5" />
+          </svg>
+          <input
+            ref="searchInput"
+            v-model="query"
+            type="search"
+            autocomplete="off"
+            placeholder="搜索笔记标题或路径"
+            aria-label="搜索笔记标题或路径"
+            @keydown="handleKeydown"
+          />
+          <kbd>Esc</kbd>
+        </div>
 
-          <div class="note-switcher-list" role="listbox" aria-label="笔记结果">
-            <div v-if="options.length === 0" class="note-switcher-empty">没有找到匹配的笔记</div>
-            <template v-for="group in groupedOptions" :key="group.key">
-              <div class="note-switcher-group-label">{{ group.label }}</div>
-              <button
-                v-for="item in group.items"
-                :key="`${group.key}-${item.path}`"
-                type="button"
-                class="note-switcher-item"
-                :class="{ highlighted: highlightedIndex === optionIndex(item.path) }"
-                role="option"
-                :aria-selected="highlightedIndex === optionIndex(item.path)"
-                @mouseenter="highlightedIndex = optionIndex(item.path)"
-                @click="selectPath(item.path)"
-              >
-                <span class="note-switcher-file-icon">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M6 3.5h8l4 4V20a.5.5 0 0 1-.5.5h-11A.5.5 0 0 1 6 20z" />
-                    <path d="M14 3.5v4h4" />
-                  </svg>
-                </span>
-                <span class="note-switcher-copy">
-                  <span class="note-switcher-name">{{ item.name }}</span>
-                  <span class="note-switcher-path">{{ item.path }}</span>
-                </span>
-                <span v-if="item.path === selectedPath" class="note-switcher-current">当前</span>
-                <span v-else-if="item.group === 'open'" class="note-switcher-current">已打开</span>
-              </button>
-            </template>
-          </div>
+        <div class="note-switcher-list" role="listbox" aria-label="笔记结果">
+          <div v-if="options.length === 0" class="note-switcher-empty">没有找到匹配的笔记</div>
+          <template v-for="group in groupedOptions" :key="group.key">
+            <div class="note-switcher-group-label">{{ group.label }}</div>
+            <button
+              v-for="item in group.items"
+              :key="`${group.key}-${item.path}`"
+              type="button"
+              class="note-switcher-item"
+              :class="{ highlighted: highlightedIndex === optionIndex(item.path) }"
+              role="option"
+              :aria-selected="highlightedIndex === optionIndex(item.path)"
+              @mouseenter="highlightedIndex = optionIndex(item.path)"
+              @click="selectPath(item.path)"
+            >
+              <span class="note-switcher-file-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M6 3.5h8l4 4V20a.5.5 0 0 1-.5.5h-11A.5.5 0 0 1 6 20z" />
+                  <path d="M14 3.5v4h4" />
+                </svg>
+              </span>
+              <span class="note-switcher-copy">
+                <span class="note-switcher-name">{{ item.name }}</span>
+                <span class="note-switcher-path">{{ item.path }}</span>
+              </span>
+              <span v-if="item.path === selectedPath" class="note-switcher-current">当前</span>
+              <span v-else-if="item.group === 'open'" class="note-switcher-current">已打开</span>
+            </button>
+          </template>
+        </div>
 
-          <footer class="note-switcher-footer">
-            <span><kbd>↑</kbd><kbd>↓</kbd>选择</span>
-            <span><kbd>Enter</kbd>打开</span>
-            <span><kbd>Esc</kbd>关闭</span>
-          </footer>
-        </section>
-      </div>
-    </Transition>
+        <footer class="note-switcher-footer">
+          <span><kbd>↑</kbd><kbd>↓</kbd>选择</span>
+          <span><kbd>Enter</kbd>打开</span>
+          <span><kbd>Esc</kbd>关闭</span>
+        </footer>
+      </section>
+    </div>
   </Teleport>
 </template>
 
@@ -357,22 +355,5 @@ kbd {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-}
-
-.note-switcher-fade-enter-active,
-.note-switcher-fade-leave-active {
-  transition: opacity 0.15s ease;
-}
-
-.note-switcher-fade-enter-from,
-.note-switcher-fade-leave-to {
-  opacity: 0;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .note-switcher-fade-enter-active,
-  .note-switcher-fade-leave-active {
-    transition: none;
-  }
 }
 </style>

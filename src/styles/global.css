@@ -63,6 +63,46 @@ body {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+
+  /* 位移类动效直接跳到终态；颜色和透明度仍保留状态反馈。 */
+  .dialog-container,
+  .context-submenu-enter-active,
+  .context-submenu-leave-active,
+  .tool-switch-enter-active,
+  .tool-switch-leave-active {
+    animation: none !important;
+  }
+
+  .context-submenu-enter-from,
+  .context-submenu-leave-to,
+  .tool-switch-enter-from,
+  .tool-switch-leave-to {
+    transform: none !important;
+  }
+}
+
+/* ═══ 统一弹窗动效：遮罩负责透明度，内容负责轻微位移 ═══ */
+.dialog-fade-enter-active,
+.dialog-fade-leave-active {
+  transition: opacity var(--transition-dialog) var(--easing-out);
+}
+
+.dialog-fade-enter-from,
+.dialog-fade-leave-to {
+  opacity: 0;
+}
+
+.dialog-container {
+  animation: dialog-slide var(--transition-dialog) var(--easing-out);
+}
+
+@keyframes dialog-slide {
+  from {
+    transform: translateY(-12px) scale(0.98);
+  }
+  to {
+    transform: translateY(0) scale(1);
+  }
 }
 
 /* HUD — data-theme="hud" */

@@ -256,7 +256,10 @@ function isSelected(day: number): boolean {
   cursor: pointer;
   color: var(--text-tertiary);
   padding: 0;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast) var(--easing-standard),
+    border-color var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard);
   clip-path: polygon(
     4px 0%,
     100% 0%,
@@ -309,7 +312,10 @@ function isSelected(day: number): boolean {
   align-items: center;
   justify-content: center;
   position: relative;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast) var(--easing-standard),
+    border-color var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard);
   font-family: var(--font-mono);
   font-size: 12px;
 }

@@ -97,29 +97,31 @@ async function handleItemClick(item: ContextMenuItem) {
           <span class="context-menu-label">{{ item.label }}</span>
           <span v-if="item.submenu" class="context-menu-chevron" aria-hidden="true">›</span>
         </button>
-        <div
-          v-if="item.submenu && openSubmenuId === item.id"
-          class="context-menu-submenu"
-          role="menu"
-        >
+        <Transition name="context-submenu">
           <div
-            v-for="subitem in item.submenu"
-            :key="subitem.id"
-            class="context-menu-entry"
-            :class="{ 'has-separator': subitem.separatorBefore }"
+            v-if="item.submenu && openSubmenuId === item.id"
+            class="context-menu-submenu"
+            role="menu"
           >
-            <button
-              type="button"
-              role="menuitem"
-              :class="['context-menu-item', { disabled: subitem.disabled }]"
-              :disabled="subitem.disabled || !subitem.action"
-              @click="handleItemClick(subitem)"
+            <div
+              v-for="subitem in item.submenu"
+              :key="subitem.id"
+              class="context-menu-entry"
+              :class="{ 'has-separator': subitem.separatorBefore }"
             >
-              <span v-if="subitem.icon" class="context-menu-icon" v-html="subitem.icon"></span>
-              <span class="context-menu-label">{{ subitem.label }}</span>
-            </button>
+              <button
+                type="button"
+                role="menuitem"
+                :class="['context-menu-item', { disabled: subitem.disabled }]"
+                :disabled="subitem.disabled || !subitem.action"
+                @click="handleItemClick(subitem)"
+              >
+                <span v-if="subitem.icon" class="context-menu-icon" v-html="subitem.icon"></span>
+                <span class="context-menu-label">{{ subitem.label }}</span>
+              </button>
+            </div>
           </div>
-        </div>
+        </Transition>
       </div>
       <div v-if="items.length === 0" class="context-menu-empty">无可用操作</div>
     </div>
@@ -194,6 +196,19 @@ async function handleItemClick(item: ContextMenuItem) {
   border-radius: var(--radius-md);
   background: var(--bg-secondary);
   box-shadow: var(--shadow-lg);
+}
+
+.context-submenu-enter-active,
+.context-submenu-leave-active {
+  transition:
+    opacity var(--transition-fast) var(--easing-out),
+    transform var(--transition-fast) var(--easing-out);
+}
+
+.context-submenu-enter-from,
+.context-submenu-leave-to {
+  opacity: 0;
+  transform: translateX(-4px);
 }
 
 .context-menu-chevron {

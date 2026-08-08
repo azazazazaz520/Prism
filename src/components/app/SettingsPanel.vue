@@ -625,7 +625,10 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
   color: var(--text-secondary);
   cursor: pointer;
   text-align: left;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard),
+    transform var(--transition-fast) var(--easing-standard);
 }
 .nav-item:hover {
   background: var(--bg-hover);
@@ -769,7 +772,7 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
   background: var(--bg-primary);
   color: var(--text-primary);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: border-color var(--transition-fast) var(--easing-standard);
 }
 .select-trigger:hover {
   border-color: var(--accent);
@@ -814,7 +817,9 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
   color: var(--text-secondary);
   text-align: left;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard);
 }
 .dropdown-item:hover {
   background: var(--bg-hover);
@@ -998,7 +1003,9 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
   color: var(--text-secondary);
   font-size: var(--text-sm);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    border-color var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard);
 }
 .about-btn:hover:not(:disabled) {
   border-color: var(--accent);

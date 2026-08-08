@@ -422,7 +422,9 @@ defineOptions({ name: 'TreeNode' });
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard);
 }
 
 .node-btn:hover {

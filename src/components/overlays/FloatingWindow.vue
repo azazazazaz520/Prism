@@ -5,6 +5,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { listen } from '@tauri-apps/api/event';
 import { useTaskStore } from '../../composables/useTaskStore';
 import { initTheme } from '../../composables/useTheme';
+import { useGestureScroll } from '../../composables/useGestureScroll';
 
 /**
  * 悬浮窗组件 — 无装饰透明窗口，置顶显示任务卡片轮播。
@@ -170,37 +171,10 @@ watch(showPanel, (expanded) => {
   invoke('resize_floating_window', { expanded });
 });
 
-// ── 手势滚动 ──────────────────────────────
-
 const scrollContainer = ref<HTMLElement | null>(null);
-const isDragging = ref(false);
-let dragStartY = 0;
-let scrollStartY = 0;
-
-/** 指针按下时记录起始位置与滚动偏移，开始拖拽手势 */
-function onPointerDown(e: PointerEvent) {
-  const target = e.target as HTMLElement;
-  if (target.closest('button, input, select, .topbar, .panel')) return;
-  isDragging.value = true;
-  dragStartY = e.clientY;
-  if (scrollContainer.value) {
-    scrollStartY = scrollContainer.value.scrollTop;
-  }
-}
-
-/** 指针移动时根据拖拽偏移量同步滚动内容区域 */
-function onPointerMove(e: PointerEvent) {
-  if (!isDragging.value) return;
-  const deltaY = dragStartY - e.clientY;
-  if (scrollContainer.value) {
-    scrollContainer.value.scrollTop = scrollStartY + deltaY;
-  }
-}
-
-/** 指针释放时结束拖拽状态 */
-function onPointerUp() {
-  isDragging.value = false;
-}
+const scrollContent = ref<HTMLElement | null>(null);
+const { isDragging, onPointerDown, onPointerMove, onPointerEnd, onPointerCancel } =
+  useGestureScroll(scrollContainer, scrollContent);
 </script>
 
 <template>
@@ -211,72 +185,16 @@ function onPointerUp() {
     :style="{ '--float-opacity': opacity }"
     @pointerdown="onPointerDown"
     @pointermove="onPointerMove"
-    @pointerup="onPointerUp"
-    @pointerleave="onPointerUp"
+    @pointerup="onPointerEnd"
+    @pointercancel="onPointerCancel"
     @mouseenter="onMouseEnter"
     @mouseleave="onMouseLeave"
   >
-    <div class="topbar" data-tauri-drag-region>
-      <div class="topbar-left">
-        <svg
-          class="topbar-icon"
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-        >
-          <circle cx="12" cy="12" r="9" />
-          <circle cx="12" cy="12" r="4" />
-          <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
-        </svg>
-        <span class="topbar-label">未完成</span>
-        <span class="count">{{ incompleteTasks.length }}</span>
-        <span class="topbar-label">项</span>
-      </div>
-      <div class="topbar-btns">
-        <button :class="['topbar-btn', { active: showPanel }]" @click="showPanel = !showPanel">
+    <div ref="scrollContent" class="gesture-scroll-content">
+      <div class="topbar" data-tauri-drag-region>
+        <div class="topbar-left">
           <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-          >
-            <circle cx="12" cy="12" r="3" />
-            <path
-              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
-            />
-          </svg>
-          <span>控制</span>
-        </button>
-      </div>
-    </div>
-
-    <div class="card-area">
-      <div v-if="isRefreshing" class="loading-hint">
-        <span class="mini-spinner"></span>
-      </div>
-      <div v-else-if="incompleteTasks.length === 0" class="no-tasks">
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-        >
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
-        <span>全部完成</span>
-      </div>
-      <div v-else-if="currentTask" class="card" :key="currentTask.id">
-        <div class="card-title">
-          <svg
-            v-if="currentTask.pinned"
-            class="card-pin-icon"
+            class="topbar-icon"
             width="13"
             height="13"
             viewBox="0 0 24 24"
@@ -284,197 +202,255 @@ function onPointerUp() {
             stroke="currentColor"
             stroke-width="1.5"
           >
-            <line x1="12" y1="2" x2="12" y2="17" />
-            <path d="M5 17h14l-3-6V5H8v6l-3 6z" />
+            <circle cx="12" cy="12" r="9" />
+            <circle cx="12" cy="12" r="4" />
+            <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
           </svg>
-          <span>{{ currentTask.title }}</span>
+          <span class="topbar-label">未完成</span>
+          <span class="count">{{ incompleteTasks.length }}</span>
+          <span class="topbar-label">项</span>
         </div>
-        <div class="card-meta">
-          <span v-for="tag in currentTask.tags" :key="tag" class="card-tag">
+        <div class="topbar-btns">
+          <button :class="['topbar-btn', { active: showPanel }]" @click="showPanel = !showPanel">
             <svg
-              width="9"
-              height="9"
+              width="12"
+              height="12"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              stroke-width="2"
+              stroke-width="1.5"
             >
+              <circle cx="12" cy="12" r="3" />
               <path
-                d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"
-              />
-              <line x1="7" y1="7" x2="7.01" y2="7" />
-            </svg>
-            {{ tag }}
-          </span>
-          <span v-if="dueStatus" :class="['card-due', dueStatus]">
-            <svg
-              width="10"
-              height="10"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-              <line x1="16" y1="2" x2="16" y2="6" />
-              <line x1="8" y1="2" x2="8" y2="6" />
-              <line x1="3" y1="10" x2="21" y2="10" />
-            </svg>
-            {{ dueLabel }}
-          </span>
-          <span v-if="currentTask.important" class="card-important">
-            <svg
-              width="11"
-              height="11"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-            >
-              <polygon
-                points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
               />
             </svg>
-            重要
-          </span>
+            <span>控制</span>
+          </button>
         </div>
       </div>
-    </div>
 
-    <div v-if="incompleteTasks.length > 0" class="carousel-controls">
-      <button class="arrow-btn" @click="prevCard">
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <polyline points="15 18 9 12 15 6" />
-        </svg>
-      </button>
-      <div class="dots">
-        <span
-          v-for="(_, i) in incompleteTasks"
-          :key="i"
-          :class="['dot', { active: i === currentIndex % incompleteTasks.length }]"
-          @click="goToCard(i)"
-        ></span>
+      <div class="card-area">
+        <div v-if="isRefreshing" class="loading-hint">
+          <span class="mini-spinner"></span>
+        </div>
+        <div v-else-if="incompleteTasks.length === 0" class="no-tasks">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+          >
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          <span>全部完成</span>
+        </div>
+        <div v-else-if="currentTask" class="card" :key="currentTask.id">
+          <div class="card-title">
+            <svg
+              v-if="currentTask.pinned"
+              class="card-pin-icon"
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
+              <line x1="12" y1="2" x2="12" y2="17" />
+              <path d="M5 17h14l-3-6V5H8v6l-3 6z" />
+            </svg>
+            <span>{{ currentTask.title }}</span>
+          </div>
+          <div class="card-meta">
+            <span v-for="tag in currentTask.tags" :key="tag" class="card-tag">
+              <svg
+                width="9"
+                height="9"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"
+                />
+                <line x1="7" y1="7" x2="7.01" y2="7" />
+              </svg>
+              {{ tag }}
+            </span>
+            <span v-if="dueStatus" :class="['card-due', dueStatus]">
+              <svg
+                width="10"
+                height="10"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+              </svg>
+              {{ dueLabel }}
+            </span>
+            <span v-if="currentTask.important" class="card-important">
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <polygon
+                  points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+                />
+              </svg>
+              重要
+            </span>
+          </div>
+        </div>
       </div>
-      <button class="arrow-btn" @click="nextCard">
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <polyline points="9 18 15 12 9 6" />
-        </svg>
-      </button>
-    </div>
 
-    <Transition name="panel-slide">
-      <div v-if="showPanel" class="panel">
-        <div class="panel-row">
-          <label>
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-            >
-              <circle cx="12" cy="12" r="5" />
-              <line x1="12" y1="1" x2="12" y2="3" />
-              <line x1="12" y1="21" x2="12" y2="23" />
-              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-              <line x1="1" y1="12" x2="3" y2="12" />
-              <line x1="21" y1="12" x2="23" y2="12" />
-              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-            </svg>
-            透明度
-          </label>
-          <input
-            type="range"
-            min="30"
-            max="100"
-            :value="Math.round(opacity * 100)"
-            @input="setOpacity(($event.target as HTMLInputElement).valueAsNumber)"
-          />
-          <span class="opacity-val">{{ opacity.toFixed(2) }}</span>
-        </div>
-        <div class="panel-row">
-          <label>
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
-            </svg>
-            自动轮播
-          </label>
-          <select
-            :value="carouselInterval"
-            @change="setCarouselInterval(Number(($event.target as HTMLSelectElement).value))"
-          >
-            <option :value="3000">3 秒</option>
-            <option :value="5000">5 秒</option>
-            <option :value="10000">10 秒</option>
-            <option :value="0">关闭</option>
-          </select>
-        </div>
-        <div class="panel-row">
-          <label>
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-            >
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-            </svg>
-            截止提醒
-          </label>
-          <select
-            :value="reminderMinutes"
-            @change="setReminder(Number(($event.target as HTMLSelectElement).value))"
-          >
-            <option :value="0">关闭</option>
-            <option :value="10">提前 10 分钟</option>
-            <option :value="30">提前 30 分钟</option>
-            <option :value="60">提前 1 小时</option>
-          </select>
-        </div>
-        <button class="exit-btn" @click="exitFloating">
+      <div v-if="incompleteTasks.length > 0" class="carousel-controls">
+        <button class="arrow-btn" @click="prevCard">
           <svg
             width="12"
             height="12"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
-            stroke-width="1.5"
+            stroke-width="2"
           >
-            <polyline points="9 14 4 9 9 4" />
-            <path d="M20 20v-7a4 4 0 0 0-4-4H4" />
+            <polyline points="15 18 9 12 15 6" />
           </svg>
-          退出悬浮窗
+        </button>
+        <div class="dots">
+          <span
+            v-for="(_, i) in incompleteTasks"
+            :key="i"
+            :class="['dot', { active: i === currentIndex % incompleteTasks.length }]"
+            @click="goToCard(i)"
+          ></span>
+        </div>
+        <button class="arrow-btn" @click="nextCard">
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
         </button>
       </div>
-    </Transition>
+
+      <Transition name="motion-panel">
+        <div v-if="showPanel" class="panel motion-panel-from-top">
+          <div class="panel-row">
+            <label>
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <circle cx="12" cy="12" r="5" />
+                <line x1="12" y1="1" x2="12" y2="3" />
+                <line x1="12" y1="21" x2="12" y2="23" />
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                <line x1="1" y1="12" x2="3" y2="12" />
+                <line x1="21" y1="12" x2="23" y2="12" />
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+              </svg>
+              透明度
+            </label>
+            <input
+              type="range"
+              min="30"
+              max="100"
+              :value="Math.round(opacity * 100)"
+              @input="setOpacity(($event.target as HTMLInputElement).valueAsNumber)"
+            />
+            <span class="opacity-val">{{ opacity.toFixed(2) }}</span>
+          </div>
+          <div class="panel-row">
+            <label>
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              自动轮播
+            </label>
+            <select
+              :value="carouselInterval"
+              @change="setCarouselInterval(Number(($event.target as HTMLSelectElement).value))"
+            >
+              <option :value="3000">3 秒</option>
+              <option :value="5000">5 秒</option>
+              <option :value="10000">10 秒</option>
+              <option :value="0">关闭</option>
+            </select>
+          </div>
+          <div class="panel-row">
+            <label>
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+              截止提醒
+            </label>
+            <select
+              :value="reminderMinutes"
+              @change="setReminder(Number(($event.target as HTMLSelectElement).value))"
+            >
+              <option :value="0">关闭</option>
+              <option :value="10">提前 10 分钟</option>
+              <option :value="30">提前 30 分钟</option>
+              <option :value="60">提前 1 小时</option>
+            </select>
+          </div>
+          <button class="exit-btn" @click="exitFloating">
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
+              <polyline points="9 14 4 9 9 4" />
+              <path d="M20 20v-7a4 4 0 0 0-4-4H4" />
+            </svg>
+            退出悬浮窗
+          </button>
+        </div>
+      </Transition>
+    </div>
   </div>
 </template>
 
@@ -498,7 +474,10 @@ function onPointerUp() {
   filter: drop-shadow(0 2px 16px rgba(0, 0, 0, 0.35));
   overflow: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-behavior: auto;
   scrollbar-width: none;
+  touch-action: none;
   user-select: none;
   cursor: grab;
   font-family: var(--font-sans);
@@ -511,6 +490,10 @@ function onPointerUp() {
 
 .floating-window.dragging {
   cursor: grabbing;
+}
+
+.gesture-scroll-content {
+  min-height: 100%;
 }
 
 /* ── 顶部栏 ────────────────────── */
@@ -850,19 +833,6 @@ function onPointerUp() {
 }
 
 /* ── 面板进出场 ────────────────────── */
-.panel-slide-enter-active,
-.panel-slide-leave-active {
-  transition:
-    opacity var(--transition-dialog) var(--easing-out),
-    transform var(--transition-dialog) var(--easing-out);
-}
-
-.panel-slide-enter-from,
-.panel-slide-leave-to {
-  opacity: 0;
-  transform: translateY(-8px);
-}
-
 /* ═══════════════════════════════════════════
    HUD — data-theme="hud"
    ═══════════════════════════════════════════ */

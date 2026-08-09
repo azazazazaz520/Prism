@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onUnmounted, ref } from 'vue';
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref } from 'vue';
 import type { NoteDocumentState } from '../../composables/useNoteDocumentStore';
 import type { WorkspaceDropZone, WorkspaceLeaf } from '../../domain/note-workspace';
+import { NOTE_FILE_DRAG_EVENT, type NoteFileDragDetail } from './file-drag';
+import { getTabDropPosition } from './tab-drop-indicator';
 
 const MarkdownEditor = defineAsyncComponent({
   loader: () => import('./MarkdownEditor.vue'),
@@ -23,6 +25,7 @@ const suppressNextTabClick = ref(false);
 const pointerDragging = ref(false);
 const dragGhostPosition = ref({ left: 0, top: 0 });
 const tabDropIndicator = ref<{ left: number; top: number; height: number } | null>(null);
+const fileDropTarget = ref<'tabs' | 'editor' | null>(null);
 let pointerDrag: {
   leafId: string;
   tabId: string;
@@ -53,6 +56,7 @@ const emit = defineEmits<{
   'drag-over': [leafId: string, zone: WorkspaceDropZone | null];
   'drop-edge': [leafId: string, zone: WorkspaceDropZone];
   'drop-tab': [leafId: string, tabId: string, targetIndex: number];
+  'file-drop': [path: string];
   'create-note': [leafId: string];
   'open-workspace': [];
   'open-menu': [event: MouseEvent];
@@ -162,16 +166,14 @@ function updateTabDropIndicator(clientX: number, clientY: number) {
     return;
   }
 
-  const targetTab = childAtPoint(targetLeaf, '[data-workspace-tab]', clientX, clientY);
-  const tabRect = targetTab?.getBoundingClientRect();
   const stripRect = targetStrip.getBoundingClientRect();
-  const tabs = [...targetLeaf.querySelectorAll<HTMLElement>('[data-workspace-tab]')];
-  const lastTabRect = tabs[tabs.length - 1]?.getBoundingClientRect();
-  const left = tabRect
-    ? clientX < tabRect.left + tabRect.width / 2
-      ? tabRect.left
-      : tabRect.right
-    : (lastTabRect?.right ?? stripRect.left);
+  const tabRects = [...targetLeaf.querySelectorAll<HTMLElement>('[data-workspace-tab]')].map(
+    (tab) => {
+      const rect = tab.getBoundingClientRect();
+      return { left: rect.left, right: rect.right };
+    },
+  );
+  const { left } = getTabDropPosition(clientX, tabRects, stripRect.left);
 
   tabDropIndicator.value = {
     left,
@@ -243,18 +245,24 @@ function handlePointerUp(event: PointerEvent) {
     const targetTabStrip = targetLeaf
       ? childAtPoint(targetLeaf, '.workspace-tabs', event.clientX, event.clientY)
       : targetElement?.closest('.workspace-tabs');
-    if (targetLeaf && targetTab) {
-      const targetTabs = [...targetLeaf.querySelectorAll<HTMLElement>('[data-workspace-tab]')];
+    if (targetLeaf && targetTabStrip) {
+      const targetTabRects = [
+        ...targetLeaf.querySelectorAll<HTMLElement>('[data-workspace-tab]'),
+      ].map((tab) => {
+        const rect = tab.getBoundingClientRect();
+        return { left: rect.left, right: rect.right };
+      });
+      const { targetIndex } = getTabDropPosition(
+        event.clientX,
+        targetTabRects,
+        targetTabStrip.getBoundingClientRect().left,
+      );
       emit(
         'drop-tab',
         targetLeaf.dataset.workspaceLeaf ?? props.leaf.id,
-        targetTab.dataset.workspaceTab ?? '',
-        targetTabs.indexOf(targetTab),
+        targetTab?.dataset.workspaceTab ?? '',
+        targetIndex,
       );
-    } else if (targetLeaf && targetTabStrip) {
-      // 标签栏是加入目标分栏的明确投放区，不能被顶部边缘区域覆盖。
-      const targetTabs = targetLeaf.querySelectorAll('[data-workspace-tab]').length;
-      emit('drop-tab', targetLeaf.dataset.workspaceLeaf ?? props.leaf.id, '', targetTabs);
     } else if (targetLeaf) {
       const targetLeafId = targetLeaf.dataset.workspaceLeaf ?? props.leaf.id;
       const zone = edgeZoneAt(targetLeaf, event.clientX, event.clientY);
@@ -285,6 +293,36 @@ function cleanupPointerDrag() {
   window.removeEventListener('pointercancel', handlePointerCancel);
 }
 
+function getFileDropTarget(target: EventTarget | null): 'tabs' | 'editor' | null {
+  if (!(target instanceof Element)) return null;
+  if (target.closest('.workspace-tabs')) return 'tabs';
+  if (target.closest('.editor-document-body')) return 'editor';
+  return null;
+}
+
+function getFileDropTargetAt(clientX: number, clientY: number) {
+  const target = document.elementFromPoint(clientX, clientY);
+  const leaf = leafElementAt(clientX, clientY);
+  const zone = getFileDropTarget(target);
+  if (!leaf || !zone) return null;
+  return { leaf, zone };
+}
+
+function handleFilePointerDrag(event: Event) {
+  const detail = (event as CustomEvent<NoteFileDragDetail>).detail;
+  if (!detail) return;
+
+  const target =
+    detail.phase === 'cancel' ? null : getFileDropTargetAt(detail.clientX, detail.clientY);
+  const targetLeafId = target?.leaf.dataset.workspaceLeaf;
+  fileDropTarget.value = targetLeafId === props.leaf.id ? (target?.zone ?? null) : null;
+
+  if (detail.phase === 'end') {
+    if (targetLeafId === props.leaf.id && target) emit('file-drop', detail.path);
+    fileDropTarget.value = null;
+  }
+}
+
 function handleTabClick(leafId: string, tabId: string) {
   if (suppressNextTabClick.value) {
     suppressNextTabClick.value = false;
@@ -293,7 +331,11 @@ function handleTabClick(leafId: string, tabId: string) {
   emit('activate-tab', leafId, tabId);
 }
 
-onUnmounted(cleanupPointerDrag);
+onMounted(() => window.addEventListener(NOTE_FILE_DRAG_EVENT, handleFilePointerDrag));
+onUnmounted(() => {
+  cleanupPointerDrag();
+  window.removeEventListener(NOTE_FILE_DRAG_EVENT, handleFilePointerDrag);
+});
 
 defineExpose({
   wrapSelection: (before: string, after: string) => editorRef.value?.wrapSelection(before, after),
@@ -339,7 +381,11 @@ defineExpose({
       </svg>
       <span>{{ draggingTabLabel || '移动标签页' }}</span>
     </div>
-    <div class="workspace-tabs editor-tabs split-pane-tabs" role="tablist">
+    <div
+      class="workspace-tabs editor-tabs split-pane-tabs"
+      :class="{ 'is-file-drop-target': fileDropTarget === 'tabs' }"
+      role="tablist"
+    >
       <div
         v-for="tab in leaf.tabs"
         :key="tab.id"
@@ -445,7 +491,10 @@ defineExpose({
 
     <slot name="leaf-tools" :leaf="leaf" />
 
-    <div class="editor-document-body">
+    <div
+      class="editor-document-body"
+      :class="{ 'is-file-drop-target': fileDropTarget === 'editor' }"
+    >
       <MarkdownEditor
         v-if="activeTab"
         ref="editorRef"
@@ -533,6 +582,17 @@ defineExpose({
   background: var(--accent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent);
   pointer-events: none;
+}
+
+.workspace-tabs.is-file-drop-target {
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-secondary));
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.editor-document-body.is-file-drop-target {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
 }
 
 .workspace-drag-ghost {

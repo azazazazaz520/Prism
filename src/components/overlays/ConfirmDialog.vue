@@ -54,14 +54,14 @@ function handleKeydown(e: KeyboardEvent) {
 
 <template>
   <Teleport to="body">
-    <Transition name="dialog-fade">
+    <Transition name="motion-dialog">
       <div
         v-if="visible"
         class="dialog-overlay"
         @click.self="handleCancel"
         @keydown="handleKeydown"
       >
-        <div class="dialog-container">
+        <div class="dialog-container motion-dialog-panel">
           <div class="dialog-header">
             <h3 class="dialog-title">{{ title }}</h3>
           </div>

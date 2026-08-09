@@ -93,7 +93,7 @@ function back() {
 <template>
   <div class="toolbox">
     <!-- 工具网格视图 -->
-    <Transition name="tool-switch" mode="out-in">
+    <Transition name="motion-switch" mode="out-in">
       <div v-if="!activeTool" key="tool-list" class="toolbox-list-view">
         <div class="tb-header">
           <h2 class="tb-title">开发者工具箱</h2>
@@ -218,23 +218,6 @@ function back() {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.tool-switch-enter-active,
-.tool-switch-leave-active {
-  transition:
-    opacity var(--transition-fast) var(--easing-out),
-    transform var(--transition-fast) var(--easing-out);
-}
-
-.tool-switch-enter-from {
-  opacity: 0;
-  transform: translateX(8px);
-}
-
-.tool-switch-leave-to {
-  opacity: 0;
-  transform: translateX(-8px);
 }
 
 /* ── 头部 ──────────────────────────────── */

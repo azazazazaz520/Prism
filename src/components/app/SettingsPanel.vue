@@ -52,7 +52,12 @@ const isThemeOpen = ref(false);
 const themeTriggerRef = ref<HTMLElement | null>(null);
 
 /** 下拉菜单 fixed 定位样式 */
-const dropdownStyle = ref({ top: '0px', left: '0px', minWidth: '0px' });
+const dropdownStyle = ref({
+  top: '0px',
+  left: '0px',
+  minWidth: '0px',
+  '--transform-origin': 'top left',
+});
 
 const themeOptions = [
   { value: 'auto', label: '跟随系统' },
@@ -78,6 +83,7 @@ function toggleThemeDropdown() {
           top: `${rect.bottom + 4}px`,
           left: `${rect.left}px`,
           minWidth: `${rect.width}px`,
+          '--transform-origin': 'top left',
         };
       }
     });
@@ -396,19 +402,21 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
                   </svg>
                 </button>
                 <Teleport to="body">
-                  <div v-if="isThemeOpen" class="select-dropdown" :style="dropdownStyle">
-                    <button
-                      v-for="opt in themeOptions"
-                      :key="opt.value"
-                      type="button"
-                      role="option"
-                      :aria-selected="theme === opt.value"
-                      :class="['dropdown-item', { selected: theme === opt.value }]"
-                      @click="selectTheme(opt.value)"
-                    >
-                      {{ opt.label }}
-                    </button>
-                  </div>
+                  <Transition name="motion-popover">
+                    <div v-if="isThemeOpen" class="select-dropdown" :style="dropdownStyle">
+                      <button
+                        v-for="opt in themeOptions"
+                        :key="opt.value"
+                        type="button"
+                        role="option"
+                        :aria-selected="theme === opt.value"
+                        :class="['dropdown-item', { selected: theme === opt.value }]"
+                        @click="selectTheme(opt.value)"
+                      >
+                        {{ opt.label }}
+                      </button>
+                    </div>
+                  </Transition>
                 </Teleport>
               </div>
             </div>
@@ -561,7 +569,7 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
                 {{ isCheckingUpdate ? '检查中…' : '检查' }}
               </button>
             </div>
-            <Transition name="tip-fade">
+            <Transition name="motion-fade">
               <p v-if="updateTip" class="update-tip">{{ updateTip }}</p>
             </Transition>
           </div>
@@ -793,18 +801,6 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
   overflow: hidden;
-  animation: dropdown-fade-in 0.15s ease-out;
-}
-
-@keyframes dropdown-fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .dropdown-item {
@@ -1089,15 +1085,6 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
   font-size: var(--text-xs);
   color: var(--accent);
   text-align: right;
-}
-
-.tip-fade-enter-active,
-.tip-fade-leave-active {
-  transition: opacity 0.3s;
-}
-.tip-fade-enter-from,
-.tip-fade-leave-to {
-  opacity: 0;
 }
 
 /* HUD 主题适配 */

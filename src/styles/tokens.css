@@ -92,11 +92,27 @@
   --shadow-lg: 0 8px 12px -3px rgba(0, 0, 0, 0.08), 0 3px 4px -2px rgba(0, 0, 0, 0.04);
 
   /* ── 过渡/easing ───────────────────── */
-  --transition-fast: 0.18s;
-  --transition-normal: 0.25s;
-  --transition-dialog: 0.2s;
-  --easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
-  --easing-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --motion-duration-instant: 0ms;
+  --motion-duration-press: 0.12s;
+  --motion-duration-hover: 0.16s;
+  --motion-duration-popover: 0.18s;
+  --motion-duration-dialog: 0.2s;
+  --motion-duration-drawer: 0.24s;
+  --motion-distance-xs: 4px;
+  --motion-distance-sm: 8px;
+  --motion-distance-dialog: 12px;
+  --motion-scale-in: 0.98;
+  --motion-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --motion-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --motion-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --motion-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* 兼容既有组件，迁移完成后继续保留为稳定别名。 */
+  --transition-fast: var(--motion-duration-popover);
+  --transition-normal: var(--motion-duration-dialog);
+  --transition-dialog: var(--motion-duration-dialog);
+  --easing-standard: var(--motion-ease-standard);
+  --easing-out: var(--motion-ease-out);
   --easing-spring: cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 

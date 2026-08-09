@@ -956,7 +956,10 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   color: var(--text-secondary);
   font-size: 12px;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--motion-duration-hover) var(--motion-ease-standard),
+    border-color var(--motion-duration-hover) var(--motion-ease-standard),
+    color var(--motion-duration-hover) var(--motion-ease-standard);
 }
 
 .plugin-page-back:hover {
@@ -1303,16 +1306,4 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
 }
 
 /* ── 模块切换过渡 ────────────────────── */
-.module-fade-enter-active,
-.module-fade-leave-active {
-  transition: all var(--transition-normal) var(--easing-standard);
-}
-.module-fade-enter-from {
-  opacity: 0;
-  transform: translateY(6px);
-}
-.module-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-4px);
-}
 </style>

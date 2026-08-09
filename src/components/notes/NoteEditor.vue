@@ -2059,7 +2059,7 @@ onUnmounted(() => {
       @cancel="closeNoteQuickSwitcher"
     />
 
-    <Transition name="status-fade">
+    <Transition name="motion-fade">
       <div v-if="statusMsg" class="status-toast">{{ statusMsg }}</div>
     </Transition>
   </div>
@@ -2223,19 +2223,6 @@ onUnmounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.status-fade-enter-active,
-.status-fade-leave-active {
-  transition:
-    opacity 0.25s,
-    transform 0.25s;
-}
-
-.status-fade-enter-from,
-.status-fade-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(8px);
 }
 
 /* ═══ HUD 主题适配 ═══ */

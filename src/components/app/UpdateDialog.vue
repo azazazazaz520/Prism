@@ -60,9 +60,9 @@ function formatReleaseBody(body: string): string {
 
 <template>
   <Teleport to="body">
-    <Transition name="dialog-fade">
+    <Transition name="motion-dialog">
       <div v-if="visible && release" class="dialog-overlay" @click.self="emit('close')">
-        <div class="dialog-container">
+        <div class="dialog-container motion-dialog-panel">
           <div class="dialog-header">
             <h3 class="dialog-title">发现新版本</h3>
           </div>

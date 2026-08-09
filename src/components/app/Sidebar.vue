@@ -114,7 +114,6 @@ function handleClick(item: ModuleDescriptor) {
   padding: var(--space-lg) var(--space-md);
   flex-shrink: 0;
   user-select: none;
-  transition: all var(--transition-normal);
 }
 
 [data-theme='hud'] .sidebar,

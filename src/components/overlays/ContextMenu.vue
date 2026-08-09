@@ -97,7 +97,7 @@ async function handleItemClick(item: ContextMenuItem) {
           <span class="context-menu-label">{{ item.label }}</span>
           <span v-if="item.submenu" class="context-menu-chevron" aria-hidden="true">›</span>
         </button>
-        <Transition name="context-submenu">
+        <Transition name="motion-submenu">
           <div
             v-if="item.submenu && openSubmenuId === item.id"
             class="context-menu-submenu"
@@ -196,19 +196,6 @@ async function handleItemClick(item: ContextMenuItem) {
   border-radius: var(--radius-md);
   background: var(--bg-secondary);
   box-shadow: var(--shadow-lg);
-}
-
-.context-submenu-enter-active,
-.context-submenu-leave-active {
-  transition:
-    opacity var(--transition-fast) var(--easing-out),
-    transform var(--transition-fast) var(--easing-out);
-}
-
-.context-submenu-enter-from,
-.context-submenu-leave-to {
-  opacity: 0;
-  transform: translateX(-4px);
 }
 
 .context-menu-chevron {

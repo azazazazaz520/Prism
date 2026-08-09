@@ -1,0 +1,168 @@
+/* ═══ Prism 语义动效预设 ═══
+   组件通过 Vue <Transition name="motion-xxx"> 使用这些预设。
+   预设只处理透明度和 transform，颜色、边框和阴影由组件自行声明。
+*/
+
+/* 遮罩与状态提示：只表达出现和消失。 */
+.motion-fade-enter-active,
+.motion-fade-leave-active {
+  transition: opacity var(--motion-duration-popover) var(--motion-ease-out);
+}
+
+.motion-fade-enter-from,
+.motion-fade-leave-to {
+  opacity: 0;
+}
+
+/* 模态弹窗：遮罩淡入，弹窗内容由 .motion-dialog-panel 轻微下落。 */
+.motion-dialog-enter-active,
+.motion-dialog-leave-active {
+  transition: opacity var(--motion-duration-dialog) var(--motion-ease-out);
+}
+
+.motion-dialog-enter-from,
+.motion-dialog-leave-to {
+  opacity: 0;
+}
+
+.motion-dialog-enter-active .motion-dialog-panel,
+.motion-dialog-leave-active .motion-dialog-panel {
+  transition:
+    opacity var(--motion-duration-dialog) var(--motion-ease-out),
+    transform var(--motion-duration-dialog) var(--motion-ease-out);
+}
+
+.motion-dialog-enter-from .motion-dialog-panel,
+.motion-dialog-leave-to .motion-dialog-panel {
+  opacity: 0;
+  transform: translateY(calc(-1 * var(--motion-distance-dialog))) scale(var(--motion-scale-in));
+}
+
+/* 触发器附近的下拉菜单和浮层。 */
+.motion-popover-enter-active,
+.motion-popover-leave-active {
+  transition:
+    opacity var(--motion-duration-popover) var(--motion-ease-out),
+    transform var(--motion-duration-popover) var(--motion-ease-out);
+  transform-origin: var(--transform-origin, top center);
+}
+
+.motion-popover-enter-from,
+.motion-popover-leave-to {
+  opacity: 0;
+  transform: translateY(calc(-1 * var(--motion-distance-xs))) scale(var(--motion-scale-in));
+}
+
+/* 右键子菜单：主菜单保持瞬时，子菜单用轻微横向位移表达层级关系。 */
+.motion-submenu-enter-active,
+.motion-submenu-leave-active {
+  transition:
+    opacity var(--motion-duration-popover) var(--motion-ease-out),
+    transform var(--motion-duration-popover) var(--motion-ease-out);
+}
+
+.motion-submenu-enter-from,
+.motion-submenu-leave-to {
+  opacity: 0;
+  transform: translateX(calc(-1 * var(--motion-distance-xs)));
+}
+
+/* 面板或抽屉：用空间位移表达来源。 */
+.motion-panel-enter-active,
+.motion-panel-leave-active {
+  transition:
+    opacity var(--motion-duration-drawer) var(--motion-ease-drawer),
+    transform var(--motion-duration-drawer) var(--motion-ease-drawer);
+}
+
+.motion-panel-enter-from,
+.motion-panel-leave-to {
+  opacity: 0;
+  transform: translateY(var(--motion-distance-sm));
+}
+
+/* 悬浮窗设置面板位于触发控件下方，从上方轻微进入。 */
+.motion-panel-from-top.motion-panel-enter-from,
+.motion-panel-from-top.motion-panel-leave-to {
+  transform: translateY(calc(-1 * var(--motion-distance-sm)));
+}
+
+/* 同一容器内的视图切换。 */
+.motion-switch-enter-active,
+.motion-switch-leave-active {
+  transition:
+    opacity var(--motion-duration-dialog) var(--motion-ease-out),
+    transform var(--motion-duration-dialog) var(--motion-ease-out);
+}
+
+.motion-switch-enter-from {
+  opacity: 0;
+  transform: translateX(var(--motion-distance-sm));
+}
+
+.motion-switch-leave-to {
+  opacity: 0;
+  transform: translateX(calc(-1 * var(--motion-distance-sm)));
+}
+
+/* Toast：进入和退出保持同一方向，避免消息像被瞬间抽走。 */
+.motion-toast-enter-active,
+.motion-toast-leave-active {
+  transition:
+    opacity var(--motion-duration-dialog) var(--motion-ease-out),
+    transform var(--motion-duration-dialog) var(--motion-ease-out);
+}
+
+.motion-toast-enter-from,
+.motion-toast-leave-to {
+  opacity: 0;
+  transform: translateY(var(--motion-distance-sm));
+}
+
+/* Toast 本体使用 left: 50% 定位，过渡期间必须保留水平居中。 */
+.motion-toast-centered.motion-toast-enter-from,
+.motion-toast-centered.motion-toast-leave-to {
+  transform: translate(-50%, var(--motion-distance-sm));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-dialog-enter-active .motion-dialog-panel,
+  .motion-dialog-leave-active .motion-dialog-panel,
+  .motion-popover-enter-active,
+  .motion-popover-leave-active,
+  .motion-submenu-enter-active,
+  .motion-submenu-leave-active,
+  .motion-panel-enter-active,
+  .motion-panel-leave-active,
+  .motion-switch-enter-active,
+  .motion-switch-leave-active,
+  .motion-toast-enter-active,
+  .motion-toast-leave-active {
+    transition-property: opacity;
+  }
+
+  .motion-dialog-enter-from .motion-dialog-panel,
+  .motion-dialog-leave-to .motion-dialog-panel,
+  .motion-popover-enter-from,
+  .motion-popover-leave-to,
+  .motion-submenu-enter-from,
+  .motion-submenu-leave-to,
+  .motion-panel-enter-from,
+  .motion-panel-leave-to,
+  .motion-switch-enter-from,
+  .motion-switch-leave-to,
+  .motion-toast-enter-from,
+  .motion-toast-leave-to {
+    transform: none;
+  }
+
+  .motion-toast-centered.motion-toast-enter-from,
+  .motion-toast-centered.motion-toast-leave-to {
+    transform: translateX(-50%);
+  }
+
+  .motion-panel-from-top.motion-panel-enter-from,
+  .motion-panel-from-top.motion-panel-leave-to {
+    transform: none;
+  }
+}

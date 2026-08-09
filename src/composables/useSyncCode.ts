@@ -45,6 +45,20 @@ export function useSyncCode() {
     return invoke<SyncConfig>('get_sync_config');
   }
 
+  /** 通过受保护的 Edge Function 创建或加入 profile，避免直接读取同步码表。 */
+  async function pairProfile(action: 'create' | 'join', syncCode: string): Promise<string> {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.functions.invoke('pair-profile', {
+      body: { action, sync_code: syncCode.trim() },
+    });
+
+    if (error || !data?.profile_id) {
+      throw new Error(action === 'join' ? '同步码无效，请检查后重试' : '生成同步码失败');
+    }
+
+    return data.profile_id as string;
+  }
+
   /** 判断当前设备是否已配对 */
   async function hasProfile(): Promise<boolean> {
     const config = await getSyncConfig();
@@ -63,29 +77,11 @@ export function useSyncCode() {
 
     try {
       const code = generateUUID();
-      const supabase = getSupabaseClient();
-      if (!supabase) throw new Error('Supabase 客户端未初始化');
-
-      // 创建 profile
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .insert({ sync_code: code })
-        .select('id')
-        .single();
-
-      if (profileError) throw profileError;
-
-      // 创建 user_profile 映射
-      const { error: mappingError } = await supabase.from('user_profiles').insert({
-        user_id: user.value.id,
-        profile_id: profile.id,
-      });
-
-      if (mappingError) throw mappingError;
+      const profileId = await pairProfile('create', code);
 
       // 持久化同步码到本地配置
-      await invoke('set_sync_config', { syncCode: code, profileId: profile.id });
-      setProfileId(profile.id);
+      await invoke('set_sync_config', { syncCode: code, profileId });
+      setProfileId(profileId);
 
       return code;
     } catch (e) {
@@ -107,44 +103,14 @@ export function useSyncCode() {
     pairError.value = null;
 
     try {
-      const supabase = getSupabaseClient();
-      if (!supabase) throw new Error('Supabase 客户端未初始化');
-
-      // 查找 profile
-      const { data: profile, error: findError } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('sync_code', syncCode)
-        .single();
-
-      if (findError || !profile) {
-        throw new Error('同步码无效，请检查后重试');
-      }
-
-      // 检查是否已加入
-      const { data: existing } = await supabase
-        .from('user_profiles')
-        .select('user_id')
-        .eq('user_id', user.value.id)
-        .eq('profile_id', profile.id)
-        .maybeSingle();
-
-      if (!existing) {
-        // 创建映射
-        const { error: mappingError } = await supabase.from('user_profiles').insert({
-          user_id: user.value.id,
-          profile_id: profile.id,
-        });
-
-        if (mappingError) throw mappingError;
-      }
+      const profileId = await pairProfile('join', syncCode);
 
       // 持久化
-      await invoke('set_sync_config', { syncCode, profileId: profile.id });
-      setProfileId(profile.id);
+      await invoke('set_sync_config', { syncCode: syncCode.trim(), profileId });
+      setProfileId(profileId);
 
       // 将本地无 profile_id 的任务关联到该 profile 并推送
-      await mergeLocalToProfile(profile.id);
+      await mergeLocalToProfile(profileId);
     } catch (e) {
       const message = e instanceof Error ? e.message : '配对失败';
       pairError.value = message;
@@ -191,25 +157,11 @@ export function useSyncCode() {
    * RLS 会拒绝后续 push 操作。
    * 失败时静默忽略，由离线队列兜底。
    */
-  async function ensureProfileMembership(profileId: string): Promise<void> {
+  async function ensureProfileMembership(syncCode: string): Promise<void> {
     if (!user.value) return;
-    const supabase = getSupabaseClient();
-    if (!supabase) return;
 
     try {
-      const { data: existing } = await supabase
-        .from('user_profiles')
-        .select('user_id')
-        .eq('user_id', user.value.id)
-        .eq('profile_id', profileId)
-        .maybeSingle();
-
-      if (!existing) {
-        await supabase.from('user_profiles').insert({
-          user_id: user.value.id,
-          profile_id: profileId,
-        });
-      }
+      await pairProfile('join', syncCode);
     } catch (e) {
       diagnosticsLogger.warn(
         'sync',
@@ -236,32 +188,21 @@ export function useSyncCode() {
       setProfileId(config.profile_id);
       // 异步确保当前用户仍在 user_profiles 中
       // fire-and-forget — 失败由 pushTask 离线队列兜底
-      ensureProfileMembership(config.profile_id);
+      ensureProfileMembership(config.sync_code);
       return true;
     }
 
-    // 本地无 profile_id → 查询 Supabase（仅在线时可用，5s 超时）
-    const supabase = getSupabaseClient();
+    // 本地无 profile_id → 通过受保护接口恢复（仅在线时可用，5s 超时）
     try {
-      const query = supabase
-        .from('profiles')
-        .select('id')
-        .eq('sync_code', config.sync_code)
-        .single();
+      const query = pairProfile('join', config.sync_code);
       const timeout = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('timeout')), 5_000),
       );
-      const { data: profile, error } = (await Promise.race([query, timeout])) as Awaited<
-        typeof query
-      >;
-
-      if (error || !profile) return false;
+      const profileId = await Promise.race([query, timeout]);
 
       // 回填本地配置，下次启动可离线恢复
-      await invoke('set_sync_config', { syncCode: config.sync_code, profileId: profile.id });
-      setProfileId(profile.id);
-      // 同样确保当前用户在 user_profiles 中
-      ensureProfileMembership(profile.id);
+      await invoke('set_sync_config', { syncCode: config.sync_code, profileId });
+      setProfileId(profileId);
       return true;
     } catch {
       return false;

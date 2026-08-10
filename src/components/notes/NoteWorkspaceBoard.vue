@@ -51,6 +51,7 @@ const draggingTabId = ref<string | null>(null);
 const draggingLeafId = ref<string | null>(null);
 const dropTarget = ref<{ leafId: string; zone: WorkspaceDropZone } | null>(null);
 const fileDragGhost = ref<{ left: number; top: number; label: string } | null>(null);
+const pendingScrollLine = ref<number | null>(null);
 const draggingTabLabel = computed(() => {
   if (!draggingTabId.value) return '';
   const tab = findTabInTree(state.value.root, draggingTabId.value);
@@ -87,6 +88,7 @@ type WorkspaceLeafApi = {
   getSelection: () => string;
   replaceSelection: (text: string) => void;
   selectAll: () => void;
+  scrollToLine: (line: number) => boolean;
 };
 const leafRefs = new Map<string, WorkspaceLeafApi>();
 
@@ -224,8 +226,16 @@ function handleCreateNote(leafId: string) {
 }
 
 function setLeafRef(leafId: string, instance: unknown) {
-  if (instance) leafRefs.set(leafId, instance as WorkspaceLeafApi);
-  else leafRefs.delete(leafId);
+  if (!instance) {
+    leafRefs.delete(leafId);
+    return;
+  }
+
+  const api = instance as WorkspaceLeafApi;
+  leafRefs.set(leafId, api);
+  if (leafId === state.value.activeLeafId && pendingScrollLine.value !== null) {
+    if (api.scrollToLine(pendingScrollLine.value)) pendingScrollLine.value = null;
+  }
 }
 
 function findLeafInTree(node: NoteWorkspaceState['root'], leafId: string): WorkspaceLeaf {
@@ -274,6 +284,21 @@ defineExpose({
   replaceSelection: (text: string) =>
     leafRefs.get(state.value.activeLeafId)?.replaceSelection(text),
   selectAll: () => leafRefs.get(state.value.activeLeafId)?.selectAll(),
+  scrollToLine: (line: number) => {
+    const leaf = leafRefs.get(state.value.activeLeafId);
+    if (!leaf) {
+      pendingScrollLine.value = line;
+      return false;
+    }
+
+    if (leaf.scrollToLine(line)) {
+      pendingScrollLine.value = null;
+      return true;
+    }
+
+    pendingScrollLine.value = line;
+    return false;
+  },
 });
 </script>
 

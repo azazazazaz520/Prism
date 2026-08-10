@@ -706,6 +706,25 @@ function prependToLine(text: string) {
   view.focus();
 }
 
+/** 将编辑器滚动到指定 Markdown 源码行，并将光标放到该行开头。 */
+function scrollToLine(lineNumber: number): boolean {
+  if (!view) return false;
+
+  const line = Number.isFinite(lineNumber)
+    ? Math.min(Math.max(Math.trunc(lineNumber), 1), view.state.doc.lines)
+    : 1;
+  const target = view.state.doc.line(line);
+  view.dispatch({
+    selection: { anchor: target.from },
+    effects: EditorView.scrollIntoView(target.from, {
+      y: 'start',
+      yMargin: 24,
+    }),
+  });
+  view.focus();
+  return true;
+}
+
 defineExpose({
   insertText,
   wrapSelection,
@@ -714,6 +733,7 @@ defineExpose({
   replaceSelection,
   selectAll,
   prependToLine,
+  scrollToLine,
 });
 </script>
 

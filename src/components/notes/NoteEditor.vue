@@ -500,6 +500,12 @@ function handleCursorChange(line: number, col: number) {
   cursorCol.value = col;
 }
 
+/** 点击笔记大纲后，将当前编辑器定位到对应的 Markdown 源码行。 */
+async function handleOutlineNavigation(line: number) {
+  await nextTick();
+  workspaceBoardRef.value?.scrollToLine(line);
+}
+
 function showContextMenu(event: MouseEvent) {
   event.preventDefault();
   event.stopPropagation();
@@ -2013,6 +2019,7 @@ onUnmounted(() => {
           @toggle-task="handleTaskToggle"
           @add-task="addTaskReference"
           @open-path="openPathInActivePane"
+          @navigate-outline="handleOutlineNavigation"
         />
       </div>
     </div>

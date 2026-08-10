@@ -3,6 +3,8 @@ import type { FileEntry } from '../types';
 export interface NoteOutlineItem {
   level: number;
   title: string;
+  /** Markdown 源码中从 1 开始的行号。 */
+  line: number;
 }
 
 /** 按名称筛选文件树，同时保留命中的目录路径。 */
@@ -27,7 +29,7 @@ export function countNoteWords(text: string): number {
   return chineseChars + englishWords;
 }
 
-/** 解析 Markdown 前三级标题，忽略围栏代码块中的内容。 */
+/** 解析 Markdown 各级标题，忽略围栏代码块中的内容。 */
 export function parseNoteOutline(markdown: string): NoteOutlineItem[] {
   const codeFenceRe = /^\s{0,3}(`{3,}|~{3,})/;
   const result: NoteOutlineItem[] = [];
@@ -35,7 +37,7 @@ export function parseNoteOutline(markdown: string): NoteOutlineItem[] {
   let fenceChar = '';
   let fenceLength = 0;
 
-  for (const line of markdown.split(/\r?\n/)) {
+  for (const [lineIndex, line] of markdown.split(/\r?\n/).entries()) {
     const fence = codeFenceRe.exec(line);
     if (fence) {
       if (!inCodeFence) {
@@ -49,8 +51,10 @@ export function parseNoteOutline(markdown: string): NoteOutlineItem[] {
     }
     if (inCodeFence) continue;
 
-    const match = /^(#{1,3})\s+(.+?)\s*$/.exec(line);
-    if (match) result.push({ level: match[1].length, title: match[2] });
+    const match = /^(#{1,6})\s+(.+?)\s*$/.exec(line);
+    if (match) {
+      result.push({ level: match[1].length, title: match[2], line: lineIndex + 1 });
+    }
   }
 
   return result;

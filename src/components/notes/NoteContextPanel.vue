@@ -20,6 +20,7 @@ const emit = defineEmits<{
   'toggle-task': [taskId: string];
   'add-task': [];
   'open-path': [path: string];
+  'navigate-outline': [line: number];
 }>();
 
 function taskForReference(reference: TaskReference): Task | undefined {
@@ -71,14 +72,16 @@ function taskForReference(reference: TaskReference): Task | undefined {
       </section>
       <section v-if="outline.length > 0" class="context-section">
         <div class="context-section-title">{{ outlinePanelLabel }}</div>
-        <div
+        <button
           v-for="item in outline"
-          :key="`${item.level}-${item.title}`"
+          :key="item.line"
+          type="button"
           class="outline-item"
           :style="{ paddingLeft: `${(item.level - 1) * 12}px` }"
+          @click="emit('navigate-outline', item.line)"
         >
           {{ item.title }}
-        </div>
+        </button>
       </section>
     </template>
     <div v-else class="context-empty">
@@ -213,13 +216,27 @@ function taskForReference(reference: TaskReference): Task | undefined {
 }
 
 .outline-item {
+  display: block;
+  width: 100%;
   padding-top: 5px;
   padding-bottom: 5px;
+  border: 0;
+  background: transparent;
   color: var(--text-secondary);
+  font: inherit;
   font-size: 12px;
+  text-align: left;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.outline-item:hover,
+.outline-item:focus-visible {
+  background: var(--bg-hover);
+  color: var(--accent);
+  outline: none;
 }
 
 .context-empty {

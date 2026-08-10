@@ -32,10 +32,18 @@ describe('note-editor utilities', () => {
     ]);
   });
 
-  it('解析标题时忽略代码围栏内的标题', () => {
-    expect(parseNoteOutline('# 开始\n```md\n# 忽略\n```\n## 继续')).toEqual([
-      { level: 1, title: '开始' },
-      { level: 2, title: '继续' },
+  it('解析各级标题、源码行号并忽略代码围栏内的标题', () => {
+    expect(parseNoteOutline('# 开始\n```md\n# 忽略\n```\n## 继续\n\n###### 结束')).toEqual([
+      { level: 1, title: '开始', line: 1 },
+      { level: 2, title: '继续', line: 5 },
+      { level: 6, title: '结束', line: 7 },
+    ]);
+  });
+
+  it('为重复标题保留不同的源码行号', () => {
+    expect(parseNoteOutline('## 相同\n\n## 相同')).toEqual([
+      { level: 2, title: '相同', line: 1 },
+      { level: 2, title: '相同', line: 3 },
     ]);
   });
 

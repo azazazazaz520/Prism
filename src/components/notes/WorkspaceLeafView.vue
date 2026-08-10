@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, onUnmounted, ref } from 'vue';
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue';
 import type { NoteDocumentState } from '../../composables/useNoteDocumentStore';
 import type { WorkspaceDropZone, WorkspaceLeaf } from '../../domain/note-workspace';
 import { NOTE_FILE_DRAG_EVENT, type NoteFileDragDetail } from './file-drag';
@@ -18,9 +18,11 @@ interface MarkdownEditorApi {
   getSelection: () => string;
   replaceSelection: (text: string) => void;
   selectAll: () => void;
+  scrollToLine: (line: number) => boolean;
 }
 
 const editorRef = ref<MarkdownEditorApi | null>(null);
+const pendingScrollLine = ref<number | null>(null);
 const suppressNextTabClick = ref(false);
 const pointerDragging = ref(false);
 const dragGhostPosition = ref({ left: 0, top: 0 });
@@ -68,6 +70,22 @@ const activeTab = computed(
 );
 const activeDocument = computed(() =>
   activeTab.value ? (props.documents.get(activeTab.value.path) ?? null) : null,
+);
+
+watch(
+  () => activeTab.value?.path,
+  () => {
+    pendingScrollLine.value = null;
+  },
+);
+
+watch(
+  editorRef,
+  (editor) => {
+    if (!editor || pendingScrollLine.value === null) return;
+    if (editor.scrollToLine(pendingScrollLine.value)) pendingScrollLine.value = null;
+  },
+  { flush: 'post' },
 );
 
 function tabName(path: string) {
@@ -345,6 +363,14 @@ defineExpose({
   getSelection: () => editorRef.value?.getSelection() ?? '',
   replaceSelection: (text: string) => editorRef.value?.replaceSelection(text),
   selectAll: () => editorRef.value?.selectAll(),
+  scrollToLine: (line: number) => {
+    if (editorRef.value?.scrollToLine(line)) {
+      pendingScrollLine.value = null;
+      return true;
+    }
+    pendingScrollLine.value = line;
+    return false;
+  },
 });
 </script>
 

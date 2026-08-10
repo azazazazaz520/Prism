@@ -251,37 +251,25 @@ mod tests {
 
     #[test]
     fn relative_markdown_path_filters_extensions_and_normalizes_separators() {
-        let base = Path::new("C:\\notes");
+        let base = Path::new("notes");
+        let markdown_path = base.join("daily").join("today.md");
+        let text_path = base.join("daily").join("today.txt");
+        let outside_path = Path::new("other").join("today.md");
         assert_eq!(
-            relative_markdown_path(Path::new("C:\\notes\\daily\\today.md"), base),
+            relative_markdown_path(&markdown_path, base),
             Some("daily/today.md".to_string())
         );
-        assert_eq!(
-            relative_markdown_path(Path::new("C:\\notes\\daily\\today.txt"), base),
-            None
-        );
-        assert_eq!(
-            relative_markdown_path(Path::new("C:\\other\\today.md"), base),
-            None
-        );
+        assert_eq!(relative_markdown_path(&text_path, base), None);
+        assert_eq!(relative_markdown_path(&outside_path, base), None);
     }
 
     #[test]
     fn rename_paths_requires_two_markdown_paths_in_from_to_order() {
-        let base = Path::new("C:\\notes");
+        let base = Path::new("notes");
         assert_eq!(
-            rename_paths(
-                &[
-                    PathBuf::from("C:\\notes\\old.md"),
-                    PathBuf::from("C:\\notes\\new.md"),
-                ],
-                base,
-            ),
+            rename_paths(&[base.join("old.md"), base.join("new.md"),], base,),
             Some(("old.md".to_string(), "new.md".to_string()))
         );
-        assert_eq!(
-            rename_paths(&[PathBuf::from("C:\\notes\\old.md")], base),
-            None
-        );
+        assert_eq!(rename_paths(&[base.join("old.md")], base), None);
     }
 }

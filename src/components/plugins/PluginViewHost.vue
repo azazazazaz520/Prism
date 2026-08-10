@@ -104,6 +104,8 @@ export default defineComponent({
               class: 'rail-btn plugin-rail-btn',
               'data-plugin': v.pluginId,
               'data-tooltip': v.id,
+              title: v.id,
+              'aria-label': v.id,
               onClick: () => v.onActivate?.(),
             },
             [
@@ -210,7 +212,9 @@ export default defineComponent({
   color: var(--text-tertiary);
   cursor: pointer;
   position: relative;
-  transition: all 0.2s;
+  transition:
+    background-color var(--motion-duration-hover) var(--motion-ease-standard),
+    color var(--motion-duration-hover) var(--motion-ease-standard);
 }
 
 .plugin-rail-btn:hover {

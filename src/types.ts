@@ -177,6 +177,20 @@ export interface NotesLayoutState {
   expandedPaths: string[];
 }
 
+/** 笔记工作区中的一个编辑分栏。 */
+export interface NotePane {
+  id: string;
+  tabs: string[];
+  activeTab: string | null;
+}
+
+/** 笔记工作区的分栏布局状态。 */
+export interface NoteWorkspaceLayout {
+  panes: NotePane[];
+  activePaneId: string;
+  direction: 'horizontal' | 'vertical' | null;
+}
+
 // ── Prompt 管理相关类型 ──────────────────────────────
 
 // ── Prompt 管理相关类型 ──────────────────────────────

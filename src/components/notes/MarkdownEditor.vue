@@ -3,27 +3,27 @@
  * Markdown 编辑器组件，基于 CodeMirror 6 封装。
  *
  * 双向同步机制：父组件通过 v-model（:modelValue + @update:modelValue）
- * 传入初始内容并接收编辑变更。组件内部通过 suppressExternal 标记位防止
+ * 传入初始内容并接收编辑变更。组件内部通过最近一次发出的内容防止
  * 「外部写入 → 内容同步 → 触发 update 事件 → 再次写入」的无限循环。
  * 支持动态明暗主题切换、Ctrl+S 手动保存、光标行列位置上报，并通过
  * defineExpose 暴露文本操作 API（插入、包裹选中、行首插入等）。
  */
-import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, watch, onMounted, onUnmounted } from 'vue';
 import { EditorState, Compartment, RangeSetBuilder } from '@codemirror/state';
+import type { LanguageDescription } from '@codemirror/language';
 import {
   Decoration,
   EditorView,
   ViewPlugin,
   WidgetType,
   keymap,
-  drawSelection,
   dropCursor,
 } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
-import { languages } from '@codemirror/language-data';
 import { bracketMatching } from '@codemirror/language';
 import { oneDarkTheme } from '@codemirror/theme-one-dark';
+import { replaceEditorDocument } from './editor-document-sync';
 
 // ── Props & Emits ──────────────────────────
 
@@ -51,7 +51,7 @@ const editorRef = ref<HTMLDivElement | null>(null);
 let view: EditorView | null = null;
 /** 标记位：防止 modelValue watch 触发的双向绑定写回循环。
  *  当 EditorView 内部修改文档时设 true，watch 检测到此标记会跳过回写。 */
-let suppressExternal = false;
+let lastEmittedValue: string | null = null;
 
 /** 文档切换时重建撤销历史，避免多个笔记共享撤销栈。 */
 const historyComp = new Compartment();
@@ -74,40 +74,43 @@ const customTheme = EditorView.theme({
   '&': {
     fontSize: '16px',
     fontFamily: "'Segoe UI', 'Microsoft YaHei', sans-serif",
-    lineHeight: '1.75',
+    lineHeight: '1.8',
     color: 'var(--text-primary)',
     backgroundColor: 'var(--bg-primary)',
     border: 'none',
     outline: 'none',
+    width: '100%',
     height: '100%',
+    minWidth: '0',
+    minHeight: '0',
   },
   '&.cm-focused': {
     outline: 'none',
   },
-  '& .cm-selectionBackground, &.cm-focused .cm-selectionBackground': {
-    backgroundColor: 'var(--selection-bg) !important',
-  },
-  '& .cm-content::selection, & .cm-line::selection': {
-    backgroundColor: 'var(--selection-bg)',
-    color: 'var(--text-primary)',
-  },
+  '& .cm-content::selection, & .cm-content *::selection, & .cm-line::selection, & .cm-line *::selection':
+    {
+      backgroundColor: 'var(--editor-selection-bg) !important',
+      color: 'var(--editor-selection-text) !important',
+    },
   '.cm-scroller': {
     fontFamily: 'inherit',
     lineHeight: 'inherit',
     overflowY: 'auto',
     overflowX: 'hidden',
     width: '100%',
-    display: 'flex',
-    justifyContent: 'center',
+    height: '100%',
+    minWidth: '0',
+    minHeight: '0',
+    display: 'block',
   },
   '.cm-content': {
-    width: 'min(100%, 860px)',
-    maxWidth: '860px',
+    width: 'min(100%, 820px)',
+    maxWidth: '820px',
     boxSizing: 'border-box',
-    padding: '28px 40px 120px',
+    padding: '28px 32px 120px',
     fontFamily: 'inherit',
     caretColor: 'var(--accent)',
-    margin: '0',
+    margin: '0 auto',
     whiteSpace: 'pre-wrap',
     overflowWrap: 'anywhere',
   },
@@ -360,13 +363,19 @@ function collectInlineDecorations(text: string, offset: number): InlineDecoratio
 const livePreviewPlugin = ViewPlugin.fromClass(
   class {
     decorations;
+    activeLine = 1;
 
     constructor(view: EditorView) {
+      this.activeLine = view.state.doc.lineAt(view.state.selection.main.head).number;
       this.decorations = this.build(view);
     }
 
     update(update: { view: EditorView; docChanged: boolean; selectionSet: boolean }) {
-      if (update.docChanged || update.selectionSet) this.decorations = this.build(update.view);
+      const nextLine = update.view.state.doc.lineAt(update.view.state.selection.main.head).number;
+      if (update.docChanged || (update.selectionSet && nextLine !== this.activeLine)) {
+        this.activeLine = nextLine;
+        this.decorations = this.build(update.view);
+      }
     }
 
     build(view: EditorView) {
@@ -542,13 +551,13 @@ const livePreviewPlugin = ViewPlugin.fromClass(
 
 // ── 构建扩展 ───────────────────────────────
 
-function buildExtensions() {
+function buildExtensions(codeLanguages: readonly LanguageDescription[] = []) {
   return [
     historyComp.of(history()),
-    drawSelection(),
+    // 使用浏览器原生文字选区，避免 Live Preview 的块级装饰把选区扩展成整块背景。
     dropCursor(),
     bracketMatching(),
-    markdown({ codeLanguages: languages }),
+    markdown({ codeLanguages }),
     keymap.of([...defaultKeymap, ...historyKeymap]),
     taskCheckboxPlugin,
     livePreviewPlugin,
@@ -558,11 +567,8 @@ function buildExtensions() {
     EditorView.updateListener.of((update) => {
       // 内容变更 → 通知父组件
       if (update.docChanged) {
-        suppressExternal = true;
-        emit('update:modelValue', update.state.doc.toString());
-        nextTick(() => {
-          suppressExternal = false;
-        });
+        lastEmittedValue = update.state.doc.toString();
+        emit('update:modelValue', lastEmittedValue);
       }
       // 光标/选区变更 → 上报行列
       if (update.selectionSet || update.docChanged) {
@@ -579,14 +585,16 @@ function buildExtensions() {
 watch(
   () => props.modelValue,
   (newVal) => {
-    if (suppressExternal || !view) return;
+    if (!view) return;
+    if (newVal === lastEmittedValue) {
+      lastEmittedValue = null;
+      return;
+    }
     const current = view.state.doc.toString();
     if (newVal !== current) {
-      view.dispatch({
-        changes: { from: 0, to: current.length, insert: newVal },
-        effects: historyComp.reconfigure(history()),
-      });
+      replaceEditorDocument(view, historyComp, newVal);
     }
+    lastEmittedValue = null;
   },
 );
 
@@ -605,12 +613,16 @@ const themeObserver = new MutationObserver(() => {
   handleThemeChange();
 });
 
-onMounted(() => {
+onMounted(async () => {
+  if (!editorRef.value) return;
+
+  // 将语言描述移出首屏主包，具体语言仍由 CodeMirror 在需要时动态加载。
+  const { languages } = await import('@codemirror/language-data');
   if (!editorRef.value) return;
 
   const state = EditorState.create({
     doc: props.modelValue,
-    extensions: buildExtensions(),
+    extensions: buildExtensions(languages),
   });
 
   view = new EditorView({
@@ -670,6 +682,12 @@ function getSelection(): string {
   return view.state.doc.sliceString(from, to);
 }
 
+function selectAll() {
+  if (!view) return;
+  view.dispatch({ selection: { anchor: 0, head: view.state.doc.length } });
+  view.focus();
+}
+
 function replaceSelection(text: string) {
   if (!view) return;
   view.dispatch(view.state.replaceSelection(text));
@@ -688,13 +706,34 @@ function prependToLine(text: string) {
   view.focus();
 }
 
+/** 将编辑器滚动到指定 Markdown 源码行，并将光标放到该行开头。 */
+function scrollToLine(lineNumber: number): boolean {
+  if (!view) return false;
+
+  const line = Number.isFinite(lineNumber)
+    ? Math.min(Math.max(Math.trunc(lineNumber), 1), view.state.doc.lines)
+    : 1;
+  const target = view.state.doc.line(line);
+  view.dispatch({
+    selection: { anchor: target.from },
+    effects: EditorView.scrollIntoView(target.from, {
+      y: 'start',
+      yMargin: 24,
+    }),
+  });
+  view.focus();
+  return true;
+}
+
 defineExpose({
   insertText,
   wrapSelection,
   focus,
   getSelection,
   replaceSelection,
+  selectAll,
   prependToLine,
+  scrollToLine,
 });
 </script>
 
@@ -704,7 +743,11 @@ defineExpose({
 
 <style scoped>
 .codemirror-wrapper {
-  flex: 1;
+  display: flex;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -736,12 +779,12 @@ defineExpose({
 }
 
 .codemirror-wrapper :deep(.cm-live-heading-1) {
-  font-size: 1.85em;
+  font-size: 2em;
   line-height: 1.35;
 }
 
 .codemirror-wrapper :deep(.cm-live-heading-2) {
-  font-size: 1.45em;
+  font-size: 1.5em;
   line-height: 1.45;
 }
 
@@ -885,5 +928,11 @@ defineExpose({
   text-decoration: underline;
   text-decoration-color: var(--accent-muted);
   text-underline-offset: 3px;
+}
+
+@media (max-width: 720px) {
+  .codemirror-wrapper :deep(.cm-content) {
+    padding: 24px 20px 96px;
+  }
 }
 </style>

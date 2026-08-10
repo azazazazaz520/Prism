@@ -6,7 +6,9 @@
  * 采用统一 paddingLeft 缩进（12 + depth * 14），操作按钮通过透明度切换
  * 避免布局跳动。
  */
+import { onUnmounted, ref } from 'vue';
 import type { FileEntry, FileTreeContextTarget } from '../../types';
+import { emitNoteFileDrag } from './file-drag';
 
 defineProps<{
   entry: FileEntry;
@@ -39,7 +41,113 @@ const INDENT_PER_LEVEL = 14;
 /** 根级基础左内边距 */
 const BASE_PADDING = 12;
 
+const suppressFileClickUntil = ref(0);
+let filePointerDrag: {
+  path: string;
+  pointerId: number;
+  startX: number;
+  startY: number;
+  active: boolean;
+} | null = null;
+
+/** 开始监听文件节点的应用内指针拖动。 */
+function handleFilePointerDown(event: PointerEvent, path: string) {
+  if (
+    event.button !== 0 ||
+    !event.isPrimary ||
+    (event.target instanceof Element && event.target.closest('.tree-node-actions'))
+  ) {
+    return;
+  }
+
+  filePointerDrag = {
+    path,
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    active: false,
+  };
+  window.addEventListener('pointermove', handleFilePointerMove, { passive: false });
+  window.addEventListener('pointerup', handleFilePointerUp);
+  window.addEventListener('pointercancel', handleFilePointerCancel);
+}
+
+function handleFilePointerMove(event: PointerEvent) {
+  if (!filePointerDrag || event.pointerId !== filePointerDrag.pointerId) return;
+
+  const distance = Math.hypot(
+    event.clientX - filePointerDrag.startX,
+    event.clientY - filePointerDrag.startY,
+  );
+  if (!filePointerDrag.active && distance < 6) return;
+
+  if (!filePointerDrag.active) {
+    filePointerDrag.active = true;
+    window.getSelection()?.removeAllRanges();
+    emitNoteFileDrag({
+      phase: 'start',
+      path: filePointerDrag.path,
+      clientX: event.clientX,
+      clientY: event.clientY,
+    });
+  }
+
+  event.preventDefault();
+  emitNoteFileDrag({
+    phase: 'move',
+    path: filePointerDrag.path,
+    clientX: event.clientX,
+    clientY: event.clientY,
+  });
+}
+
+function handleFilePointerUp(event: PointerEvent) {
+  if (!filePointerDrag || event.pointerId !== filePointerDrag.pointerId) return;
+
+  if (filePointerDrag.active) {
+    suppressFileClickUntil.value = performance.now() + 500;
+    emitNoteFileDrag({
+      phase: 'end',
+      path: filePointerDrag.path,
+      clientX: event.clientX,
+      clientY: event.clientY,
+    });
+  }
+  cleanupFilePointerDrag();
+}
+
+function handleFilePointerCancel(event: PointerEvent) {
+  if (!filePointerDrag || event.pointerId !== filePointerDrag.pointerId) return;
+
+  if (filePointerDrag.active) {
+    emitNoteFileDrag({
+      phase: 'cancel',
+      path: filePointerDrag.path,
+      clientX: event.clientX,
+      clientY: event.clientY,
+    });
+  }
+  cleanupFilePointerDrag();
+}
+
+function cleanupFilePointerDrag() {
+  filePointerDrag = null;
+  window.removeEventListener('pointermove', handleFilePointerMove);
+  window.removeEventListener('pointerup', handleFilePointerUp);
+  window.removeEventListener('pointercancel', handleFilePointerCancel);
+}
+
+function handleFileClick(path: string) {
+  if (performance.now() < suppressFileClickUntil.value) {
+    suppressFileClickUntil.value = 0;
+    return;
+  }
+  emit('select', path);
+}
+
 defineOptions({ name: 'TreeNode' });
+
+onUnmounted(cleanupFilePointerDrag);
 </script>
 
 <template>
@@ -191,7 +299,8 @@ defineOptions({ name: 'TreeNode' });
     :tabindex="0"
     :class="['tree-row', 'tree-row-file', { active: selectedPath === entry.path }]"
     :style="{ paddingLeft: `${BASE_PADDING + (depth || 0) * INDENT_PER_LEVEL + 14 + 4}px` }"
-    @click="emit('select', entry.path)"
+    @pointerdown="handleFilePointerDown($event, entry.path)"
+    @click="handleFileClick(entry.path)"
     @contextmenu.prevent.stop="
       emit('context-menu', $event, { name: entry.name, path: entry.path, kind: 'file' })
     "
@@ -422,7 +531,9 @@ defineOptions({ name: 'TreeNode' });
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard);
 }
 
 .node-btn:hover {

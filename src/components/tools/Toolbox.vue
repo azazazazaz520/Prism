@@ -93,106 +93,106 @@ function back() {
 <template>
   <div class="toolbox">
     <!-- 工具网格视图 -->
-    <template v-if="!activeTool">
-      <div class="tb-header">
-        <h2 class="tb-title">开发者工具箱</h2>
-        <span class="tb-count">{{ tools.length }} 个工具</span>
-      </div>
-      <div class="tb-search-wrap">
-        <div class="tb-search">
-          <svg
-            class="tb-search-icon"
-            width="15"
-            height="15"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-          >
-            <circle cx="11" cy="11" r="8" />
-            <path d="M21 21l-4.35-4.35" />
-          </svg>
-          <input
-            class="tb-search-input"
-            v-model="searchQuery"
-            placeholder="搜索工具..."
-            autofocus
-          />
-          <button
-            v-if="searchQuery"
-            class="tb-search-clear"
-            aria-label="清空搜索"
-            @click="searchQuery = ''"
-          >
-            ×
-          </button>
+    <Transition name="motion-switch" mode="out-in">
+      <div v-if="!activeTool" key="tool-list" class="toolbox-list-view">
+        <div class="tb-header">
+          <h2 class="tb-title">开发者工具箱</h2>
+          <span class="tb-count">{{ tools.length }} 个工具</span>
         </div>
-      </div>
-
-      <!-- 空状态 -->
-      <div v-if="isEmpty" class="tb-empty">
-        <svg
-          width="32"
-          height="32"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="var(--text-disabled)"
-          stroke-width="1.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <circle cx="11" cy="11" r="8" />
-          <path d="M21 21l-4.35-4.35M8 11h6" />
-        </svg>
-        <p class="tb-empty-text">没有匹配「{{ searchQuery }}」的工具</p>
-      </div>
-
-      <!-- 工具网格 -->
-      <div v-else class="tb-grid">
-        <div
-          v-for="(tool, idx) in filteredTools"
-          :key="tool.id"
-          class="tb-card"
-          :style="{ '--card-hue': tool.hue, '--card-idx': idx }"
-          @click="openTool(tool.id)"
-        >
-          <div class="tb-card-icon-wrap">
+        <div class="tb-search-wrap">
+          <div class="tb-search">
             <svg
-              class="tb-card-icon"
+              class="tb-search-icon"
+              width="15"
+              height="15"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              stroke-width="1.6"
+              stroke-width="2"
               stroke-linecap="round"
-              stroke-linejoin="round"
             >
-              <path :d="tool.icon" />
+              <circle cx="11" cy="11" r="8" />
+              <path d="M21 21l-4.35-4.35" />
             </svg>
+            <input
+              class="tb-search-input"
+              v-model="searchQuery"
+              placeholder="搜索工具..."
+              autofocus
+            />
+            <button
+              v-if="searchQuery"
+              class="tb-search-clear"
+              aria-label="清空搜索"
+              @click="searchQuery = ''"
+            >
+              ×
+            </button>
           </div>
-          <div class="tb-card-body">
-            <div class="tb-card-name">{{ tool.name }}</div>
-            <div class="tb-card-desc">{{ tool.desc }}</div>
-          </div>
+        </div>
+
+        <!-- 空状态 -->
+        <div v-if="isEmpty" class="tb-empty">
           <svg
-            class="tb-card-arrow"
-            width="14"
-            height="14"
+            width="32"
+            height="32"
             viewBox="0 0 24 24"
             fill="none"
-            stroke="currentColor"
-            stroke-width="2"
+            stroke="var(--text-disabled)"
+            stroke-width="1.5"
             stroke-linecap="round"
+            stroke-linejoin="round"
           >
-            <path d="M9 18l6-6-6-6" />
+            <circle cx="11" cy="11" r="8" />
+            <path d="M21 21l-4.35-4.35M8 11h6" />
           </svg>
+          <p class="tb-empty-text">没有匹配「{{ searchQuery }}」的工具</p>
+        </div>
+
+        <!-- 工具网格 -->
+        <div v-else class="tb-grid">
+          <div
+            v-for="(tool, idx) in filteredTools"
+            :key="tool.id"
+            class="tb-card"
+            :style="{ '--card-hue': tool.hue, '--card-idx': idx }"
+            @click="openTool(tool.id)"
+          >
+            <div class="tb-card-icon-wrap">
+              <svg
+                class="tb-card-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path :d="tool.icon" />
+              </svg>
+            </div>
+            <div class="tb-card-body">
+              <div class="tb-card-name">{{ tool.name }}</div>
+              <div class="tb-card-desc">{{ tool.desc }}</div>
+            </div>
+            <svg
+              class="tb-card-arrow"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            >
+              <path d="M9 18l6-6-6-6" />
+            </svg>
+          </div>
         </div>
       </div>
-    </template>
 
-    <!-- 工具详情视图 -->
-    <template v-else>
-      <ToolShell :title="activeToolDef?.name ?? ''" @back="back">
+      <!-- 工具详情视图 -->
+      <ToolShell v-else :key="activeTool" :title="activeToolDef?.name ?? ''" @back="back">
         <JsonTool v-if="activeTool === 'json'" :ai-enabled="props.aiEnabled" />
         <RegexTool v-else-if="activeTool === 'regex'" :ai-enabled="props.aiEnabled" />
         <Base64Tool v-else-if="activeTool === 'base64'" />
@@ -200,7 +200,7 @@ function back() {
         <UuidTool v-else-if="activeTool === 'uuid'" />
         <ColorTool v-else-if="activeTool === 'color'" />
       </ToolShell>
-    </template>
+    </Transition>
   </div>
 </template>
 
@@ -211,6 +211,13 @@ function back() {
   flex-direction: column;
   overflow: hidden;
   background: var(--bg-primary);
+}
+
+.toolbox-list-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 /* ── 头部 ──────────────────────────────── */
@@ -349,15 +356,15 @@ function back() {
   padding: var(--space-xl);
   cursor: pointer;
   transition:
-    border-color 0.2s var(--easing-standard),
-    box-shadow 0.2s var(--easing-standard),
-    transform 0.2s var(--easing-standard);
+    border-color var(--motion-duration-hover) var(--motion-ease-standard),
+    box-shadow var(--motion-duration-hover) var(--motion-ease-standard),
+    transform var(--motion-duration-hover) var(--motion-ease-standard);
   min-height: 100px;
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
-  animation: card-enter 0.35s var(--easing-standard) backwards;
-  animation-delay: calc(var(--card-idx, 0) * 50ms);
+  animation: card-enter var(--motion-duration-dialog) var(--motion-ease-out) backwards;
+  animation-delay: calc(var(--card-idx, 0) * var(--motion-stagger-sm));
 }
 
 @keyframes card-enter {
@@ -382,7 +389,7 @@ function back() {
 
 .tb-card:active {
   transform: translateY(0) scale(0.98);
-  transition-duration: 0.08s;
+  transition-duration: var(--motion-duration-press);
 }
 
 /* ── 图标徽章 ────────────────────────────── */
@@ -394,7 +401,13 @@ function back() {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.2s var(--easing-standard);
+  transition: background-color var(--motion-duration-hover) var(--motion-ease-standard);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tb-card {
+    animation: none;
+  }
 }
 
 [data-theme='hud'] .tb-card-icon-wrap {

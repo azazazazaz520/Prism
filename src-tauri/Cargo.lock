@@ -2832,6 +2832,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tokio",
  "trash",
+ "url",
  "uuid",
  "windows 0.61.3",
 ]

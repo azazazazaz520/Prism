@@ -216,17 +216,7 @@ function isSelected(day: number): boolean {
   height: 5px;
   background: var(--accent);
   clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
-  animation: breathe 3s ease-in-out infinite;
-}
-
-@keyframes breathe {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
+  animation: motion-breathe var(--motion-duration-breathe) var(--motion-ease-in-out) infinite;
 }
 
 .mc-month-row {
@@ -256,7 +246,10 @@ function isSelected(day: number): boolean {
   cursor: pointer;
   color: var(--text-tertiary);
   padding: 0;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast) var(--easing-standard),
+    border-color var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard);
   clip-path: polygon(
     4px 0%,
     100% 0%,
@@ -309,7 +302,10 @@ function isSelected(day: number): boolean {
   align-items: center;
   justify-content: center;
   position: relative;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast) var(--easing-standard),
+    border-color var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard);
   font-family: var(--font-mono);
   font-size: 12px;
 }
@@ -381,6 +377,13 @@ function isSelected(day: number): boolean {
 }
 
 /* ── Light mode overrides ────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .mc-label-dot {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
 [data-theme='light'] .mc-header {
   border-bottom-color: var(--border-light);
 }

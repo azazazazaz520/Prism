@@ -139,7 +139,9 @@ async function setActive(id: string | null) {
   font-family: var(--font-heading);
   font-size: var(--text-base);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--motion-duration-hover) var(--motion-ease-standard),
+    color var(--motion-duration-hover) var(--motion-ease-standard);
 }
 
 .add-btn:hover {
@@ -244,7 +246,10 @@ async function setActive(id: string | null) {
   letter-spacing: 0.5px;
   cursor: pointer;
   color: var(--gray-700);
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--motion-duration-hover) var(--motion-ease-standard),
+    border-color var(--motion-duration-hover) var(--motion-ease-standard),
+    color var(--motion-duration-hover) var(--motion-ease-standard);
 }
 .action-btn:hover {
   border-color: var(--accent);

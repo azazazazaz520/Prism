@@ -47,6 +47,8 @@
   --accent-hover: #0f766e;
   --accent-light: #f0fdfa;
   --selection-bg: rgba(13, 148, 136, 0.28);
+  --editor-selection-bg: rgba(129, 96, 226, 0.26);
+  --editor-selection-text: #1f1b3d;
   --accent-muted: rgba(13, 148, 136, 0.15);
   --accent-bg: #ccfbf1;
   --accent-bg-active: #99f6e4;
@@ -90,9 +92,32 @@
   --shadow-lg: 0 8px 12px -3px rgba(0, 0, 0, 0.08), 0 3px 4px -2px rgba(0, 0, 0, 0.04);
 
   /* ── 过渡/easing ───────────────────── */
-  --transition-fast: 0.18s;
-  --transition-normal: 0.25s;
-  --easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-duration-instant: 0ms;
+  --motion-duration-press: 0.12s;
+  --motion-duration-hover: 0.16s;
+  --motion-duration-popover: 0.18s;
+  --motion-duration-dialog: 0.2s;
+  --motion-duration-drawer: 0.24s;
+  --motion-duration-loading: 0.8s;
+  --motion-duration-status: 1.5s;
+  --motion-duration-breathe: 3s;
+  --motion-duration-typing: 1.2s;
+  --motion-stagger-sm: 50ms;
+  --motion-distance-xs: 4px;
+  --motion-distance-sm: 8px;
+  --motion-distance-dialog: 12px;
+  --motion-scale-in: 0.98;
+  --motion-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --motion-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --motion-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --motion-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* 兼容既有组件，迁移完成后继续保留为稳定别名。 */
+  --transition-fast: var(--motion-duration-popover);
+  --transition-normal: var(--motion-duration-dialog);
+  --transition-dialog: var(--motion-duration-dialog);
+  --easing-standard: var(--motion-ease-standard);
+  --easing-out: var(--motion-ease-out);
   --easing-spring: cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
@@ -126,6 +151,8 @@
   --accent-hover: #5eead4;
   --accent-light: rgba(45, 212, 191, 0.08);
   --selection-bg: rgba(45, 212, 191, 0.32);
+  --editor-selection-bg: rgba(155, 135, 245, 0.38);
+  --editor-selection-text: #f5f3ff;
   --accent-muted: rgba(45, 212, 191, 0.18);
   --accent-bg: rgba(45, 212, 191, 0.1);
   --accent-bg-active: rgba(45, 212, 191, 0.2);
@@ -175,6 +202,8 @@
     --accent-hover: #5eead4;
     --accent-light: rgba(45, 212, 191, 0.08);
     --selection-bg: rgba(45, 212, 191, 0.32);
+    --editor-selection-bg: rgba(155, 135, 245, 0.38);
+    --editor-selection-text: #f5f3ff;
     --accent-muted: rgba(45, 212, 191, 0.18);
     --accent-bg: rgba(45, 212, 191, 0.1);
     --accent-bg-active: rgba(45, 212, 191, 0.2);
@@ -239,6 +268,8 @@
   --accent-glow-s: rgba(245, 197, 24, 0.06);
   --accent-light: rgba(245, 197, 24, 0.08);
   --selection-bg: rgba(245, 197, 24, 0.34);
+  --editor-selection-bg: rgba(245, 197, 24, 0.42);
+  --editor-selection-text: #1a1e27;
   --accent-muted: rgba(245, 197, 24, 0.18);
   --accent-bg: rgba(245, 197, 24, 0.1);
   --accent-bg-active: rgba(245, 197, 24, 0.2);

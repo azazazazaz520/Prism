@@ -209,7 +209,10 @@ function handleSave() {
   color: var(--text-secondary);
   cursor: pointer;
   font-size: var(--text-sm);
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--motion-duration-hover) var(--motion-ease-standard),
+    border-color var(--motion-duration-hover) var(--motion-ease-standard),
+    color var(--motion-duration-hover) var(--motion-ease-standard);
 }
 .preset-btn.selected {
   border-color: var(--accent);
@@ -289,7 +292,9 @@ function handleSave() {
   font-family: var(--font-heading);
   font-size: var(--text-base);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--motion-duration-hover) var(--motion-ease-standard),
+    color var(--motion-duration-hover) var(--motion-ease-standard);
 }
 .save-btn:hover {
   background: var(--accent-hover);

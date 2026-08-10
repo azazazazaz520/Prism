@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 import type { ContextMenuItem } from '../../composables/useContextMenu';
 
 export type { ContextMenuItem } from '../../composables/useContextMenu';
@@ -18,9 +18,20 @@ const emit = defineEmits<{
   close: [];
 }>();
 
+const openSubmenuId = ref<string | null>(null);
+
 function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape' && props.visible) {
+  if (!props.visible) return;
+  if (e.key === 'Escape') {
     emit('close');
+    return;
+  }
+
+  if (e.key === 'ArrowRight' && openSubmenuId.value) {
+    const firstItem = document.querySelector<HTMLElement>(
+      `.context-menu-entry[data-menu-item="${openSubmenuId.value}"] .context-menu-submenu button`,
+    );
+    firstItem?.focus();
   }
 }
 
@@ -28,6 +39,7 @@ function onDocumentClick(e: MouseEvent) {
   if (props.visible) {
     const target = e.target as HTMLElement;
     if (!target.closest('.context-menu')) {
+      openSubmenuId.value = null;
       emit('close');
     }
   }
@@ -43,27 +55,74 @@ onUnmounted(() => {
   document.removeEventListener('click', onDocumentClick);
 });
 
-function handleItemClick(item: ContextMenuItem) {
-  if (item.disabled) return;
-  item.action();
-  emit('close');
+async function handleItemClick(item: ContextMenuItem) {
+  if (item.disabled || !item.action) return;
+  try {
+    await item.action();
+  } finally {
+    openSubmenuId.value = null;
+    emit('close');
+  }
 }
 </script>
 
 <template>
   <Teleport to="body">
-    <div v-if="visible" class="context-menu" :style="{ left: x + 'px', top: y + 'px' }" @click.stop>
-      <button
+    <div
+      v-if="visible"
+      class="context-menu"
+      role="menu"
+      :style="{ left: x + 'px', top: y + 'px' }"
+      @click.stop
+      @contextmenu.stop.prevent
+    >
+      <div
         v-for="item in items"
         :key="item.id"
-        :class="['context-menu-item', { disabled: item.disabled }]"
-        :disabled="item.disabled"
-        @click="handleItemClick(item)"
+        class="context-menu-entry"
+        :class="{ 'has-separator': item.separatorBefore }"
+        :data-menu-item="item.id"
+        @mouseenter="item.submenu && (openSubmenuId = item.id)"
       >
-        <span v-if="item.separatorBefore" class="context-menu-separator" aria-hidden="true"></span>
-        <span v-if="item.icon" class="context-menu-icon" v-html="item.icon"></span>
-        <span class="context-menu-label">{{ item.label }}</span>
-      </button>
+        <button
+          type="button"
+          role="menuitem"
+          :class="['context-menu-item', { disabled: item.disabled }]"
+          :disabled="item.disabled || (!item.action && !item.submenu)"
+          :aria-haspopup="item.submenu ? 'menu' : undefined"
+          :aria-expanded="item.submenu ? openSubmenuId === item.id : undefined"
+          @click="handleItemClick(item)"
+        >
+          <span v-if="item.icon" class="context-menu-icon" v-html="item.icon"></span>
+          <span class="context-menu-label">{{ item.label }}</span>
+          <span v-if="item.submenu" class="context-menu-chevron" aria-hidden="true">›</span>
+        </button>
+        <Transition name="motion-submenu">
+          <div
+            v-if="item.submenu && openSubmenuId === item.id"
+            class="context-menu-submenu"
+            role="menu"
+          >
+            <div
+              v-for="subitem in item.submenu"
+              :key="subitem.id"
+              class="context-menu-entry"
+              :class="{ 'has-separator': subitem.separatorBefore }"
+            >
+              <button
+                type="button"
+                role="menuitem"
+                :class="['context-menu-item', { disabled: subitem.disabled }]"
+                :disabled="subitem.disabled || !subitem.action"
+                @click="handleItemClick(subitem)"
+              >
+                <span v-if="subitem.icon" class="context-menu-icon" v-html="subitem.icon"></span>
+                <span class="context-menu-label">{{ subitem.label }}</span>
+              </button>
+            </div>
+          </div>
+        </Transition>
+      </div>
       <div v-if="items.length === 0" class="context-menu-empty">无可用操作</div>
     </div>
   </Teleport>
@@ -74,23 +133,33 @@ function handleItemClick(item: ContextMenuItem) {
 .context-menu {
   position: fixed;
   z-index: 9999;
-  min-width: 180px;
+  min-width: 196px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
-  padding: var(--space-xs);
+  padding: 6px;
   display: flex;
   flex-direction: column;
 }
 
+.context-menu-entry {
+  position: relative;
+}
+
+.context-menu-entry.has-separator {
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid var(--border-subtle);
+}
+
 .context-menu-item {
   display: flex;
-  position: relative;
   align-items: center;
-  gap: var(--space-sm);
+  gap: 10px;
   width: 100%;
-  padding: var(--space-sm) var(--space-md);
+  min-height: 30px;
+  padding: 5px 8px;
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -102,41 +171,56 @@ function handleItemClick(item: ContextMenuItem) {
 }
 
 .context-menu-item.disabled {
-  opacity: 0.45;
+  opacity: 0.42;
   cursor: default;
 }
 
-.context-menu-separator {
-  position: absolute;
-  top: -5px;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: var(--border-subtle);
+.context-menu-entry.has-separator > .context-menu-item {
+  /* 分隔线由条目自身绘制，避免影响按钮的可点击区域。 */
 }
 
-.context-menu-item:has(.context-menu-separator) {
-  margin-top: 5px;
-}
-
-.context-menu-item:hover {
+.context-menu-item:not(:disabled):hover,
+.context-menu-item:not(:disabled):focus-visible {
   background: var(--bg-hover);
+  outline: none;
+}
+
+.context-menu-submenu {
+  position: absolute;
+  z-index: 1;
+  top: -7px;
+  left: calc(100% + 6px);
+  min-width: 196px;
+  padding: 6px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow-lg);
+}
+
+.context-menu-chevron {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 19px;
+  line-height: 14px;
 }
 
 .context-menu-icon {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
 }
 
 .context-menu-icon svg {
-  width: 14px;
-  height: 14px;
+  width: 17px;
+  height: 17px;
   stroke: currentColor;
   fill: none;
-  stroke-width: 1.5;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .context-menu-label {

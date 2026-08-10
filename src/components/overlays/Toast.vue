@@ -10,8 +10,8 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <Transition name="toast">
-    <div v-if="message" class="toast" role="status" aria-live="polite">
+  <Transition name="motion-toast">
+    <div v-if="message" class="toast motion-toast-centered" role="status" aria-live="polite">
       <span>{{ message }}</span>
       <button v-if="actionLabel" type="button" class="toast-action" @click="emit('action')">
         {{ actionLabel }}
@@ -51,18 +51,5 @@ const emit = defineEmits<{
 
 .toast-action:hover {
   text-decoration: underline;
-}
-
-.toast-enter-active,
-.toast-leave-active {
-  transition:
-    opacity 150ms ease,
-    transform 150ms ease;
-}
-
-.toast-enter-from,
-.toast-leave-to {
-  opacity: 0;
-  transform: translate(-50%, 8px);
 }
 </style>

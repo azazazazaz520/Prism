@@ -72,7 +72,7 @@ async function postpone(taskId: string) {
   background: transparent;
   color: var(--accent);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background-color var(--motion-duration-hover) var(--motion-ease-standard);
 }
 [data-theme='hud'] .ov-btn {
   clip-path: polygon(

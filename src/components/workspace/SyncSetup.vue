@@ -284,7 +284,7 @@ async function handleCopy() {
   border-radius: 50%;
   background: var(--success);
   box-shadow: 0 0 6px var(--success);
-  animation: status-pulse 2s ease-in-out infinite;
+  animation: status-pulse var(--motion-duration-status) var(--motion-ease-in-out) infinite;
   flex-shrink: 0;
 }
 
@@ -484,7 +484,10 @@ async function handleCopy() {
   font-family: var(--font-sans);
   cursor: pointer;
   white-space: nowrap;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--motion-duration-hover) var(--motion-ease-standard),
+    border-color var(--motion-duration-hover) var(--motion-ease-standard),
+    color var(--motion-duration-hover) var(--motion-ease-standard);
   height: 36px;
 }
 
@@ -529,7 +532,9 @@ async function handleCopy() {
   color: var(--text-muted);
   cursor: pointer;
   flex-shrink: 0;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--motion-duration-hover) var(--motion-ease-standard),
+    color var(--motion-duration-hover) var(--motion-ease-standard);
 }
 
 .icon-btn:hover {
@@ -553,7 +558,10 @@ async function handleCopy() {
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--motion-duration-hover) var(--motion-ease-standard),
+    border-color var(--motion-duration-hover) var(--motion-ease-standard),
+    color var(--motion-duration-hover) var(--motion-ease-standard);
 }
 
 .btn-retry:hover {
@@ -597,16 +605,10 @@ async function handleCopy() {
 
 /* ── Spin animation ─────────────────────── */
 .spin-icon {
-  animation: spin 1.2s linear infinite;
+  animation: motion-spin var(--motion-duration-loading) linear infinite;
 }
 
 /* ── Keyframes ──────────────────────────── */
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 @keyframes status-pulse {
   0%,
   100% {

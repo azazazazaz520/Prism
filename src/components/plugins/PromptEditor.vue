@@ -161,7 +161,7 @@ async function resetPrompt() {
   border-radius: 6px;
   cursor: pointer;
   margin-bottom: 2px;
-  transition: background 0.15s;
+  transition: background-color var(--motion-duration-hover) var(--motion-ease-standard);
 }
 .prompt-item:hover {
   background: var(--bg-hover, #e2e8f0);
@@ -270,7 +270,11 @@ async function resetPrompt() {
   letter-spacing: 0.5px;
   cursor: pointer;
   border: 1px solid transparent;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--motion-duration-hover) var(--motion-ease-standard),
+    border-color var(--motion-duration-hover) var(--motion-ease-standard),
+    color var(--motion-duration-hover) var(--motion-ease-standard),
+    opacity var(--motion-duration-press) var(--motion-ease-standard);
 }
 .btn:disabled {
   opacity: 0.4;

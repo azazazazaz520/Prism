@@ -63,7 +63,9 @@ const progressPct = computed(() =>
   cursor: pointer;
   padding: 4px 10px;
   border-radius: var(--radius-sm);
-  transition: all var(--transition-fast);
+  transition:
+    border-color var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard);
 }
 
 .clear-btn:hover {

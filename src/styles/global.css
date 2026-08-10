@@ -4,6 +4,7 @@
    ═══════════════════════════════════════════ */
 
 @import './tokens.css';
+@import './motion.css';
 
 *,
 *::before,
@@ -46,6 +47,13 @@ body {
 ::selection {
   background: var(--selection-bg);
   color: var(--text-primary);
+}
+
+html.prism-note-file-dragging,
+html.prism-note-file-dragging * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  cursor: grabbing !important;
 }
 
 :where(button, input, textarea, select, [tabindex]):focus-visible {

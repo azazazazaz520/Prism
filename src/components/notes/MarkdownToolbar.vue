@@ -257,7 +257,10 @@ function horizontalRule() {
   border-radius: var(--radius-sm);
   font-size: var(--text-xs);
   font-family: inherit;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast) var(--easing-standard),
+    border-color var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard);
   display: flex;
   align-items: center;
   justify-content: center;

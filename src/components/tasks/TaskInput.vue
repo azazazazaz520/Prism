@@ -313,7 +313,9 @@ function formatDueDate(d: string): string {
   border-radius: var(--radius-full);
   font-size: var(--text-base);
   outline: none;
-  transition: all var(--transition-fast);
+  transition:
+    border-color var(--transition-fast) var(--easing-standard),
+    box-shadow var(--transition-fast) var(--easing-standard);
   background: var(--bg-primary);
   color: var(--text-primary);
 }
@@ -358,20 +360,19 @@ function formatDueDate(d: string): string {
 
 /* ── 展开/收起动画 ──────────────────── */
 .expand-enter-active {
-  animation: expand-in 0.2s ease-out;
+  transition:
+    opacity 150ms var(--easing-out),
+    transform 150ms var(--easing-out);
 }
 .expand-leave-active {
-  animation: expand-in 0.15s ease-in reverse;
+  transition:
+    opacity 100ms var(--easing-out),
+    transform 100ms var(--easing-out);
 }
-@keyframes expand-in {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.expand-enter-from,
+.expand-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
 }
 
 /* ── 快捷属性按钮 ────────────────────── */
@@ -393,7 +394,11 @@ function formatDueDate(d: string): string {
   border-radius: var(--radius-full);
   font-size: 11px;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast) var(--easing-standard),
+    border-color var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard),
+    box-shadow var(--transition-fast) var(--easing-standard);
   color: var(--text-secondary);
 }
 
@@ -554,7 +559,11 @@ function formatDueDate(d: string): string {
   border-radius: var(--radius-full);
   font-size: 11px;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast) var(--easing-standard),
+    border-color var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard),
+    box-shadow var(--transition-fast) var(--easing-standard);
   color: var(--text-secondary);
 }
 
@@ -607,7 +616,11 @@ function formatDueDate(d: string): string {
   letter-spacing: 1px;
   text-transform: uppercase;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast) var(--easing-standard),
+    border-color var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard),
+    box-shadow var(--transition-fast) var(--easing-standard);
   white-space: nowrap;
 }
 

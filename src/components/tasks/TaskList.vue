@@ -78,8 +78,31 @@ const normalTasks = computed(() => sortedTasks.value.filter((t) => !t.pinned || 
           </svg>
           已置顶
         </div>
+        <TransitionGroup name="task-list" tag="div" class="pinned-tasks">
+          <TaskItem
+            v-for="task in pinnedTasks"
+            :key="task.id"
+            :task="task"
+            :is-daily-completed="dailyCompletionsMap[task.id] ?? false"
+            :ai-enabled="props.aiEnabled"
+            @toggle="(id) => emit('toggle', id)"
+            @toggle-daily="(id, date) => emit('toggleDaily', id, date)"
+            @update="(id, title) => emit('update', id, title)"
+            @delete="(id) => emit('delete', id)"
+            @update-meta="
+              (id, tags, important, pinned, isDaily) =>
+                emit('updateMeta', id, tags, important, pinned, isDaily)
+            "
+          />
+        </TransitionGroup>
+      </div>
+      <div
+        v-if="pinnedTasks.length > 0 && normalTasks.filter((t) => !t.completed).length > 0"
+        class="section-divider"
+      ></div>
+      <TransitionGroup name="task-list" tag="div" class="normal-tasks">
         <TaskItem
-          v-for="task in pinnedTasks"
+          v-for="task in normalTasks"
           :key="task.id"
           :task="task"
           :is-daily-completed="dailyCompletionsMap[task.id] ?? false"
@@ -93,26 +116,7 @@ const normalTasks = computed(() => sortedTasks.value.filter((t) => !t.pinned || 
               emit('updateMeta', id, tags, important, pinned, isDaily)
           "
         />
-      </div>
-      <div
-        v-if="pinnedTasks.length > 0 && normalTasks.filter((t) => !t.completed).length > 0"
-        class="section-divider"
-      ></div>
-      <TaskItem
-        v-for="task in normalTasks"
-        :key="task.id"
-        :task="task"
-        :is-daily-completed="dailyCompletionsMap[task.id] ?? false"
-        :ai-enabled="props.aiEnabled"
-        @toggle="(id) => emit('toggle', id)"
-        @toggle-daily="(id, date) => emit('toggleDaily', id, date)"
-        @update="(id, title) => emit('update', id, title)"
-        @delete="(id) => emit('delete', id)"
-        @update-meta="
-          (id, tags, important, pinned, isDaily) =>
-            emit('updateMeta', id, tags, important, pinned, isDaily)
-        "
-      />
+      </TransitionGroup>
     </template>
   </div>
 </template>
@@ -131,6 +135,15 @@ const normalTasks = computed(() => sortedTasks.value.filter((t) => !t.pinned || 
 
 .pinned-section {
   background: var(--bg-secondary);
+}
+
+.pinned-tasks,
+.normal-tasks {
+  display: contents;
+}
+
+.task-list-move {
+  transition: transform var(--motion-duration-hover) var(--motion-ease-in-out);
 }
 
 .pinned-header {
@@ -189,5 +202,11 @@ const normalTasks = computed(() => sortedTasks.value.filter((t) => !t.pinned || 
 [data-theme='hud'] .section-divider,
 [data-theme='hud'] .section-divider {
   background: var(--border-subtle);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-list-move {
+    transition: none;
+  }
 }
 </style>

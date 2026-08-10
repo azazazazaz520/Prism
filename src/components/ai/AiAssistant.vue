@@ -359,27 +359,14 @@ const hasMessages = computed(() => messages.value.length > 0);
   height: 6px;
   background: var(--text-muted);
   border-radius: 50%;
-  animation: bounce 1.2s infinite ease-in-out;
+  animation: motion-typing var(--motion-duration-typing) var(--motion-ease-in-out) infinite;
 }
 
 .dot:nth-child(2) {
-  animation-delay: 0.2s;
+  animation-delay: calc(var(--motion-duration-typing) / 6);
 }
 .dot:nth-child(3) {
-  animation-delay: 0.4s;
-}
-
-@keyframes bounce {
-  0%,
-  80%,
-  100% {
-    opacity: 0.3;
-    transform: scale(0.8);
-  }
-  40% {
-    opacity: 1;
-    transform: scale(1);
-  }
+  animation-delay: calc(var(--motion-duration-typing) / 3);
 }
 
 /* ── 底部输入区 ─────────────────────── */
@@ -410,7 +397,10 @@ const hasMessages = computed(() => messages.value.length > 0);
   font-size: var(--text-base);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--motion-duration-hover) var(--motion-ease-standard),
+    border-color var(--motion-duration-hover) var(--motion-ease-standard),
+    color var(--motion-duration-hover) var(--motion-ease-standard);
 }
 
 .quick-btn:hover {
@@ -501,5 +491,13 @@ const hasMessages = computed(() => messages.value.length > 0);
   background: var(--border-default);
   color: var(--bg-primary);
   cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot {
+    animation: none;
+    opacity: 0.6;
+    transform: none;
+  }
 }
 </style>

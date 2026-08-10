@@ -87,12 +87,11 @@ const displayLabel = computed(() => {
   font-size: 11px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background-color var(--motion-duration-hover) var(--motion-ease-standard);
   border: 0;
   font: inherit;
 }
 
-[data-theme='hud'] .sync-status,
 [data-theme='hud'] .sync-status {
   font-family: var(--font-mono);
   font-size: 10px;
@@ -115,20 +114,18 @@ const displayLabel = computed(() => {
   background: var(--accent);
 }
 
-[data-theme='hud'] .sync-indicator.idle,
 [data-theme='hud'] .sync-indicator.idle {
   box-shadow: 0 0 6px var(--accent);
-  animation: breathe 3s ease-in-out infinite;
+  animation: motion-breathe var(--motion-duration-breathe) var(--motion-ease-in-out) infinite;
 }
 
 .sync-indicator.syncing {
   background: var(--accent);
-  animation: spin 1s linear infinite;
+  animation: motion-breathe var(--motion-duration-status) var(--motion-ease-in-out) infinite;
 }
 
-[data-theme='hud'] .sync-indicator.syncing,
 [data-theme='hud'] .sync-indicator.syncing {
-  animation: heartbeat 1.5s ease-in-out infinite;
+  animation: sync-status-heartbeat var(--motion-duration-status) var(--motion-ease-in-out) infinite;
 }
 
 .sync-indicator.error,
@@ -140,19 +137,7 @@ const displayLabel = computed(() => {
   background: var(--text-secondary);
 }
 
-@keyframes spin {
-  0% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.3;
-  }
-  100% {
-    opacity: 1;
-  }
-}
-
-@keyframes heartbeat {
+@keyframes sync-status-heartbeat {
   0%,
   100% {
     opacity: 1;
@@ -173,16 +158,6 @@ const displayLabel = computed(() => {
   42% {
     opacity: 1;
     transform: scale(1);
-  }
-}
-
-@keyframes breathe {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
   }
 }
 
@@ -242,5 +217,11 @@ const displayLabel = computed(() => {
 .sync-retry:disabled {
   cursor: default;
   opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sync-indicator {
+    animation: none;
+  }
 }
 </style>

@@ -114,7 +114,6 @@ function handleClick(item: ModuleDescriptor) {
   padding: var(--space-lg) var(--space-md);
   flex-shrink: 0;
   user-select: none;
-  transition: all var(--transition-normal);
 }
 
 [data-theme='hud'] .sidebar,
@@ -196,7 +195,9 @@ function handleClick(item: ModuleDescriptor) {
   font-size: var(--text-base);
   font-weight: var(--font-weight-medium);
   color: var(--text-secondary);
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard);
 }
 
 [data-theme='hud'] .nav-item,

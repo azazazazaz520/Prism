@@ -582,7 +582,9 @@ onUnmounted(() => cancelAnimationFrame(inertiaRaf));
   cursor: pointer;
   font-size: 13px;
   border-radius: var(--radius-sm);
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--motion-duration-hover) var(--motion-ease-standard),
+    color var(--motion-duration-hover) var(--motion-ease-standard);
   flex-shrink: 0;
 }
 .w-close:hover {
@@ -603,7 +605,7 @@ onUnmounted(() => cancelAnimationFrame(inertiaRaf));
   pointer-events: none;
   z-index: 1;
   min-height: 80px;
-  animation: drop-pulse 1s ease-in-out infinite;
+  animation: motion-breathe var(--motion-duration-status) var(--motion-ease-in-out) infinite;
 }
 
 [data-theme='hud'] .drop-indicator {
@@ -616,18 +618,6 @@ onUnmounted(() => cancelAnimationFrame(inertiaRaf));
     0% 100%,
     0% 8px
   );
-}
-
-@keyframes drop-pulse {
-  0%,
-  100% {
-    border-color: var(--accent);
-    opacity: 0.8;
-  }
-  50% {
-    border-color: var(--accent-dim);
-    opacity: 0.4;
-  }
 }
 
 /* ── 添加 Widget ──────────────────────────── */
@@ -682,11 +672,20 @@ onUnmounted(() => cancelAnimationFrame(inertiaRaf));
   font-family: var(--font-sans);
   font-size: 12px;
   text-align: left;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--motion-duration-hover) var(--motion-ease-standard),
+    color var(--motion-duration-hover) var(--motion-ease-standard);
 }
 .add-widget-option:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drop-indicator {
+    animation: none;
+    opacity: 0.7;
+  }
 }
 </style>
 

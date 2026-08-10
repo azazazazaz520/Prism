@@ -382,7 +382,9 @@ function autoResize() {
   font-family: inherit;
   cursor: pointer;
   text-align: left;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--motion-duration-hover) var(--motion-ease-standard),
+    color var(--motion-duration-hover) var(--motion-ease-standard);
 }
 
 .acp-mode-option:hover {
@@ -449,13 +451,7 @@ function autoResize() {
 }
 
 .acp-submit.is-loading svg {
-  animation: acp-spin 0.8s linear infinite;
-}
-
-@keyframes acp-spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: motion-spin var(--motion-duration-loading) linear infinite;
 }
 
 .acp-result-actions {
@@ -474,7 +470,10 @@ function autoResize() {
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--motion-duration-hover) var(--motion-ease-standard),
+    border-color var(--motion-duration-hover) var(--motion-ease-standard),
+    color var(--motion-duration-hover) var(--motion-ease-standard);
 }
 .acp-clear-btn:hover {
   border-color: var(--danger);
@@ -633,5 +632,11 @@ function autoResize() {
   font-family: var(--font-heading);
   letter-spacing: 1px;
   font-size: 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .acp-submit.is-loading svg {
+    animation: none;
+  }
 }
 </style>

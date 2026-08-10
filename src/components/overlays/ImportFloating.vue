@@ -385,7 +385,9 @@ function formatDate(d: string | null): string {
   border-radius: var(--radius-sm);
   line-height: 1;
   -webkit-app-region: no-drag;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--motion-duration-hover) var(--motion-ease-standard),
+    color var(--motion-duration-hover) var(--motion-ease-standard);
 }
 
 .close-btn:hover {
@@ -450,7 +452,9 @@ function formatDate(d: string | null): string {
   padding: 3px 8px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--motion-duration-hover) var(--motion-ease-standard),
+    color var(--motion-duration-hover) var(--motion-ease-standard);
 }
 
 .clear-screenshot-btn:hover {
@@ -476,7 +480,10 @@ function formatDate(d: string | null): string {
   font-size: var(--text-base);
   font-weight: 500;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--motion-duration-hover) var(--motion-ease-standard),
+    color var(--motion-duration-hover) var(--motion-ease-standard),
+    opacity var(--motion-duration-hover) var(--motion-ease-standard);
   font-family: var(--font-heading);
   letter-spacing: 0.5px;
 }
@@ -496,13 +503,7 @@ function formatDate(d: string | null): string {
   border: 2px solid rgba(255, 255, 255, 0.3);
   border-top-color: #fff;
   border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: motion-spin var(--motion-duration-loading) linear infinite;
 }
 
 .error-msg {
@@ -544,7 +545,9 @@ function formatDate(d: string | null): string {
   cursor: pointer;
   padding: 2px 8px;
   border-radius: var(--radius-sm);
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--motion-duration-hover) var(--motion-ease-standard),
+    color var(--motion-duration-hover) var(--motion-ease-standard);
 }
 
 .toggle-all-btn:hover {
@@ -565,7 +568,9 @@ function formatDate(d: string | null): string {
   border-radius: var(--radius-sm);
   background: var(--bg-hover);
   border: 1px solid var(--border-subtle);
-  transition: all 0.2s;
+  transition:
+    background-color var(--motion-duration-hover) var(--motion-ease-standard),
+    border-color var(--motion-duration-hover) var(--motion-ease-standard);
   overflow: hidden;
 }
 
@@ -718,7 +723,10 @@ function formatDate(d: string | null): string {
   font-size: var(--text-base);
   font-weight: 500;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--motion-duration-hover) var(--motion-ease-standard),
+    color var(--motion-duration-hover) var(--motion-ease-standard),
+    opacity var(--motion-duration-hover) var(--motion-ease-standard);
   font-family: var(--font-heading);
   letter-spacing: 0.5px;
 }
@@ -805,5 +813,11 @@ function formatDate(d: string | null): string {
 
 [data-theme='hud'] .bottom-bar {
   border-top-color: var(--border-line);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
 }
 </style>

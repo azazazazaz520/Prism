@@ -119,81 +119,79 @@ watch(normalizedQuery, () => {
 
 <template>
   <Teleport to="body">
-    <Transition name="task-picker-fade">
-      <div v-if="visible" class="task-picker-layer" @mousedown.self="emit('cancel')">
-        <section
-          class="task-picker"
-          role="dialog"
-          aria-modal="true"
-          aria-label="插入正式任务"
-          @mousedown.stop
-        >
-          <div class="task-picker-search">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="11" cy="11" r="6.5" />
-              <path d="m16 16 4.5 4.5" />
-            </svg>
-            <input
-              ref="searchInput"
-              v-model="query"
-              type="search"
-              autocomplete="off"
-              placeholder="搜索任务标题或标签"
-              aria-label="搜索任务标题或标签"
-              @keydown="handleKeydown"
-            />
-            <kbd>Esc</kbd>
+    <div v-if="visible" class="task-picker-layer" @mousedown.self="emit('cancel')">
+      <section
+        class="task-picker"
+        role="dialog"
+        aria-modal="true"
+        aria-label="插入正式任务"
+        @mousedown.stop
+      >
+        <div class="task-picker-search">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="11" cy="11" r="6.5" />
+            <path d="m16 16 4.5 4.5" />
+          </svg>
+          <input
+            ref="searchInput"
+            v-model="query"
+            type="search"
+            autocomplete="off"
+            placeholder="搜索任务标题或标签"
+            aria-label="搜索任务标题或标签"
+            @keydown="handleKeydown"
+          />
+          <kbd>Esc</kbd>
+        </div>
+
+        <div class="task-picker-list" role="listbox" aria-label="任务结果">
+          <div v-if="filteredTasks.length === 0 && !canCreate" class="task-picker-empty">
+            没有可关联的任务
           </div>
+          <button
+            v-for="(task, index) in filteredTasks"
+            :key="task.id"
+            type="button"
+            class="task-picker-item"
+            :class="{
+              highlighted: highlightedIndex === index,
+              linked: currentTaskIdSet.has(task.id),
+            }"
+            role="option"
+            :aria-selected="highlightedIndex === index"
+            @mouseenter="highlightedIndex = index"
+            @click="selectTask(task)"
+          >
+            <span class="task-picker-checkbox" :class="{ checked: task.completed }">
+              {{ task.completed ? '✓' : '' }}
+            </span>
+            <span class="task-picker-copy">
+              <span class="task-picker-title">{{ task.title }}</span>
+              <span class="task-picker-meta">{{ taskMeta(task) }}</span>
+            </span>
+            <span v-if="currentTaskIdSet.has(task.id)" class="task-picker-state">已在本页</span>
+          </button>
 
-          <div class="task-picker-list" role="listbox" aria-label="任务结果">
-            <div v-if="filteredTasks.length === 0 && !canCreate" class="task-picker-empty">
-              没有可关联的任务
-            </div>
-            <button
-              v-for="(task, index) in filteredTasks"
-              :key="task.id"
-              type="button"
-              class="task-picker-item"
-              :class="{
-                highlighted: highlightedIndex === index,
-                linked: currentTaskIdSet.has(task.id),
-              }"
-              role="option"
-              :aria-selected="highlightedIndex === index"
-              @mouseenter="highlightedIndex = index"
-              @click="selectTask(task)"
-            >
-              <span class="task-picker-checkbox" :class="{ checked: task.completed }">
-                {{ task.completed ? '✓' : '' }}
-              </span>
-              <span class="task-picker-copy">
-                <span class="task-picker-title">{{ task.title }}</span>
-                <span class="task-picker-meta">{{ taskMeta(task) }}</span>
-              </span>
-              <span v-if="currentTaskIdSet.has(task.id)" class="task-picker-state">已在本页</span>
-            </button>
+          <button
+            v-if="canCreate"
+            type="button"
+            class="task-picker-create"
+            :class="{ highlighted: highlightedIndex === filteredTasks.length }"
+            @mouseenter="highlightedIndex = filteredTasks.length"
+            @click="createTask"
+          >
+            <span class="task-picker-create-icon">＋</span>
+            <span>创建“{{ query.trim() }}”为新任务</span>
+          </button>
+        </div>
 
-            <button
-              v-if="canCreate"
-              type="button"
-              class="task-picker-create"
-              :class="{ highlighted: highlightedIndex === filteredTasks.length }"
-              @mouseenter="highlightedIndex = filteredTasks.length"
-              @click="createTask"
-            >
-              <span class="task-picker-create-icon">＋</span>
-              <span>创建“{{ query.trim() }}”为新任务</span>
-            </button>
-          </div>
-
-          <footer class="task-picker-footer">
-            <span><kbd>↑</kbd><kbd>↓</kbd>选择</span>
-            <span><kbd>Enter</kbd>插入</span>
-            <span><kbd>Esc</kbd>关闭</span>
-          </footer>
-        </section>
-      </div>
-    </Transition>
+        <footer class="task-picker-footer">
+          <span><kbd>↑</kbd><kbd>↓</kbd>选择</span>
+          <span><kbd>Enter</kbd>插入</span>
+          <span><kbd>Esc</kbd>关闭</span>
+        </footer>
+      </section>
+    </div>
   </Teleport>
 </template>
 
@@ -369,22 +367,5 @@ kbd {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-}
-
-.task-picker-fade-enter-active,
-.task-picker-fade-leave-active {
-  transition: opacity 0.15s ease;
-}
-
-.task-picker-fade-enter-from,
-.task-picker-fade-leave-to {
-  opacity: 0;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .task-picker-fade-enter-active,
-  .task-picker-fade-leave-active {
-    transition: none;
-  }
 }
 </style>

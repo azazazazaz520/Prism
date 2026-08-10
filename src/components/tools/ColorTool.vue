@@ -304,7 +304,10 @@ function clearAll() {
   border-radius: var(--radius-md);
   border: 2px solid var(--border-default);
   box-shadow: var(--shadow-sm);
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--motion-duration-hover) var(--motion-ease-standard),
+    border-color var(--motion-duration-hover) var(--motion-ease-standard),
+    box-shadow var(--motion-duration-hover) var(--motion-ease-standard);
 }
 
 .pane-content {

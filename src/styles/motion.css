@@ -125,6 +125,36 @@
   transform: translate(-50%, var(--motion-distance-sm));
 }
 
+/* 状态与加载反馈：保留必要的状态变化，组件负责决定何时启用。 */
+@keyframes motion-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes motion-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes motion-typing {
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .motion-dialog-enter-active .motion-dialog-panel,
   .motion-dialog-leave-active .motion-dialog-panel,

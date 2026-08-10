@@ -106,34 +106,37 @@ function isToday(day: number): boolean {
 
 <template>
   <Teleport to="body">
-    <div v-if="visible" class="datepicker" :style="pickerStyle">
-      <div class="dp-header">
-        <button class="dp-nav" @click="prevMonth">&lt;</button>
-        <span class="dp-month">{{ currentYear }}年 {{ currentMonth + 1 }}月</span>
-        <button class="dp-nav" @click="nextMonth">&gt;</button>
+    <Transition name="motion-popover">
+      <div v-if="visible" class="datepicker" :style="pickerStyle">
+        <div class="dp-header">
+          <button class="dp-nav" @click="prevMonth">&lt;</button>
+          <span class="dp-month">{{ currentYear }}年 {{ currentMonth + 1 }}月</span>
+          <button class="dp-nav" @click="nextMonth">&gt;</button>
+        </div>
+        <div class="dp-weekdays">
+          <span v-for="wd in weekDays" :key="wd" class="dp-wd">{{ wd }}</span>
+        </div>
+        <div class="dp-grid">
+          <button
+            v-for="(cell, i) in days"
+            :key="i"
+            :class="['dp-day', { empty: cell === null, today: cell !== null && isToday(cell) }]"
+            :disabled="cell === null"
+            @click="cell !== null && selectDay(cell)"
+          >
+            {{ cell }}
+          </button>
+        </div>
+        <button class="dp-clear" @click="clearDate">清除日期</button>
       </div>
-      <div class="dp-weekdays">
-        <span v-for="wd in weekDays" :key="wd" class="dp-wd">{{ wd }}</span>
-      </div>
-      <div class="dp-grid">
-        <button
-          v-for="(cell, i) in days"
-          :key="i"
-          :class="['dp-day', { empty: cell === null, today: cell !== null && isToday(cell) }]"
-          :disabled="cell === null"
-          @click="cell !== null && selectDay(cell)"
-        >
-          {{ cell }}
-        </button>
-      </div>
-      <button class="dp-clear" @click="clearDate">清除日期</button>
-    </div>
+    </Transition>
   </Teleport>
 </template>
 
 <style scoped>
 .datepicker {
   position: fixed;
+  --transform-origin: top right;
   background: var(--bg-primary);
   border-radius: var(--radius-lg);
   box-shadow: 0 var(--space-xs) var(--space-lg) rgba(0, 0, 0, 0.12);

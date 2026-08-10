@@ -253,7 +253,10 @@ function statusClass(s: string): string {
   color: var(--accent);
   font-size: 10px;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--motion-duration-hover) var(--motion-ease-standard),
+    border-color var(--motion-duration-hover) var(--motion-ease-standard),
+    color var(--motion-duration-hover) var(--motion-ease-standard);
 }
 
 .sm-run-btn:hover:not(:disabled) {

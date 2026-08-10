@@ -98,6 +98,11 @@
   --motion-duration-popover: 0.18s;
   --motion-duration-dialog: 0.2s;
   --motion-duration-drawer: 0.24s;
+  --motion-duration-loading: 0.8s;
+  --motion-duration-status: 1.5s;
+  --motion-duration-breathe: 3s;
+  --motion-duration-typing: 1.2s;
+  --motion-stagger-sm: 50ms;
   --motion-distance-xs: 4px;
   --motion-distance-sm: 8px;
   --motion-distance-dialog: 12px;

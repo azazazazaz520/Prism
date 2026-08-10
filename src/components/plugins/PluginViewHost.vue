@@ -212,7 +212,9 @@ export default defineComponent({
   color: var(--text-tertiary);
   cursor: pointer;
   position: relative;
-  transition: all 0.2s;
+  transition:
+    background-color var(--motion-duration-hover) var(--motion-ease-standard),
+    color var(--motion-duration-hover) var(--motion-ease-standard);
 }
 
 .plugin-rail-btn:hover {

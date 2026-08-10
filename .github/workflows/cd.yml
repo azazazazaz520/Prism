@@ -25,6 +25,14 @@ jobs:
           TAG="${{ github.ref_name }}"
           # 去掉 v 前缀
           VER="${TAG#v}"
+          # Tauri 要求 version 使用完整 SemVer；兼容历史上的 v主版本.次版本 tag。
+          if [[ "$VER" =~ ^([0-9]+)\.([0-9]+)$ ]]; then
+            VER="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.0"
+          fi
+          if [[ ! "$VER" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+            echo "Invalid release version: ${VER}. Use a SemVer tag such as v0.43.0 or v0.43.0-alpha.1."
+            exit 1
+          fi
           echo "version=${VER}" >> $GITHUB_OUTPUT
           echo "Version resolved: ${VER}"
 

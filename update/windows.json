@@ -1,8 +1,8 @@
 {
-  "version": "0.4.2",
-  "download_url": "https://github.com/azazazazaz520/Prism/releases/download/v0.4.2/Prism_0.4.2_x64-setup.exe",
-  "sha256": "21ff8637fbe02122d96f19d8c9b30891bff209ffb41d3bcb49846de858cecac6",
-  "release_notes": "## Changes since v0.4.1\n\n- fix(导出): 修复非 Windows Clippy 未使用参数 (asd_fire)\n- feat(插件): 接入沙箱插件视图运行时 (asd_fire)\n- fix: 增加插件隔离持久化存储 (asd_fire)\n- fix: 修复插件页阻塞主模块导航 (asd_fire)\n- fix: 修复开发环境启动解析问题 (asd_fire)\n- feat: 引入 GitHub Device Flow 插件授权 (asd_fire)\n- chore: 同步稳定版更新清单 (github-actions[bot])",
-  "release_url": "https://github.com/azazazazaz520/Prism/releases/tag/v0.4.2",
-  "release_date": "2026-07-29T12:21:46.6422907Z"
+  "release_date": "2026-08-10T14:46:39.0507422Z",
+  "release_url": "https://github.com/azazazazaz520/Prism/releases/tag/v0.4.3",
+  "version": "0.4.3",
+  "download_url": "https://github.com/azazazazaz520/Prism/releases/download/v0.4.3/Prism_0.4.3_x64-setup.exe",
+  "release_notes": "## Changes since v0.4.2\n\n- fix: 修复cd构建失败的问题 (asd_fire)\n- fix: 修复文件监听测试的跨平台路径 (asd_fire)\n- feat(notes): 支持大纲点击跳转 (asd_fire)\n- refactor(ui): 完善动画库与自然连续界面动效 (asd_fire)\n- refactor(ui): 完善统一动效迁移 (asd_fire)\n- feat(悬浮窗): 增加手势滚动与面板过渡 (asd_fire)\n- feat(笔记): 支持文件拖入标签页与编辑区 (asd_fire)\n- fix(同步): 通过受保护接口完成同步码配对 (asd_fire)\n- refactor: 统一界面动效规则 (asd_fire)\n- refactor(笔记): 清理 NoteEditor 残留死样式与失效逻辑 (asd_fire)\n- refactor(笔记): 抽取状态栏、侧栏按钮与上下文面板组件 (asd_fire)\n- refactor(笔记): 抽取编辑器右键菜单数据模块 (asd_fire)\n- refactor(笔记): 抽取文件树面板组件 (asd_fire)\n- refactor(笔记): 抽取侧边栏布局 composable (asd_fire)\n- feat: 重构编辑器右键菜单并支持子菜单与系统剪贴板 (asd_fire)\n- docs: 清理 README 残留旧项目内容并更新项目结构 (asd_fire)\n- fix: 加固插件网络请求安全与数据持久化容错 (asd_fire)\n- refactor: 精简笔记工作区状态与组件接口 (asd_fire)\n- fix: 完善笔记自身写入标识 (asd_fire)\n- fix: 支持笔记文件重命名监听 (asd_fire)\n- refactor: 改进笔记状态与编辑器样式 (asd_fire)\n- refactor: 统一工作区导航层级 (asd_fire)\n- refactor: 重构笔记与插件核心模块 (asd_fire)\n- fix: 修复笔记保存与编辑器撤销数据安全问题 (asd_fire)\n- fix(笔记): 阻止加载期间保存临时空内容 (asd_fire)\n- perf(编辑器): 拆分编辑器依赖并优化索引队列 (asd_fire)\n- refactor(编辑器): 统一文档状态并优化笔记同步 (asd_fire)\n- chore: 同步稳定版更新清单 (github-actions[bot])",
+  "sha256": "d2c968b9fc2ca3a0a280dae9509409bd5866f7b6ae502838956ae6cf7b88d034"
 }

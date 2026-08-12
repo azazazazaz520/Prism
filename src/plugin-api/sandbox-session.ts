@@ -1,5 +1,5 @@
 import vueRuntime from 'vue/dist/vue.runtime.global.prod.js?raw';
-import { invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
+import { diagnosticsLogger, invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
 
 export type SandboxViewLocation = 'sidebar' | 'panel' | 'settings' | 'rail' | 'page';
 
@@ -58,6 +58,15 @@ const SANDBOX_FACTORY_PARAMETER_LIST = SANDBOX_PLUGIN_FACTORY_PARAMETERS.map((na
   JSON.stringify(name),
 ).join(', ');
 
+export const SANDBOX_READY_TIMEOUT_MS = 10_000;
+
+function createSandboxChannelId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 const BOOTSTRAP = String.raw`(() => {
   const config = __PRISM_CONFIG__;
   const pluginSource = __PRISM_SOURCE__;
@@ -69,9 +78,17 @@ const BOOTSTRAP = String.raw`(() => {
   let nextRequestId = 1;
   let nextDisposableId = 1;
 
+  function postToHost(message) {
+    parent.postMessage({ ...message, channelId: config.channelId }, '*');
+  }
+
+  function lifecycle(stage) {
+    postToHost({ kind: 'lifecycle', stage });
+  }
+
   function rpc(method, args) {
     const id = nextRequestId++;
-    parent.postMessage({ kind: 'rpc', id, method, args }, '*');
+    postToHost({ kind: 'rpc', id, method, args });
     return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
   }
 
@@ -116,7 +133,11 @@ const BOOTSTRAP = String.raw`(() => {
 
   function disposable(kind, id) {
     const disposableId = nextDisposableId++;
-    return { dispose() { parent.postMessage({ kind: 'sandbox-dispose', disposableId, resource: kind, id }, '*'); } };
+    return {
+      dispose() {
+        postToHost({ kind: 'sandbox-dispose', disposableId, resource: kind, id });
+      },
+    };
   }
 
   const ctx = {
@@ -125,7 +146,7 @@ const BOOTSTRAP = String.raw`(() => {
     permissions: new Set(config.permissions),
     track(value) { return value; },
     dispose,
-    log(level, message) { parent.postMessage({ kind: 'log', level, message: String(message) }, '*'); },
+    log(level, message) { postToHost({ kind: 'log', level, message: String(message) }); },
     openUrl(url) { return rpc('open-url', [url]); },
     storage: {
       async get(key) { const value = await rpc('storage.get', [key]); if (value == null) return null; storageCache.set(key, value); return JSON.parse(value); },
@@ -140,7 +161,11 @@ const BOOTSTRAP = String.raw`(() => {
       },
     },
     commands: {
-      register(id, callback) { commands.set(id, callback); parent.postMessage({ kind: 'command-register', id }); return disposable('command', id); },
+      register(id, callback) {
+        commands.set(id, callback);
+        postToHost({ kind: 'command-register', id });
+        return disposable('command', id);
+      },
       async execute(id, ...args) { return executeCommand(id, args); },
     },
     views: {
@@ -154,7 +179,11 @@ const BOOTSTRAP = String.raw`(() => {
     menus: {
       register(location, items) {
         for (const item of items) menus.set(item.id, item.action);
-        parent.postMessage({ kind: 'menu-register', location, items: items.map(({ id, label, icon }) => ({ id, label, icon })) }, '*');
+        postToHost({
+          kind: 'menu-register',
+          location,
+          items: items.map(({ id, label, icon }) => ({ id, label, icon })),
+        });
         return disposable('menu', location);
       },
     },
@@ -181,7 +210,7 @@ const BOOTSTRAP = String.raw`(() => {
   function registerView(id, location, component, options) {
     const icon = options && typeof options.icon === 'object' ? options.icon : undefined;
     views.set(id, { location, component });
-    parent.postMessage({ kind: 'view-register', id, location, title: id, icon }, '*');
+    postToHost({ kind: 'view-register', id, location, title: id, icon });
     return disposable('view', id);
   }
 
@@ -208,7 +237,7 @@ const BOOTSTRAP = String.raw`(() => {
 
   function reportRuntimeError(error) {
     const message = error?.message || String(error);
-    parent.postMessage({ kind: 'runtime-error', error: message }, '*');
+    postToHost({ kind: 'runtime-error', error: message });
     let panel = document.getElementById('prism-plugin-runtime-error');
     if (!panel) {
       panel = document.createElement('div');
@@ -239,22 +268,31 @@ const BOOTSTRAP = String.raw`(() => {
 
   (async () => {
     try {
+      lifecycle('storage_snapshot_started');
       const snapshot = await rpc('storage.snapshot', []);
       Object.entries(snapshot || {}).forEach(([key, value]) => storageCache.set(key, value));
+      lifecycle('storage_snapshot_completed');
       const factory = new Function(${SANDBOX_FACTORY_PARAMETER_LIST}, pluginSource + '\nreturn { activate: typeof activate === "function" ? activate : undefined, deactivate: typeof deactivate === "function" ? deactivate : undefined };');
       const module = factory(window, document, storage, window.Vue);
       if (typeof module.activate !== 'function') throw new Error('插件未导出 activate 函数');
+      lifecycle('activate_started');
       await module.activate(ctx);
+      lifecycle('activate_completed');
       window.__prism_deactivate__ = module.deactivate;
-      parent.postMessage({ kind: 'ready' }, '*');
+      postToHost({ kind: 'ready' });
     } catch (error) {
-      parent.postMessage({ kind: 'error', error: error?.message || String(error) }, '*');
+      postToHost({ kind: 'error', error: error?.message || String(error) });
     }
   })();
 })();`;
 
-function createSrcdoc(pluginId: string, permissions: string[], source: string): string {
-  const config = JSON.stringify({ pluginId, permissions });
+function createSrcdoc(
+  pluginId: string,
+  permissions: string[],
+  source: string,
+  channelId: string,
+): string {
+  const config = JSON.stringify({ pluginId, permissions, channelId });
   const pluginSource = JSON.stringify(source);
   return `<!doctype html><html><head><meta charset="utf-8"><style>:root{--theme-color-scheme:light}html,body,#prism-plugin-view{margin:0;min-height:100%;height:100%;overflow:auto;font-family:system-ui,sans-serif;background:var(--bg-primary,#f8fdfb);color:var(--text-primary,#1a2e2b)}</style><script>${vueRuntime}</script></head><body><div id="prism-plugin-view"></div><script>const __PRISM_CONFIG__=${config};const __PRISM_SOURCE__=${pluginSource};${BOOTSTRAP}</script></body></html>`;
 }
@@ -276,6 +314,9 @@ export class SandboxPluginSession implements SandboxViewSession {
   private resolveReady!: () => void;
   private rejectReady!: (error: Error) => void;
   private disposed = false;
+  private readySettled = false;
+  private readyTimeout?: ReturnType<typeof setTimeout>;
+  private readonly channelId: string;
   private iframeLoaded = false;
   private sandboxReady = false;
   private attachedView?: { container: HTMLElement; viewId: string };
@@ -286,16 +327,36 @@ export class SandboxPluginSession implements SandboxViewSession {
     private readonly permissions: string[],
     source: string,
   ) {
+    this.channelId = createSandboxChannelId();
     this.iframe.setAttribute('sandbox', 'allow-scripts');
     this.iframe.setAttribute('data-plugin', pluginId);
     this.iframe.style.cssText =
       'display:none;width:100%;height:100%;border:0;background:transparent;';
-    this.iframe.srcdoc = createSrcdoc(pluginId, permissions, source);
+    this.iframe.srcdoc = createSrcdoc(pluginId, permissions, source, this.channelId);
     this.iframe.addEventListener('load', this.handleIframeLoad);
+    this.iframe.addEventListener('error', this.handleIframeError);
     this.ready = new Promise<void>((resolve, reject) => {
-      this.resolveReady = resolve;
-      this.rejectReady = reject;
+      this.resolveReady = () => {
+        if (this.readySettled) return;
+        this.readySettled = true;
+        if (this.readyTimeout) clearTimeout(this.readyTimeout);
+        resolve();
+      };
+      this.rejectReady = (error) => {
+        if (this.readySettled) return;
+        this.readySettled = true;
+        if (this.readyTimeout) clearTimeout(this.readyTimeout);
+        reject(error);
+      };
     });
+    this.readyTimeout = setTimeout(() => {
+      const error = new Error(`插件沙箱启动超时（${SANDBOX_READY_TIMEOUT_MS}ms）`);
+      diagnosticsLogger.error('plugin', 'plugin.sandbox_timeout', '插件沙箱启动超时', error, {
+        plugin_id: this.pluginId,
+        timeout_ms: SANDBOX_READY_TIMEOUT_MS,
+      });
+      this.rejectReady(error);
+    }, SANDBOX_READY_TIMEOUT_MS);
     window.addEventListener('message', this.handleMessage);
     document.body.appendChild(this.iframe);
     this.themeObserver = new MutationObserver(() => this.syncTheme());
@@ -304,6 +365,9 @@ export class SandboxPluginSession implements SandboxViewSession {
       attributeFilter: ['class', 'data-theme', 'style'],
     });
     this.syncTheme();
+    diagnosticsLogger.info('plugin', 'plugin.sandbox_created', '插件沙箱已创建', {
+      plugin_id: this.pluginId,
+    });
   }
 
   onViewRegistered(handler: (registration: SandboxViewRegistration) => void): void {
@@ -353,17 +417,33 @@ export class SandboxPluginSession implements SandboxViewSession {
     this.disposed = true;
     this.themeObserver.disconnect();
     this.iframe.removeEventListener('load', this.handleIframeLoad);
+    this.iframe.removeEventListener('error', this.handleIframeError);
     this.iframe.contentWindow?.postMessage({ kind: 'sandbox-command', command: 'dispose' }, '*');
     window.removeEventListener('message', this.handleMessage);
     this.iframe.remove();
+    this.rejectReady(new Error('插件沙箱已关闭'));
     for (const item of this.pending.values()) item.reject(new Error('插件沙箱已关闭'));
     this.pending.clear();
+    diagnosticsLogger.info('plugin', 'plugin.sandbox_disposed', '插件沙箱已释放', {
+      plugin_id: this.pluginId,
+    });
   }
 
   private readonly handleIframeLoad = () => {
     this.iframeLoaded = true;
+    diagnosticsLogger.info('plugin', 'plugin.sandbox_iframe_loaded', '插件沙箱 iframe 已加载', {
+      plugin_id: this.pluginId,
+    });
     this.syncTheme();
     this.postAttachedView();
+  };
+
+  private readonly handleIframeError = () => {
+    const error = new Error('插件沙箱 iframe 加载失败');
+    diagnosticsLogger.error('plugin', 'plugin.sandbox_error', '插件沙箱 iframe 加载失败', error, {
+      plugin_id: this.pluginId,
+    });
+    this.rejectReady(error);
   };
 
   private postShowView(viewId: string): void {
@@ -395,15 +475,58 @@ export class SandboxPluginSession implements SandboxViewSession {
   }
 
   private readonly handleMessage = (event: MessageEvent) => {
-    if (event.source !== this.iframe.contentWindow) return;
     const message = event.data as Record<string, unknown>;
+    const sourceMatches = event.source === this.iframe.contentWindow;
+    const channelMatches = message?.channelId === this.channelId;
+    if (!sourceMatches && !channelMatches) return;
+    if (!sourceMatches) {
+      diagnosticsLogger.warn(
+        'plugin',
+        'plugin.sandbox_message_source_mismatch',
+        '插件沙箱消息来源对象不一致，已通过会话通道校验',
+        { plugin_id: this.pluginId, kind: String(message?.kind || 'unknown') },
+      );
+    }
+    if (message.kind === 'lifecycle') {
+      const stage = String(message.stage || 'unknown');
+      const eventByStage: Record<string, string> = {
+        storage_snapshot_started: 'plugin.sandbox_storage_snapshot_started',
+        storage_snapshot_completed: 'plugin.sandbox_storage_snapshot_completed',
+        activate_started: 'plugin.sandbox_activate_started',
+        activate_completed: 'plugin.sandbox_activate_completed',
+      };
+      const logEvent = eventByStage[stage];
+      if (logEvent) {
+        const phase = stage.endsWith('_started') ? '开始' : '完成';
+        diagnosticsLogger.info('plugin', logEvent, `插件沙箱阶段${phase}：${stage}`, {
+          plugin_id: this.pluginId,
+        });
+      }
+    }
     if (message.kind === 'ready') {
       this.sandboxReady = true;
+      diagnosticsLogger.info('plugin', 'plugin.sandbox_ready', '插件沙箱已就绪', {
+        plugin_id: this.pluginId,
+      });
       this.resolveReady();
       this.postAttachedView();
     }
-    if (message.kind === 'error')
-      this.rejectReady(new Error(String(message.error || '插件沙箱启动失败')));
+    if (message.kind === 'error') {
+      const error = new Error(String(message.error || '插件沙箱启动失败'));
+      diagnosticsLogger.error('plugin', 'plugin.sandbox_error', '插件沙箱启动失败', error, {
+        plugin_id: this.pluginId,
+      });
+      this.rejectReady(error);
+    }
+    if (message.kind === 'runtime-error') {
+      diagnosticsLogger.error(
+        'plugin',
+        'plugin.sandbox_runtime_error',
+        '插件沙箱运行时异常',
+        new Error(String(message.error || '插件沙箱运行时异常')),
+        { plugin_id: this.pluginId },
+      );
+    }
     if (message.kind === 'view-register') {
       const registration = message as unknown as SandboxViewRegistration;
       if (!this.hasViewHandler) this.pendingViews.push(registration);
@@ -419,10 +542,28 @@ export class SandboxPluginSession implements SandboxViewSession {
   };
 
   private async handleRpc(request: RpcRequest): Promise<void> {
+    const isStorageSnapshot = request.method === 'storage.snapshot';
+    if (isStorageSnapshot) {
+      diagnosticsLogger.info(
+        'plugin',
+        'plugin.sandbox_storage_snapshot_requested',
+        '插件沙箱请求存储快照',
+        { plugin_id: this.pluginId },
+      );
+    }
     try {
       const value = await this.handleHostRequest(request);
       this.reply({ kind: 'rpc-result', id: request.id, ok: true, value });
     } catch (error) {
+      if (isStorageSnapshot) {
+        diagnosticsLogger.error(
+          'plugin',
+          'plugin.sandbox_storage_snapshot_failed',
+          '插件沙箱读取存储快照失败',
+          error,
+          { plugin_id: this.pluginId },
+        );
+      }
       this.reply({
         kind: 'rpc-result',
         id: request.id,

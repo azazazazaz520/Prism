@@ -108,6 +108,10 @@ export function usePluginLoader() {
 
     initial.state = 'activating';
     bumpReactivity();
+    const startedAt = performance.now();
+    diagnosticsLogger.info('plugin', 'plugin.activation_started', '插件开始激活', {
+      plugin_id: pluginId,
+    });
     const entry = pluginEntries.value.get(pluginId)!;
     const registrations: Disposable[] = [];
     try {
@@ -117,6 +121,7 @@ export function usePluginLoader() {
       });
       const { body } = parseModule(source);
       const session = new SandboxPluginSession(pluginId, entry.manifest.permissions ?? [], body);
+      entry.session = session;
       session.onViewRegistered((registration) => {
         registrations.push(
           registerSandboxView(
@@ -141,6 +146,10 @@ export function usePluginLoader() {
       entry.diagnostics = { status: 'ok', errorCount: entry.diagnostics.errorCount };
       entry.lastError = undefined;
       bumpReactivity();
+      diagnosticsLogger.info('plugin', 'plugin.activation_completed', '插件激活完成', {
+        plugin_id: pluginId,
+        duration_ms: Math.round(performance.now() - startedAt),
+      });
     } catch (error) {
       entry.session?.dispose();
       entry.session = undefined;
@@ -149,6 +158,10 @@ export function usePluginLoader() {
       entry.registrations = undefined;
       markFailure(entry, error);
       bumpReactivity();
+      diagnosticsLogger.error('plugin', 'plugin.activation_failed', '插件激活失败', error, {
+        plugin_id: pluginId,
+        duration_ms: Math.round(performance.now() - startedAt),
+      });
     }
   }
 

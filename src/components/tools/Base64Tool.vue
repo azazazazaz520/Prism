@@ -145,7 +145,7 @@ function clearAll() {
   padding: 4px 10px;
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
-  font-family: monospace;
+  font-family: var(--font-mono);
   color: var(--text-muted);
   cursor: pointer;
   transition: background var(--transition-fast);
@@ -275,7 +275,7 @@ function clearAll() {
 .pane-content {
   flex: 1;
   padding: var(--space-md);
-  font-family: 'Fira Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   font-size: var(--text-sm);
   line-height: 1.6;
   color: var(--text-primary);

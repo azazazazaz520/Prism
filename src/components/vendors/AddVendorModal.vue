@@ -119,12 +119,12 @@ function handleSave() {
         </div>
 
         <div class="field-row">
-          <label>API Key</label>
+          <label>API 密钥</label>
           <input v-model="apiKey" type="password" placeholder="sk-..." />
         </div>
 
         <div class="field-row">
-          <label>Base URL</label>
+          <label>基础地址</label>
           <input v-model="baseUrl" type="text" />
         </div>
 

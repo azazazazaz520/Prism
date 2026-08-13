@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, computed } from 'vue';
 import { invokeWithDiagnostics as invoke } from '../../diagnostics/invoke-logged';
 
@@ -345,7 +345,7 @@ const hasContent = computed(() => input.value.length > 0 || output.value.length 
 .pane-content {
   flex: 1;
   padding: var(--space-md);
-  font-family: 'Fira Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   font-size: var(--text-sm);
   line-height: 1.6;
   color: var(--text-primary);

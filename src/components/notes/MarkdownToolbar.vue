@@ -290,7 +290,7 @@ function horizontalRule() {
   text-decoration: line-through;
 }
 .md-label-mono {
-  font-family: 'Cascadia Code', 'Fira Code', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
 }
 

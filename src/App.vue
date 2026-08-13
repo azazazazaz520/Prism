@@ -262,7 +262,6 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
           v-if="isEnabled('notes')"
           :class="['rail-btn', { active: activeModule === 'notes' }]"
           data-tooltip="笔记工作区"
-          title="笔记工作区"
           aria-label="笔记工作区"
           :aria-current="activeModule === 'notes' ? 'page' : undefined"
           @click="handleSwitchModule('notes')"
@@ -277,7 +276,6 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
           v-if="isEnabled('tasks')"
           :class="['rail-btn', { active: activeModule === 'tasks' }]"
           data-tooltip="任务"
-          title="任务"
           aria-label="任务"
           :aria-current="activeModule === 'tasks' ? 'page' : undefined"
           @click="handleSwitchModule('tasks')"
@@ -297,7 +295,6 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
           v-if="isEnabled('ai-assistant')"
           :class="['rail-btn', { active: activeModule === 'ai-assistant' }]"
           data-tooltip="AI 助手"
-          title="AI 助手"
           aria-label="AI 助手"
           :aria-current="activeModule === 'ai-assistant' ? 'page' : undefined"
           @click="handleSwitchModule('ai-assistant')"
@@ -311,7 +308,6 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
           v-if="isEnabled('devtools')"
           :class="['rail-btn', { active: activeModule === 'devtools' }]"
           data-tooltip="工具箱"
-          title="工具箱"
           aria-label="工具箱"
           :aria-current="activeModule === 'devtools' ? 'page' : undefined"
           @click="handleSwitchModule('devtools')"
@@ -330,7 +326,6 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
           v-if="isEnabled('floating')"
           class="rail-btn"
           data-tooltip="悬浮窗"
-          title="打开悬浮窗"
           aria-label="打开悬浮窗"
           @click="handleSwitchModule('floating')"
         >
@@ -350,7 +345,6 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
           type="button"
           :class="['rail-btn', { active: activeModule === 'settings' }]"
           data-tooltip="设置"
-          title="设置"
           aria-label="设置"
           :aria-current="activeModule === 'settings' ? 'page' : undefined"
           @click="handleSwitchModule('settings')"
@@ -511,12 +505,12 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
     <!-- 右侧面板 (仅任务模块) -->
     <aside v-if="activeModule === 'tasks' && !isPluginPageActive" class="right-panel">
       <div class="right-panel-header">
-        <span class="right-panel-label"><span class="rp-dot"></span>Cal & Tags</span>
+        <span class="right-panel-label"><span class="rp-dot"></span>日历与标签</span>
       </div>
       <div class="right-panel-content">
         <MiniCalendar :tasks="tasks" :selected-date="filterDate" @select-date="selectDate" />
         <div class="detail-section-header" style="margin-top: var(--space-md)">
-          <span class="detail-section-label">Filter Tags</span>
+          <span class="detail-section-label">标签筛选</span>
           <span class="detail-section-line"></span>
         </div>
         <TagFilterBar

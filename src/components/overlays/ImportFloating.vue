@@ -167,7 +167,7 @@ function formatDate(d: string | null): string {
   <div class="import-window">
     <!-- 顶部拖拽栏 -->
     <div class="topbar" data-tauri-drag-region>
-      <span class="topbar-title">Import</span>
+      <span class="topbar-title">导入</span>
       <button class="close-btn" @click.stop="closeWindow">
         <svg
           width="14"

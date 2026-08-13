@@ -338,7 +338,7 @@ const hasMessages = computed(() => messages.value.length > 0);
   padding: 2px 6px;
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
-  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-family: var(--font-mono);
 }
 
 .msg-row.user .msg-bubble :deep(code) {

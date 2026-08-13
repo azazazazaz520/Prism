@@ -104,7 +104,6 @@ export default defineComponent({
               class: 'rail-btn plugin-rail-btn',
               'data-plugin': v.pluginId,
               'data-tooltip': v.id,
-              title: v.id,
               'aria-label': v.id,
               onClick: () => v.onActivate?.(),
             },

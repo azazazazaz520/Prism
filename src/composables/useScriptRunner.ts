@@ -1,7 +1,7 @@
 import { ref, shallowRef } from 'vue';
 import { invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
 import { diagnosticsLogger } from '../diagnostics/invoke-logged';
-import { buildCapability } from '../plugin-api/capability-builder';
+import { runScriptInSandbox } from '../plugin-api/script-sandbox';
 import type { PluginPermission } from '../types';
 
 // ═══════════════════════════════════════════════════════════════
@@ -54,29 +54,30 @@ export function useScriptRunner() {
     try {
       const fileName = entry.name.endsWith('.js') ? entry.name : entry.name + '.js';
       const source: string = await invoke('read_script_content', { fileName });
+      const scriptId = `script:${entry.name}`;
+      const permissions = entry.permissions as PluginPermission[];
 
-      // 构造注入的 prism 对象（权限裁剪后的 Capability 子集）
-      const cap = buildCapability(`script:${entry.name}`, entry.permissions as PluginPermission[]);
+      // 将脚本声明权限持久化到 ConfigStore，使后端 check_plugin_permission
+      // 对 script:<name> 的调用按持久化配置校验（审查报告 H-1：移除无条件放行）
+      await invoke('set_plugin_config', {
+        pluginId: scriptId,
+        config: { enabled: true, permissions },
+      }).catch((error) =>
+        diagnosticsLogger.warn('script', 'script.config_save_failed', '脚本权限配置保存失败', {
+          error: String(error),
+          script_id: scriptId,
+        }),
+      );
 
-      const prism = {
-        tasks: cap.tasks,
-        network: cap.network,
-        ui: cap.api.ui,
-        storage: cap.api.storage,
-        log: (msg: string) => cap.api.diagnostics.log('info', msg),
-      };
-
-      // IIFE 执行：用 Function 构造器注入 prism 变量
-      const wrapped = `
-        return (async function(prism) {
-          ${source}
-        })(prism);
-      `;
-      const fn = new Function('prism', wrapped);
-      await fn(prism);
-
-      entry.status = 'done';
-      entry.lastOutput = '执行完成';
+      // 在隔离 iframe 沙箱中执行（审查报告 S-2），带执行超时
+      const result = await runScriptInSandbox({ scriptId, permissions, source });
+      if (result.ok) {
+        entry.status = 'done';
+        entry.lastOutput = '执行完成';
+      } else {
+        entry.status = 'error';
+        entry.lastOutput = result.error || '执行失败';
+      }
     } catch (e: any) {
       entry.status = 'error';
       entry.lastOutput = e?.message || String(e);

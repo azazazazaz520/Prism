@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs;
-use std::net::{IpAddr, Ipv6Addr};
+use std::net::{IpAddr, Ipv6Addr, ToSocketAddrs};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -15,12 +15,55 @@ use crate::AppState;
 //  路径沙箱
 // ═══════════════════════════════════════════════════════════════
 
+/// 校验插件 ID 格式：反向域名风格，至少两段，
+/// 段内仅允许 ASCII 字母数字、连字符与下划线。
+/// 拒绝路径分隔符、`.`/`..` 段与空段，防止路径构造注入（审查报告 H-7）。
+fn is_valid_plugin_id(plugin_id: &str) -> bool {
+    if plugin_id.is_empty() || plugin_id.len() > 128 {
+        return false;
+    }
+    let mut segment_count = 0;
+    for segment in plugin_id.split('.') {
+        segment_count += 1;
+        if segment.is_empty()
+            || !segment
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        {
+            return false;
+        }
+    }
+    segment_count >= 2
+}
+
+/// 校验脚本 ID 格式：`script:` 前缀 + 合法名称。
+fn is_valid_script_id(plugin_id: &str) -> bool {
+    match plugin_id.strip_prefix("script:") {
+        Some(name) => {
+            !name.is_empty()
+                && name.len() <= 128
+                && name
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
+        }
+        None => false,
+    }
+}
+
+/// 可调用方 ID（插件或脚本）的格式校验。
+fn is_valid_callable_id(plugin_id: &str) -> bool {
+    is_valid_plugin_id(plugin_id) || is_valid_script_id(plugin_id)
+}
+
 /// 解析插件目录内的文件路径，防止路径穿越攻击。
 ///
 /// 使用 `canonicalize` 规范化路径后，校验其是否仍在
 /// `<workspace>/plugins/<plugin_id>/` 目录之内。
 /// 超出范围则返回 `Err`。
 fn resolve_plugin_path(plugin_id: &str, relative_path: &str) -> Result<PathBuf, String> {
+    if !is_valid_plugin_id(plugin_id) {
+        return Err(format!("非法插件 ID: '{}'", plugin_id));
+    }
     let plugins_dir = persistence::get_plugins_dir();
     let full_path = plugins_dir.join(plugin_id).join(relative_path);
 
@@ -110,6 +153,14 @@ fn read_plugin_manifest(plugin_dir: &std::path::Path) -> Option<PluginManifestIn
         }
     };
 
+    // manifest 声明的 id 必须通过格式校验，否则跳过该插件（审查报告 H-7）
+    if let Some(id) = manifest.get("id").and_then(serde_json::Value::as_str) {
+        if !is_valid_plugin_id(id) {
+            eprintln!("[plugins] {} 的 manifest.id 非法: {}", plugin_id, id);
+            return None;
+        }
+    }
+
     Some(parse_plugin_manifest(&plugin_id, &manifest))
 }
 
@@ -153,6 +204,9 @@ fn string_field<'a>(manifest: &'a serde_json::Value, field: &str, default: &'a s
         .unwrap_or(default)
 }
 
+/// 合法权限标识集合（后端第三层防线，过滤 manifest 声明的非法权限）
+const VALID_PERMISSIONS: [&str; 4] = ["tasks:read", "tasks:write", "network", "network:local"];
+
 fn read_permissions(manifest: &serde_json::Value) -> Vec<String> {
     manifest
         .get("permissions")
@@ -160,7 +214,12 @@ fn read_permissions(manifest: &serde_json::Value) -> Vec<String> {
         .map(|permissions| {
             permissions
                 .iter()
-                .filter_map(|permission| permission.as_str().map(str::to_string))
+                .filter_map(|permission| {
+                    permission
+                        .as_str()
+                        .filter(|p| VALID_PERMISSIONS.contains(p))
+                        .map(str::to_string)
+                })
                 .collect()
         })
         .unwrap_or_default()
@@ -174,13 +233,17 @@ pub fn get_plugin_configs(
     state.with_config(|config| config.plugins.clone())
 }
 
-/// 保存单个插件的配置（启用/禁用状态 + 裁剪后权限）
+/// 保存单个插件或脚本的配置（启用/禁用状态 + 裁剪后权限）。
+/// 对 plugin_id 做格式校验，防止污染 ConfigStore（审查报告 H-7）。
 #[tauri::command]
 pub fn set_plugin_config(
     state: tauri::State<AppState>,
     plugin_id: String,
     config: PluginConfig,
 ) -> Result<(), String> {
+    if !is_valid_callable_id(&plugin_id) {
+        return Err(format!("非法插件 ID: '{}'", plugin_id));
+    }
     state.with_config_mut(|c| {
         c.plugins.insert(plugin_id, config);
     })
@@ -200,20 +263,13 @@ pub fn read_plugin_file(plugin_id: String, file_path: String) -> Result<String, 
 /// 校验插件是否持有指定权限。
 /// 从 ConfigStore.plugins 读取已持久化的权限列表，
 /// 不信任前端传入的任何权限声明（第三层防线）。
+/// 脚本（ID 以 `script:` 开头）同样以 `script:<name>` 为 key 持久化在
+/// ConfigStore 中，由前端运行脚本前写入声明权限，走同一校验路径
 fn check_plugin_permission(
     state: &AppState,
     plugin_id: &str,
     required: &str,
 ) -> Result<(), String> {
-    // 脚本（ID 以 script: 开头）：由前端 Capability Builder 控制权限，Rust 仅做格式校验
-    if plugin_id.starts_with("script:") {
-        let valid_perms = ["tasks:read", "tasks:write", "network", "network:local"];
-        if valid_perms.contains(&required) {
-            return Ok(());
-        }
-        return Err(format!("未知权限标识: {}", required));
-    }
-
     let config = state.with_config(|c| c.plugins.get(plugin_id).cloned());
     match config {
         Some(cfg) if cfg.enabled && cfg.permissions.iter().any(|p| p == required) => Ok(()),
@@ -457,6 +513,34 @@ fn validate_network_url(url_str: &str, has_local_perm: bool) -> Result<(), Strin
     Ok(())
 }
 
+/// 解析域名并校验解析结果是否为公网 IP（审查报告 H-1）。
+///
+/// 域名形态校验无法阻止"域名指向内网"与 DNS rebinding，此处对 DNS 解析
+/// 结果逐 IP 复核：任何解析 IP 命中本地/私网段即拒绝。
+/// 仅对非 localhost 域名且未声明 `network:local` 权限时执行；
+/// IP 字面量已在 `validate_network_url` 校验。
+fn validate_resolved_host(host: &str, port: u16, has_local_perm: bool) -> Result<(), String> {
+    let lower = host.to_ascii_lowercase();
+    let is_local_hostname =
+        lower == "localhost" || lower.ends_with(".localhost") || lower.ends_with(".local");
+    if is_local_hostname || has_local_perm {
+        return Ok(());
+    }
+    let addresses = (host, port)
+        .to_socket_addrs()
+        .map_err(|e| format!("域名解析失败: {}", e))?;
+    for address in addresses {
+        if is_local_ip(&address.ip()) {
+            return Err(format!(
+                "域名 '{}' 解析到内网地址 '{}'，已拒绝",
+                host,
+                address.ip()
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// HTTP 代理请求（通过 Rust Host 发出，避免浏览器 CORS/混合内容限制）
 /// 仅限 network 权限（公网）或 network:local 权限（公网 + 内网）
 #[tauri::command]
@@ -473,6 +557,12 @@ pub async fn plugin_network_fetch(
 
     validate_network_url(&url, has_local)?;
 
+    // H-1：域名解析结果复核（指向内网的域名 / DNS rebinding 拦截）
+    let parsed_url = Url::parse(&url).map_err(|e| format!("URL 格式无效: {}", e))?;
+    if let (Some(host), Some(port)) = (parsed_url.host_str(), parsed_url.port_or_known_default()) {
+        validate_resolved_host(host, port, has_local)?;
+    }
+
     let opts = options.unwrap_or(NetworkFetchOptions {
         method: "GET".to_string(),
         headers: HashMap::new(),
@@ -486,7 +576,18 @@ pub async fn plugin_network_fetch(
             return attempt.error("重定向次数过多".to_string());
         }
         match validate_network_url(attempt.url().as_str(), has_local) {
-            Ok(()) => attempt.follow(),
+            Ok(()) => {
+                // H-1：重定向目标的域名解析结果同样复核
+                if let (Some(host), Some(port)) = (
+                    attempt.url().host_str(),
+                    attempt.url().port_or_known_default(),
+                ) {
+                    if let Err(e) = validate_resolved_host(host, port, has_local) {
+                        return attempt.error(format!("重定向目标被安全策略拒绝: {}", e));
+                    }
+                }
+                attempt.follow()
+            }
             Err(e) => attempt.error(format!("重定向目标被安全策略拒绝: {}", e)),
         }
     });
@@ -751,5 +852,57 @@ mod tests {
     fn test_localhost_case_insensitive() {
         assert!(validate_network_url("http://LOCALHOST/", false).is_err());
         assert!(validate_network_url("http://LoCaLhOsT/", true).is_ok());
+    }
+
+    // ═══ 插件 ID 格式校验（审查报告 H-7） ═══
+
+    #[test]
+    fn test_valid_plugin_ids_accepted() {
+        assert!(is_valid_plugin_id("com.prism.hello"));
+        assert!(is_valid_plugin_id("com.example.my-plugin_v2"));
+        assert!(is_valid_plugin_id("a.b.c"));
+    }
+
+    #[test]
+    fn test_invalid_plugin_ids_rejected() {
+        assert!(!is_valid_plugin_id(""));
+        assert!(!is_valid_plugin_id("hello"));
+        assert!(!is_valid_plugin_id("../../.prism"));
+        assert!(!is_valid_plugin_id("a..b"));
+        assert!(!is_valid_plugin_id("a/b"));
+        assert!(!is_valid_plugin_id("a\\b"));
+        assert!(!is_valid_plugin_id("a:b"));
+        assert!(!is_valid_plugin_id(".hidden"));
+        assert!(!is_valid_plugin_id("trailing."));
+        assert!(!is_valid_plugin_id(&"x".repeat(200)));
+    }
+
+    #[test]
+    fn test_script_ids() {
+        assert!(is_valid_script_id("script:my-script.js"));
+        assert!(is_valid_script_id("script:my_script"));
+        assert!(!is_valid_script_id("script:"));
+        assert!(!is_valid_script_id("script:../evil"));
+        assert!(!is_valid_script_id("script:a/b"));
+        assert!(!is_valid_script_id("plugin"));
+    }
+
+    #[test]
+    fn test_callable_ids() {
+        assert!(is_valid_callable_id("com.prism.hello"));
+        assert!(is_valid_callable_id("script:test"));
+        assert!(!is_valid_callable_id("../../x"));
+        assert!(!is_valid_callable_id("script:"));
+    }
+
+    // ═══ 域名解析结果校验（审查报告 H-1） ═══
+
+    #[test]
+    fn test_resolved_host_short_circuits() {
+        // localhost 名称不触发 DNS 解析
+        assert!(validate_resolved_host("localhost", 80, false).is_ok());
+        assert!(validate_resolved_host("svc.localhost", 80, false).is_ok());
+        // 声明 network:local 权限时不额外拦截
+        assert!(validate_resolved_host("example.com", 80, true).is_ok());
     }
 }

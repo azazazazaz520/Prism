@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue';
 import type { ContextMenuItem } from '../../composables/useContextMenu';
+import { sanitizeIconMarkup } from '../../utils/plugin-icon';
 
 export type { ContextMenuItem } from '../../composables/useContextMenu';
 
@@ -93,7 +94,11 @@ async function handleItemClick(item: ContextMenuItem) {
           :aria-expanded="item.submenu ? openSubmenuId === item.id : undefined"
           @click="handleItemClick(item)"
         >
-          <span v-if="item.icon" class="context-menu-icon" v-html="item.icon"></span>
+          <span
+            v-if="item.icon"
+            class="context-menu-icon"
+            v-html="sanitizeIconMarkup(item.icon)"
+          ></span>
           <span class="context-menu-label">{{ item.label }}</span>
           <span v-if="item.submenu" class="context-menu-chevron" aria-hidden="true">›</span>
         </button>
@@ -116,7 +121,11 @@ async function handleItemClick(item: ContextMenuItem) {
                 :disabled="subitem.disabled || !subitem.action"
                 @click="handleItemClick(subitem)"
               >
-                <span v-if="subitem.icon" class="context-menu-icon" v-html="subitem.icon"></span>
+                <span
+                  v-if="subitem.icon"
+                  class="context-menu-icon"
+                  v-html="sanitizeIconMarkup(subitem.icon)"
+                ></span>
                 <span class="context-menu-label">{{ subitem.label }}</span>
               </button>
             </div>

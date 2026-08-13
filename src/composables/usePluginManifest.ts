@@ -35,8 +35,9 @@ export function validateManifest(m: unknown): m is PluginManifest {
   if (typeof obj.author !== 'string' || !obj.author) return false;
   if (typeof obj.main !== 'string' || !obj.main) return false;
 
-  // id 必须含命名空间（至少一个点号）
-  if (!obj.id.includes('.')) return false;
+  // id 必须为反向域名格式：至少两段，段内仅允许 ASCII 字母数字、
+  // 连字符与下划线。拒绝路径分隔符、`.`/`..` 段与空段（审查报告 H-7）
+  if (!/^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)+$/.test(obj.id)) return false;
 
   // engines 对象
   if (!obj.engines || typeof obj.engines !== 'object') return false;

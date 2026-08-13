@@ -28,6 +28,13 @@ interface PluginConfig {
 const pluginEntries = shallowRef<Map<string, PluginEntry>>(new Map());
 let loaded = false;
 
+/** 各插件的激活世代号：停用/重载时递增，使在途激活失效（审查报告 H-3） */
+const pluginGenerations = new Map<string, number>();
+
+function invalidatePluginActivations(pluginId: string): void {
+  pluginGenerations.set(pluginId, (pluginGenerations.get(pluginId) ?? 0) + 1);
+}
+
 function bumpReactivity(): void {
   pluginEntries.value = new Map(pluginEntries.value);
 }
@@ -112,6 +119,8 @@ export function usePluginLoader() {
     diagnosticsLogger.info('plugin', 'plugin.activation_started', '插件开始激活', {
       plugin_id: pluginId,
     });
+    // 捕获本次激活世代：若激活期间被停用（世代递增），结果作废（H-3）
+    const generation = pluginGenerations.get(pluginId) ?? 0;
     const entry = pluginEntries.value.get(pluginId)!;
     const registrations: Disposable[] = [];
     try {
@@ -123,23 +132,58 @@ export function usePluginLoader() {
       const session = new SandboxPluginSession(pluginId, entry.manifest.permissions ?? [], body);
       entry.session = session;
       session.onViewRegistered((registration) => {
-        registrations.push(
-          registerSandboxView(
+        try {
+          const disposable = registerSandboxView(
             pluginId,
             session,
             registration,
             registration.location === 'rail' ? () => activatePluginPage(pluginId) : undefined,
-          ),
-        );
+          );
+          registrations.push(disposable);
+          // 登记到会话，使沙箱内 Disposable.dispose() 能释放宿主注册（S-4）
+          session.registerExternalDisposable(`view:${registration.id}`, disposable);
+        } catch (error) {
+          // 视图 ID 前缀校验失败（H-6）：拒绝该注册但保持插件激活
+          diagnosticsLogger.warn('plugin', 'plugin.sandbox_view_rejected', '沙箱视图注册被拒绝', {
+            plugin_id: pluginId,
+            view_id: registration.id,
+            error: String(error),
+          });
+        }
       });
       session.onMenuRegistered((location, items) => {
-        registrations.push(
-          registerSandboxMenus(pluginId, location as any, items, async (commandId) => {
-            await session.executeCommand(commandId);
-          }),
-        );
+        try {
+          const disposable = registerSandboxMenus(
+            pluginId,
+            location as any,
+            items,
+            async (commandId) => {
+              await session.executeCommand(commandId);
+            },
+          );
+          registrations.push(disposable);
+          session.registerExternalDisposable(`menu:${location}`, disposable);
+        } catch (error) {
+          // 菜单 ID 前缀校验失败（H-6）：拒绝该注册但保持插件激活
+          diagnosticsLogger.warn('plugin', 'plugin.sandbox_menu_rejected', '沙箱菜单注册被拒绝', {
+            plugin_id: pluginId,
+            location,
+            error: String(error),
+          });
+        }
       });
       await session.waitUntilReady();
+      // 激活期间被停用：清理会话与注册，保持 disabled 且不写错误诊断（H-3）
+      if (generation !== (pluginGenerations.get(pluginId) ?? 0) || entry.state !== 'activating') {
+        session.dispose();
+        entry.session = undefined;
+        for (const registration of registrations) registration.dispose();
+        entry.registrations = undefined;
+        entry.state = 'disabled';
+        entry.lastError = undefined;
+        bumpReactivity();
+        return;
+      }
       entry.session = session;
       entry.registrations = registrations;
       entry.state = 'active';
@@ -151,11 +195,19 @@ export function usePluginLoader() {
         duration_ms: Math.round(performance.now() - startedAt),
       });
     } catch (error) {
+      const stale = generation !== (pluginGenerations.get(pluginId) ?? 0);
       entry.session?.dispose();
       entry.session = undefined;
       for (const registration of registrations) registration.dispose();
       for (const registration of entry.registrations ?? []) registration.dispose();
       entry.registrations = undefined;
+      if (stale) {
+        // 主动停用导致的沙箱关闭：不记录为错误诊断（H-3/M-5）
+        entry.state = 'disabled';
+        entry.lastError = undefined;
+        bumpReactivity();
+        return;
+      }
       markFailure(entry, error);
       bumpReactivity();
       diagnosticsLogger.error('plugin', 'plugin.activation_failed', '插件激活失败', error, {
@@ -168,6 +220,8 @@ export function usePluginLoader() {
   async function deactivatePlugin(pluginId: string): Promise<void> {
     const entry = pluginEntries.value.get(pluginId);
     if (!entry || entry.state === 'disabled' || entry.state === 'deactivating') return;
+    // 使在途激活失效，避免停用后被"复活"（H-3）
+    invalidatePluginActivations(pluginId);
     entry.state = 'deactivating';
     bumpReactivity();
     for (const registration of entry.registrations ?? []) registration.dispose();

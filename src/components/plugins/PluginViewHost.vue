@@ -16,6 +16,7 @@ import {
 } from '../../plugin-api/views-impl';
 import PluginErrorBoundary from './PluginErrorBoundary.vue';
 import type { SandboxIcon } from '../../plugin-api/sandbox-session';
+import { sanitizeIconNodes } from '../../utils/plugin-icon';
 
 const SandboxFrame = defineComponent({
   props: {
@@ -24,10 +25,26 @@ const SandboxFrame = defineComponent({
   },
   setup(props) {
     const host = ref<HTMLElement | null>(null);
+    let visibilityObserver: IntersectionObserver | null = null;
     onMounted(() => {
-      if (host.value) (props.session as any).attach(host.value, props.viewId);
+      const hostEl = host.value;
+      if (!hostEl) return;
+      const session = props.session as any;
+      session.attach(hostEl, props.viewId);
+      // H-4：单 iframe 会话可能被移动到其他容器（如插件 page 宿主），
+      // 本容器重新可见时需把 iframe 重新挂回，避免视图永久空白
+      if (typeof IntersectionObserver !== 'undefined') {
+        visibilityObserver = new IntersectionObserver((entries) => {
+          if (entries.some((entry) => entry.isIntersecting)) {
+            session.attach(hostEl, props.viewId);
+          }
+        });
+        visibilityObserver.observe(hostEl);
+      }
     });
     onBeforeUnmount(() => {
+      visibilityObserver?.disconnect();
+      visibilityObserver = null;
       if (host.value) (props.session as any).detach(host.value);
     });
     return () =>
@@ -46,7 +63,8 @@ const SandboxFrame = defineComponent({
 });
 
 function sandboxRailIcon(icon?: SandboxIcon) {
-  return (icon?.nodes ?? []).map((node) => h(node.tag, node.attrs));
+  // 插件图标数据经白名单消毒后才进入宿主 DOM，防止任意标签/属性注入（S-1）
+  return sanitizeIconNodes(icon?.nodes).map((node) => h(node.tag, node.attrs));
 }
 
 /**

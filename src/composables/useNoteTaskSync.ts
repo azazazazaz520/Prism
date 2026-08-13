@@ -9,8 +9,9 @@ import {
   updateTaskReferences,
   type TaskReferenceIndex,
 } from '../notes/task-references';
-import { FILE_CHANGED_EXTERNALLY } from '../utils/error-codes';
 import { beginNoteSelfWrite, endNoteSelfWrite } from './useNoteSelfWriteTracker';
+import { useNoteSaveController, type NoteSaveResult } from './useNoteSaveController';
+import { useNoteDocumentStore } from './useNoteDocumentStore';
 
 const noteContents = ref<Record<string, string>>({});
 const isIndexing = ref(false);
@@ -29,7 +30,10 @@ function noteFiles(entries: FileEntry[]): string[] {
 }
 
 /** 本地 Markdown 笔记的任务引用索引与投影服务。 */
-export function useNoteTaskSync() {
+export function useNoteTaskSync(
+  documentStore: ReturnType<typeof useNoteDocumentStore> = useNoteDocumentStore(),
+) {
+  const noteSaveController = useNoteSaveController();
   const referenceIndex = ref<TaskReferenceIndex>({
     byTaskId: new Map(),
     byNotePath: new Map(),
@@ -100,6 +104,11 @@ export function useNoteTaskSync() {
   /** 增量刷新单篇笔记，供文件监听器维护任务引用索引。 */
   async function refreshNoteIndex(path: string) {
     if (!path.toLowerCase().endsWith('.md')) return;
+    const document = documentStore.ensure(path);
+    if (document.conflict || document.dirty) {
+      if (document.content !== noteContents.value[path]) setNoteContent(path, document.content);
+      return;
+    }
     try {
       const content = await invoke<string>('read_note', { path });
       setNoteContent(path, content);
@@ -113,23 +122,56 @@ export function useNoteTaskSync() {
     referenceIndex.value = { byTaskId: new Map(), byNotePath: new Map() };
   }
 
-  /** 使用文件版本校验写入任务引用，避免覆盖外部编辑。 */
-  async function writeNoteSafely(path: string, content: string): Promise<string | null> {
-    const expectedMtime = await invoke<string>('get_note_mtime', { path });
-    const selfWriteToken = beginNoteSelfWrite(path);
-    try {
-      return await invoke<string>('write_note', { path, content, expectedMtime });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (message.startsWith(FILE_CHANGED_EXTERNALLY)) {
-        const meta = await invoke<{ content: string; mtime: string }>('read_note_meta', { path });
-        setNoteContent(path, meta.content);
-        return null;
-      }
-      throw error;
-    } finally {
-      endNoteSelfWrite(path, selfWriteToken);
+  /** 将任务投影加入与编辑器共用的按路径写入队列。 */
+  async function writeProjectedNote(path: string, content: string): Promise<NoteSaveResult | null> {
+    const document = documentStore.ensure(path);
+    const latestSnapshot = noteSaveController.getLatestSnapshot(path);
+    const expectedMtime =
+      latestSnapshot?.expectedMtime ??
+      document.mtime ??
+      (await invoke<string>('get_note_mtime', { path }));
+    const currentContent = latestSnapshot?.content ?? noteContents.value[path] ?? document.content;
+
+    if (document.hydratedRevision < 0 || document.content !== currentContent) {
+      documentStore.finishLoading(path, currentContent, expectedMtime);
     }
+    documentStore.updateContent(path, content);
+    setNoteContent(path, content);
+
+    let selfWriteToken: ReturnType<typeof beginNoteSelfWrite> | null = null;
+    const generation = noteSaveController.scheduleResult({
+      path,
+      snapshot: { content, expectedMtime },
+      source: 'task-projection',
+      write: async (request) => {
+        documentStore.markSaving(path, request.generation);
+        selfWriteToken = beginNoteSelfWrite(path);
+        return invoke<string>('write_note', {
+          path,
+          content: request.content,
+          expectedMtime: request.expectedMtime,
+        });
+      },
+      readConflict: async () => {
+        const meta = await invoke<{ content: string; mtime: string }>('read_note_meta', { path });
+        return { diskContent: meta.content, diskMtime: meta.mtime };
+      },
+      onResult: (result) => {
+        if (result.status === 'saved') {
+          documentStore.markSaved(path, result.mtime, result.generation);
+        } else if (result.status === 'conflict') {
+          documentStore.setConflict(path, result.diskContent, result.diskMtime, result.generation);
+        } else {
+          documentStore.markSaveFailed(path, result.generation, result.error.cause);
+        }
+      },
+      onSettled: () => {
+        if (selfWriteToken !== null) endNoteSelfWrite(path, selfWriteToken);
+      },
+    });
+    documentStore.markScheduled(path, generation);
+
+    return noteSaveController.flush(path);
   }
 
   function removeNote(path: string) {
@@ -182,14 +224,14 @@ export function useNoteTaskSync() {
     const paths = [...new Set(references.map((reference) => reference.notePath))];
     await Promise.all(
       paths.map(async (path) => {
-        const current = noteContents.value[path];
+        const current =
+          noteSaveController.getLatestSnapshot(path)?.content ?? noteContents.value[path];
         if (current === undefined) return;
         const next = updateTaskReferences(current, task);
         if (next === current) return;
         writingPaths.add(path);
         try {
-          const writtenMtime = await writeNoteSafely(path, next);
-          if (writtenMtime) setNoteContent(path, next);
+          await writeProjectedNote(path, next);
         } finally {
           writingPaths.delete(path);
         }
@@ -202,7 +244,8 @@ export function useNoteTaskSync() {
     const paths = [...new Set(references.map((reference) => reference.notePath))];
     await Promise.all(
       paths.map(async (path) => {
-        const current = noteContents.value[path];
+        const current =
+          noteSaveController.getLatestSnapshot(path)?.content ?? noteContents.value[path];
         if (current === undefined) return;
         let next = current;
         for (const reference of references
@@ -214,8 +257,7 @@ export function useNoteTaskSync() {
         if (next === current) return;
         writingPaths.add(path);
         try {
-          const writtenMtime = await writeNoteSafely(path, next);
-          if (writtenMtime) setNoteContent(path, next);
+          await writeProjectedNote(path, next);
         } finally {
           writingPaths.delete(path);
         }

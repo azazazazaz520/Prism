@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { useNoteSaveController, type NoteSaveSnapshot } from '../composables/useNoteSaveController';
+import {
+  createNoteSaveController,
+  useNoteSaveController,
+  type NoteSaveSnapshot,
+} from '../composables/useNoteSaveController';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -47,6 +51,7 @@ describe('笔记保存队列', () => {
 
     expect(write).toHaveBeenCalledTimes(2);
     expect(writes.map((snapshot) => snapshot.content)).toEqual(['第一版', '第二版']);
+    expect(writes[1].expectedMtime).toBe('mtime-2');
 
     secondWrite.resolve('mtime-3');
     await vi.runAllTimersAsync();
@@ -113,6 +118,66 @@ describe('笔记保存队列', () => {
     await controller.flush('notes/example.md');
 
     expect(settled).toHaveBeenCalledOnce();
+    controller.dispose();
+  });
+
+  it('返回带 generation 和双方内容的外部冲突结果', async () => {
+    const controller = createNoteSaveController(0);
+    const generation = controller.scheduleResult({
+      path: 'notes/example.md',
+      snapshot: { content: '本地版本', expectedMtime: 'mtime-1' },
+      source: 'editor',
+      write: async () => {
+        throw new Error('FILE_CHANGED_EXTERNALLY');
+      },
+      readConflict: async () => ({ diskContent: '磁盘版本', diskMtime: 'mtime-2' }),
+    });
+
+    const result = await controller.flush('notes/example.md');
+
+    expect(result).toEqual({
+      status: 'conflict',
+      path: 'notes/example.md',
+      generation,
+      localContent: '本地版本',
+      diskContent: '磁盘版本',
+      diskMtime: 'mtime-2',
+    });
+    controller.dispose();
+  });
+
+  it('任务投影可以基于编辑器尚未写入的最新快照排队', async () => {
+    const controller = createNoteSaveController(0);
+    const writes: string[] = [];
+
+    controller.scheduleResult({
+      path: 'notes/example.md',
+      snapshot: { content: '编辑器最新正文', expectedMtime: 'mtime-1' },
+      source: 'editor',
+      write: async (request) => {
+        writes.push(request.content);
+        return 'mtime-2';
+      },
+    });
+
+    const latest = controller.getLatestSnapshot('notes/example.md');
+    expect(latest?.content).toBe('编辑器最新正文');
+
+    controller.scheduleResult({
+      path: 'notes/example.md',
+      snapshot: {
+        content: `${latest?.content}\n任务状态：已完成`,
+        expectedMtime: latest?.expectedMtime ?? null,
+      },
+      source: 'task-projection',
+      write: async (request) => {
+        writes.push(request.content);
+        return 'mtime-3';
+      },
+    });
+
+    await controller.flush('notes/example.md');
+    expect(writes).toEqual(['编辑器最新正文\n任务状态：已完成']);
     controller.dispose();
   });
 });

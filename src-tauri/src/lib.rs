@@ -78,14 +78,16 @@ impl AppState {
         f(&config)
     }
 
-    /// 修改配置并自动持久化
+    /// 通过候选配置修改并自动持久化，持久化成功后才提交内存状态。
     pub fn with_config_mut<F, R>(&self, f: F) -> Result<R, String>
     where
         F: FnOnce(&mut store::ConfigStore) -> R,
     {
         let mut config = self.config.lock().unwrap();
-        let result = f(&mut config);
-        store::save_config(&config)?;
+        let mut candidate = config.clone();
+        let result = f(&mut candidate);
+        store::save_config(&candidate)?;
+        *config = candidate;
         Ok(result)
     }
 
@@ -416,8 +418,12 @@ pub fn run() {
             {
                 let state = app.state::<AppState>();
                 let notes_dir = state.with_config(store::get_notes_dir);
-                let watcher = file_watcher::FileWatcher::start(app.handle().clone(), notes_dir);
-                *state.file_watcher.lock().unwrap() = Some(watcher);
+                match file_watcher::FileWatcher::start(app.handle().clone(), notes_dir) {
+                    Ok(watcher) => *state.file_watcher.lock().unwrap() = Some(watcher),
+                    Err(error) => {
+                        eprintln!("[prism] 文件监听不可用，应用将继续启动: {error}");
+                    }
+                }
             }
 
             let backend = Arc::new(reminder::TauriBackend::new(app.handle().clone()));

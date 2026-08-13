@@ -47,30 +47,26 @@ impl FileWatcher {
     ///
     /// 监听器在独立线程中运行，负责监测 `notes_dir` 下所有 `.md` 文件的
     /// 创建、内容修改和删除事件，并通过 Tauri 事件发送到前端。
-    pub fn start(app_handle: AppHandle, notes_dir: PathBuf) -> Self {
+    pub fn start(app_handle: AppHandle, notes_dir: PathBuf) -> Result<Self, String> {
         let (shutdown_tx, shutdown_rx) = mpsc::channel();
         let (event_tx, event_rx) = mpsc::channel::<Result<Event, notify::Error>>();
 
         let mut watcher = match create_watcher(event_tx) {
             Ok(watcher) => watcher,
-            Err(error) => {
-                eprintln!("[prism] 文件监听器创建失败: {error}");
-                return Self { shutdown_tx: None };
-            }
+            Err(error) => return Err(format!("文件监听器创建失败: {error}")),
         };
 
         if let Err(error) = watcher.watch(&notes_dir, RecursiveMode::Recursive) {
-            eprintln!("[prism] 文件监听启动失败: {error}");
-            return Self { shutdown_tx: None };
+            return Err(format!("文件监听启动失败: {error}"));
         }
 
         std::thread::spawn(move || {
             run_event_loop(app_handle, notes_dir, watcher, event_rx, shutdown_rx);
         });
 
-        Self {
+        Ok(Self {
             shutdown_tx: Some(shutdown_tx),
-        }
+        })
     }
 }
 

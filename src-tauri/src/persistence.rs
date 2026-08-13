@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::Write;
 use std::path::PathBuf;
 
 use crate::logging::{LogLevel, LogWriter};
@@ -259,7 +260,55 @@ pub fn load_config(logger: &LogWriter) -> ConfigStore {
 pub fn save_config(store: &ConfigStore) -> Result<(), String> {
     let path = get_config_path();
     let content = serde_json::to_string_pretty(store).map_err(|e| e.to_string())?;
-    fs::write(&path, content).map_err(|e| e.to_string())
+    let temporary = path.with_file_name(format!(
+        ".config.json.prism-{}.tmp",
+        uuid::Uuid::new_v4().simple()
+    ));
+    let result = (|| -> Result<(), String> {
+        let mut file =
+            fs::File::create_new(&temporary).map_err(|e| format!("创建临时配置文件失败: {}", e))?;
+        file.write_all(content.as_bytes())
+            .map_err(|e| format!("写入临时配置文件失败: {}", e))?;
+        file.sync_all()
+            .map_err(|e| format!("刷新临时配置文件失败: {}", e))?;
+        replace_config_file(&temporary, &path)
+    })();
+
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
+}
+
+fn replace_config_file(
+    temporary: &std::path::Path,
+    target: &std::path::Path,
+) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        use windows::core::PCWSTR;
+        use windows::Win32::Storage::FileSystem::{
+            MoveFileExW, MOVEFILE_COPY_ALLOWED, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+        };
+
+        let temporary: Vec<u16> = temporary.as_os_str().encode_wide().chain(Some(0)).collect();
+        let target: Vec<u16> = target.as_os_str().encode_wide().chain(Some(0)).collect();
+        unsafe {
+            MoveFileExW(
+                PCWSTR(temporary.as_ptr()),
+                PCWSTR(target.as_ptr()),
+                MOVEFILE_COPY_ALLOWED | MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+            )
+        }
+        .map_err(|e| format!("替换配置文件失败: {}", e))?;
+        Ok(())
+    }
+
+    #[cfg(not(windows))]
+    {
+        fs::rename(temporary, target).map_err(|e| format!("替换配置文件失败: {}", e))
+    }
 }
 
 /// 从磁盘加载同步状态，文件不存在或解析失败时返回默认空状态

@@ -91,6 +91,9 @@ const BOOTSTRAP = String.raw`(() => {
   const commands = new Map();
   const menus = new Map();
   let disposed = false;
+  // 当前已挂载的视图实例：切换或停用时先卸载再替换，避免实例泄漏（审查报告 M-4）
+  let currentApp = null;      // Vue 应用实例
+  let currentDomView = null;  // Raw DOM 视图（registerDomView）
   let nextRequestId = 1;
   let nextDisposableId = 1;
 
@@ -235,12 +238,28 @@ const BOOTSTRAP = String.raw`(() => {
     if (!registration || !window.Vue) return;
     const root = document.getElementById('prism-plugin-view');
     if (!root) return;
+    // M-4：先卸载旧实例（触发 onUnmounted 清理），再清空挂载点，避免实例泄漏
+    if (currentApp) {
+      currentApp.unmount();
+      currentApp = null;
+    }
+    if (currentDomView && currentDomView !== registration.component) {
+      if (typeof currentDomView.unmount === 'function') currentDomView.unmount();
+      currentDomView = null;
+    }
     root.replaceChildren();
-    if (registration.component && typeof registration.component === 'object') {
+    // 判别：Vue 组件选项对象不含 mount 方法；registerDomView 的对象含 mount
+    if (
+      registration.component &&
+      typeof registration.component === 'object' &&
+      typeof registration.component.mount !== 'function'
+    ) {
       const app = window.Vue.createApp(registration.component, { pluginId: config.pluginId });
       app.config.errorHandler = reportRuntimeError;
+      currentApp = app;
       app.mount(root);
     } else if (registration.component && typeof registration.component.mount === 'function') {
+      currentDomView = registration.component;
       registration.component.mount(root);
     }
   }
@@ -279,6 +298,13 @@ const BOOTSTRAP = String.raw`(() => {
     menus.clear();
     commands.clear();
     views.clear();
+    // M-4：停用时先卸载当前实例，触发 onUnmounted 清理
+    if (currentApp) {
+      currentApp.unmount();
+      currentApp = null;
+    }
+    if (currentDomView && typeof currentDomView.unmount === 'function') currentDomView.unmount();
+    currentDomView = null;
     document.getElementById('prism-plugin-view')?.replaceChildren();
     // 通知宿主清理完成，宿主随后移除 iframe（H-5）
     postToHost({ kind: 'dispose-complete' });

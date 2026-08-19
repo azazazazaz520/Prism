@@ -395,7 +395,6 @@ pub fn run() {
             commands::ai::ai_regex_generate,
             commands::ai::ai_parse_wechat,
             commands::screenshot::crop_screenshot,
-            commands::screenshot::ocr_image,
             // Prompt 管理命令
             commands::prompt::list_prompts,
             commands::prompt::get_prompt,

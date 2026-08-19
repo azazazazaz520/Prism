@@ -1,0 +1,28 @@
+{
+  "provider": "paddleocr-web",
+  "sdk_version": "0.4.2",
+  "model_version": "PP-OCRv6-small",
+  "languages": ["zh-Hans", "zh-Hant", "en", "ja"],
+  "files": [
+    {
+      "path": "models/PP-OCRv6_small_det_onnx_infer.tar",
+      "size": 9891840,
+      "sha256": "d218f6fbf0f1c23d2161bd6ac7f5eaa6104fa89955c09290497e31008e2618e4"
+    },
+    {
+      "path": "models/PP-OCRv6_small_rec_onnx_infer.tar",
+      "size": 21319680,
+      "sha256": "d267ab077a44a0eedb1ea8f8c542d263f211de8e9d7a029bf9fcfff7e5a88fb1"
+    },
+    {
+      "path": "runtime/ort-wasm-simd-threaded.jsep.mjs",
+      "size": 46614,
+      "sha256": "3ee381d20a80f51a788a1c4a5872f6f1d047538dd4342f4af00062de5f9ea4c6"
+    },
+    {
+      "path": "runtime/ort-wasm-simd-threaded.jsep.wasm",
+      "size": 26827543,
+      "sha256": "78feeeb3d08f6bcee94d938ed322f69073bb8076b5f9d34697a574ffba8deb48"
+    }
+  ]
+}

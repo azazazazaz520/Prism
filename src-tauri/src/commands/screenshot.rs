@@ -11,31 +11,6 @@ pub struct ScreenshotCapturePayload {
     pub height: i32,
 }
 
-#[derive(Debug, Serialize)]
-pub struct OcrLine {
-    pub text: String,
-    pub confidence: Option<f32>,
-    pub bounds: Option<OcrBounds>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct OcrBounds {
-    pub x: f32,
-    pub y: f32,
-    pub width: f32,
-    pub height: f32,
-}
-
-#[derive(Debug, Serialize)]
-pub struct OcrResult {
-    pub text: String,
-    pub lines: Vec<OcrLine>,
-    pub language: Option<String>,
-    pub confidence: Option<f32>,
-    pub provider: String,
-    pub warnings: Vec<String>,
-}
-
 /// 区域截图：选区 → 裁剪为 PNG → 编码 Base64 → 弹出导入窗
 #[tauri::command]
 pub async fn crop_screenshot(
@@ -63,15 +38,6 @@ pub async fn crop_screenshot(
         let _ = win.eval(format!("window.__screenshotResult = {};", payload));
     }
     Ok(())
-}
-
-/// OCR 接口占位：在具体识别引擎接入前，明确返回不可用状态。
-#[tauri::command]
-pub fn ocr_image(image_base64: String) -> Result<OcrResult, String> {
-    if image_base64.trim().is_empty() {
-        return Err("OCR 输入图片为空".into());
-    }
-    Err("OCR 识别引擎尚未配置，请手动输入文字后继续。".into())
 }
 
 /// Windows 区域截图：截取指定矩形区域的屏幕像素，返回 PNG 字节。
@@ -173,21 +139,4 @@ fn encode_png(pixels: &[u8], width: u32, height: u32) -> Result<Vec<u8>, String>
 #[cfg(not(windows))]
 fn capture_screen_region(_x: i32, _y: i32, _w: i32, _h: i32) -> Result<Vec<u8>, String> {
     Err("截屏仅支持 Windows".into())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::ocr_image;
-
-    #[test]
-    fn ocr_image_rejects_empty_input() {
-        let error = ocr_image(String::new()).expect_err("空图片应被拒绝");
-        assert_eq!(error, "OCR 输入图片为空");
-    }
-
-    #[test]
-    fn ocr_image_reports_unavailable_engine() {
-        let error = ocr_image("base64-image".into()).expect_err("当前没有 OCR 引擎");
-        assert_eq!(error, "OCR 识别引擎尚未配置，请手动输入文字后继续。");
-    }
 }

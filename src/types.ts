@@ -125,6 +125,15 @@ export interface OcrResult {
   confidence?: number;
   provider: string;
   warnings: string[];
+  metrics?: {
+    initialize_ms?: number;
+    detection_ms: number;
+    recognition_ms: number;
+    total_ms: number;
+    detected_boxes: number;
+    recognized_lines: number;
+    runtime: string;
+  };
 }
 
 /** 区域截图完成后注入导入窗口的统一载荷。 */

@@ -7,11 +7,12 @@ import {
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { emit, listen } from '@tauri-apps/api/event';
 import { initTheme } from '../../composables/useTheme';
+import { createOcrModule, OcrModuleError, type OcrCapabilities } from '../../ocr';
+import { createTraceId } from '../../diagnostics/trace-context';
 import type {
   AddTasksBatchResult,
   ImportDraft,
   ImportSource,
-  OcrResult,
   ParsedTask,
   ScreenshotCapturePayload,
 } from '../../types';
@@ -60,6 +61,9 @@ const sourceRevision = ref(0);
 const parsedRevision = ref<number | null>(null);
 const parseAttempted = ref(false);
 const candidateFieldError = ref<CandidateFieldError | null>(null);
+const ocrModule = createOcrModule();
+const ocrCapabilities = ref<OcrCapabilities | null>(null);
+const ocrCapabilityChecking = ref(true);
 
 const activeText = computed({
   get: () => (draft.source === 'text' ? draft.text : draft.screenshotText),
@@ -73,10 +77,13 @@ const activeText = computed({
 });
 
 const screenshotImage = computed(() => draft.screenshot?.image_base64 || '');
+const ocrCanRecognize = computed(() => ocrCapabilities.value?.available === true);
 const ocrStatusLabel = computed(() => {
+  if (ocrCapabilityChecking.value) return '正在检查离线识别能力…';
+  if (!ocrCanRecognize.value) return '离线识别暂不可用';
   switch (draft.ocr.status) {
     case 'processing':
-      return '识别中…';
+      return '正在加载并识别…';
     case 'success':
       return '识别完成';
     case 'unavailable':
@@ -87,6 +94,22 @@ const ocrStatusLabel = computed(() => {
       return '等待识别';
   }
 });
+
+async function loadOcrCapabilities() {
+  ocrCapabilityChecking.value = true;
+  try {
+    ocrCapabilities.value = await ocrModule.capabilities();
+    if (!ocrCapabilities.value.available) {
+      draft.ocr = {
+        status: 'unavailable',
+        result: null,
+        message: '离线文字识别暂不可用，可以根据截图手动输入文字。',
+      };
+    }
+  } finally {
+    ocrCapabilityChecking.value = false;
+  }
+}
 
 function resetDraft() {
   Object.assign(draft, createDraft());
@@ -163,27 +186,62 @@ function selectSource(source: ImportSource) {
 }
 
 async function recognizeScreenshot() {
-  if (!draft.screenshot || draft.ocr.status === 'processing') return;
+  if (!draft.screenshot || draft.ocr.status === 'processing' || !ocrCanRecognize.value) return;
+  const screenshot = draft.screenshot;
+  const requestRevision = sourceRevision.value;
+  const requestId = createTraceId();
   draft.ocr = { status: 'processing', result: null, message: '' };
   error.value = '';
   try {
-    const result = await invoke<OcrResult>('ocr_image', {
-      imageBase64: draft.screenshot.image_base64,
+    const result = await ocrModule.recognize({
+      imageBase64: screenshot.image_base64,
+      width: screenshot.width,
+      height: screenshot.height,
+      requestId,
     });
+
+    if (draft.screenshot !== screenshot || sourceRevision.value !== requestRevision) {
+      diagnosticsLogger.info('ocr', 'ocr.result_discarded_as_stale', '丢弃已失效的 OCR 结果', {
+        request_id: requestId,
+        source_revision: requestRevision,
+        current_revision: sourceRevision.value,
+      });
+      if (draft.screenshot === screenshot && draft.ocr.status === 'processing') {
+        draft.ocr = {
+          status: 'idle',
+          result: null,
+          message: '截图文字已发生变化，未应用本次识别结果。',
+        };
+      }
+      return;
+    }
+
     draft.screenshotText = result.text;
     markSourceChanged();
     draft.ocr = {
       status: 'success',
       result,
-      message: result.warnings.join('；'),
+      message:
+        result.text.trim().length === 0
+          ? '未从截图中识别到文字，可以重试或手动输入。'
+          : result.warnings.join('；'),
     };
   } catch (value) {
-    const message = getErrorMessage(value);
-    const unavailable = message.includes('尚未配置') || message.includes('不可用');
+    if (value instanceof OcrModuleError && value.code === 'CANCELLED') return;
+    const code = value instanceof OcrModuleError ? value.code : 'RECOGNITION_FAILED';
+    const unavailable = code === 'MODEL_ASSET_MISSING' || code === 'UNSUPPORTED_RUNTIME';
+    const messages: Record<string, string> = {
+      INVALID_IMAGE: '截图数据无效，请重新截图。',
+      MODEL_ASSET_MISSING: '离线识别资源缺失，可以根据截图手动输入文字。',
+      MODEL_INIT_FAILED: '离线识别模型加载失败，请重试。',
+      UNSUPPORTED_RUNTIME: '当前环境不支持离线识别，可以根据截图手动输入文字。',
+      RECOGNITION_TIMEOUT: '识别超时，请缩小截图区域后重试。',
+      RECOGNITION_FAILED: '识别失败，请重试或手动输入文字。',
+    };
     draft.ocr = {
       status: unavailable ? 'unavailable' : 'error',
       result: null,
-      message,
+      message: messages[code] || '识别失败，请重试或手动输入文字。',
     };
   }
 }
@@ -207,6 +265,7 @@ onMounted(async () => {
   // 加载主题（首次显示时自仓库读取）
   await initTheme();
   checkScreenshot();
+  await loadOcrCapabilities();
 
   const appWindow = getCurrentWindow();
   unlistenFocus = await appWindow.listen('tauri://focus', () => {
@@ -223,6 +282,7 @@ let unlistenTheme: (() => void) | null = null;
 onUnmounted(() => {
   if (unlistenFocus) unlistenFocus();
   if (unlistenTheme) unlistenTheme();
+  void ocrModule.dispose();
 });
 
 // ── AI 解析 ──────────────────────────────
@@ -388,7 +448,7 @@ function formatDate(d: string | null): string {
     </div>
 
     <!-- 输入区 -->
-    <div class="input-section">
+    <div class="input-section" :class="{ 'has-results': candidates.length > 0 }">
       <div class="source-tabs" role="tablist" aria-label="导入方式">
         <button
           class="source-tab"
@@ -439,7 +499,9 @@ function formatDate(d: string | null): string {
         <button
           class="secondary-btn"
           type="button"
-          :disabled="draft.ocr.status === 'processing' || adding"
+          :disabled="
+            ocrCapabilityChecking || !ocrCanRecognize || draft.ocr.status === 'processing' || adding
+          "
           @click="recognizeScreenshot"
         >
           {{ draft.ocr.status === 'success' ? '重新识别' : '识别文字' }}
@@ -669,6 +731,7 @@ function formatDate(d: string | null): string {
 
 .import-window {
   width: 400px;
+  height: min(560px, 100vh);
   max-height: 560px;
   display: flex;
   flex-direction: column;
@@ -686,6 +749,7 @@ function formatDate(d: string | null): string {
 /* ── 顶部栏 ────────────────────── */
 .topbar {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
   padding: 8px 14px;
@@ -735,7 +799,16 @@ function formatDate(d: string | null): string {
 /* ── 输入区 ────────────────────── */
 .input-section {
   padding: 12px 14px;
-  flex-shrink: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}
+
+.input-section.has-results {
+  flex: 0 1 250px;
+  max-height: 45%;
 }
 
 .source-tabs {
@@ -810,13 +883,15 @@ function formatDate(d: string | null): string {
 .chat-textarea {
   width: 100%;
   min-height: 72px;
+  max-height: 120px;
   background: var(--bg-hover);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   color: var(--text-primary);
   font-size: var(--text-base);
   padding: 10px 12px;
-  resize: vertical;
+  resize: none;
+  overflow-y: auto;
   outline: none;
   font-family: var(--font-sans);
   line-height: 1.5;
@@ -1032,7 +1107,8 @@ function formatDate(d: string | null): string {
 
 /* ── 结果列表 ────────────────────── */
 .results-section {
-  flex: 1;
+  flex: 1 1 0;
+  min-height: 220px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1041,6 +1117,7 @@ function formatDate(d: string | null): string {
 
 .results-header {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
   padding: 8px 14px;
@@ -1076,6 +1153,7 @@ function formatDate(d: string | null): string {
 
 .card-list {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 6px 14px;
   scrollbar-width: thin;

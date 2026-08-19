@@ -5,6 +5,10 @@ const mocks = vi.hoisted(() => ({
   emit: vi.fn().mockResolvedValue(undefined),
   invoke: vi.fn(),
   warn: vi.fn(),
+  info: vi.fn(),
+  ocrCapabilities: vi.fn(),
+  ocrRecognize: vi.fn(),
+  ocrDispose: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@tauri-apps/api/window', () => ({
@@ -25,9 +29,29 @@ vi.mock('../composables/useTheme', () => ({
 vi.mock('../diagnostics/invoke-logged', () => ({
   diagnosticsLogger: {
     warn: mocks.warn,
+    info: mocks.info,
   },
   invokeWithDiagnostics: mocks.invoke,
 }));
+
+vi.mock('../ocr', () => {
+  class OcrModuleError extends Error {
+    constructor(
+      public readonly code: string,
+      message: string,
+    ) {
+      super(message);
+    }
+  }
+  return {
+    OcrModuleError,
+    createOcrModule: vi.fn(() => ({
+      capabilities: mocks.ocrCapabilities,
+      recognize: mocks.ocrRecognize,
+      dispose: mocks.ocrDispose,
+    })),
+  };
+});
 
 describe('导入任务窗口', () => {
   let host: HTMLDivElement;
@@ -37,6 +61,18 @@ describe('导入任务窗口', () => {
     mocks.emit.mockClear();
     mocks.invoke.mockReset();
     mocks.warn.mockClear();
+    mocks.info.mockClear();
+    mocks.ocrCapabilities.mockReset();
+    mocks.ocrCapabilities.mockResolvedValue({
+      available: true,
+      mode: 'offline',
+      languages: ['zh-Hans', 'en'],
+      modelVersion: 'PP-OCRv6-small',
+      reason: null,
+    });
+    mocks.ocrRecognize.mockReset();
+    mocks.ocrDispose.mockClear();
+    delete (window as Window & { __screenshotResult?: unknown }).__screenshotResult;
     host = document.createElement('div');
     document.body.appendChild(host);
   });
@@ -96,6 +132,31 @@ describe('导入任务窗口', () => {
     await flushAsyncUpdates();
 
     expect(host.textContent).toContain('未从这段文字中识别到任务，请修改内容后重新解析。');
+  });
+
+  it('长原文解析出较多候选时切换为结果优先布局并保留全部候选', async () => {
+    const tasks = Array.from({ length: 12 }, (_, index) => ({
+      title: `候选任务 ${index + 1}`,
+      due_date: null,
+      tags: [],
+      confidence: 0.9,
+    }));
+    mocks.invoke.mockImplementation((command: string) => {
+      if (command === 'ai_parse_wechat') return Promise.resolve(tasks);
+      return Promise.resolve(undefined);
+    });
+    await mountImportWindow();
+
+    const textarea = host.querySelector('textarea') as HTMLTextAreaElement;
+    await setTextareaValue(textarea, '包含大量界面文字的 OCR 结果。'.repeat(80));
+    (host.querySelector('.parse-btn') as HTMLButtonElement).click();
+    await flushAsyncUpdates();
+
+    expect(host.querySelector('.input-section')?.classList.contains('has-results')).toBe(true);
+    expect(host.querySelectorAll('.card')).toHaveLength(12);
+    expect(host.querySelector('.card-list')).not.toBeNull();
+    expect(host.querySelector('.bottom-bar')).not.toBeNull();
+    expect(host.textContent).toContain('候选任务 12');
   });
 
   it('一次提交全部选中候选并通知主窗口', async () => {
@@ -204,6 +265,80 @@ describe('导入任务窗口', () => {
     expect((host.querySelector('.add-btn') as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it('截图识别成功后将文字写入可编辑输入区', async () => {
+    setScreenshotResult();
+    mocks.ocrRecognize.mockResolvedValue({
+      text: '明天提交报告',
+      lines: [],
+      confidence: 0.96,
+      provider: 'paddleocr-web',
+      warnings: [],
+    });
+    await mountImportWindow();
+    await flushAsyncUpdates();
+
+    (host.querySelector('.ocr-actions .secondary-btn') as HTMLButtonElement).click();
+    await flushAsyncUpdates();
+
+    expect((host.querySelector('textarea') as HTMLTextAreaElement).value).toBe('明天提交报告');
+    expect(host.textContent).toContain('识别完成');
+    expect(mocks.ocrRecognize).toHaveBeenCalledWith(
+      expect.objectContaining({ width: 320, height: 180 }),
+    );
+  });
+
+  it('识别期间修改文字后丢弃迟到结果', async () => {
+    setScreenshotResult();
+    let resolveRecognition!: (value: unknown) => void;
+    mocks.ocrRecognize.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRecognition = resolve;
+        }),
+    );
+    await mountImportWindow();
+    await flushAsyncUpdates();
+
+    (host.querySelector('.ocr-actions .secondary-btn') as HTMLButtonElement).click();
+    const textarea = host.querySelector('textarea') as HTMLTextAreaElement;
+    await setTextareaValue(textarea, '我手动输入的文字');
+    resolveRecognition({
+      text: '迟到的识别结果',
+      lines: [],
+      provider: 'paddleocr-web',
+      warnings: [],
+    });
+    await flushAsyncUpdates();
+
+    expect(textarea.value).toBe('我手动输入的文字');
+    expect(host.textContent).toContain('未应用本次识别结果');
+    expect(mocks.info).toHaveBeenCalledWith(
+      'ocr',
+      'ocr.result_discarded_as_stale',
+      expect.any(String),
+      expect.any(Object),
+    );
+  });
+
+  it('离线识别不可用时保留手动输入路径', async () => {
+    setScreenshotResult();
+    mocks.ocrCapabilities.mockResolvedValue({
+      available: false,
+      mode: 'offline',
+      languages: [],
+      modelVersion: null,
+      reason: 'MODEL_ASSET_MISSING',
+    });
+    await mountImportWindow();
+    await flushAsyncUpdates();
+
+    expect(host.textContent).toContain('离线识别暂不可用');
+    expect((host.querySelector('.ocr-actions .secondary-btn') as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+    expect((host.querySelector('textarea') as HTMLTextAreaElement).disabled).toBe(false);
+  });
+
   async function mountImportWindow() {
     const { default: ImportFloating } = await import('../components/overlays/ImportFloating.vue');
     const app = createApp(ImportFloating);
@@ -222,5 +357,15 @@ describe('导入任务窗口', () => {
     await Promise.resolve();
     await Promise.resolve();
     await nextTick();
+  }
+
+  function setScreenshotResult() {
+    (window as Window & { __screenshotResult?: unknown }).__screenshotResult = {
+      source: 'region',
+      text: '',
+      image_base64: 'iVBORw0KGgo=',
+      width: 320,
+      height: 180,
+    };
   }
 });

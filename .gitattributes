@@ -5,3 +5,8 @@ Cargo.lock text eol=lf
 
 # Generated Tauri schema — require LF for cross-platform consistency
 src-tauri/gen/**/*.json text eol=lf
+
+# OCR 模型与供应商运行时必须逐字节保持不变，避免签名校验因换行转换失效
+public/ocr/models/*.tar binary
+public/ocr/runtime/*.mjs binary
+public/ocr/runtime/*.wasm binary

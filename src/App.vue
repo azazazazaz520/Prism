@@ -6,8 +6,9 @@ import {
   deactivatePluginPage,
 } from './plugin-api/views-impl';
 import { invokeWithDiagnostics as invoke } from './diagnostics/invoke-logged';
+import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import type { AppModule, SettingsSubModule } from './types';
+import type { AppModule, SettingsSubModule, Task } from './types';
 import TaskInput from './components/tasks/TaskInput.vue';
 import TaskList from './components/tasks/TaskList.vue';
 import SyncStatus from './components/app/SyncStatus.vue';
@@ -51,6 +52,7 @@ const {
   pushTask,
   pullAndMerge,
   addTask,
+  applyImportedTasks,
   toggleTask,
   toggleDailyTask,
   updateTask,
@@ -128,6 +130,7 @@ const hasTaskFilters = computed(
 
 // 在 setup 顶层注册清理，避免 async onMounted 中 await 后丢失组件上下文
 let _unlistenFocus: (() => void) | null = null;
+let _unlistenTasksImported: (() => void) | null = null;
 let _pollInterval: ReturnType<typeof setInterval> | null = null;
 const _handleForceSync = async () => {
   await refreshTasks();
@@ -158,14 +161,19 @@ function onGlobalContextMenu(event: MouseEvent) {
 
 onUnmounted(() => {
   _unlistenFocus?.();
+  _unlistenTasksImported?.();
   window.removeEventListener('prism:force-sync', _handleForceSync);
   if (_pollInterval) clearInterval(_pollInterval);
   document.removeEventListener('contextmenu', onGlobalContextMenu);
 });
 
 onMounted(async () => {
+  loadImportDiscoveryHint();
   document.addEventListener('contextmenu', onGlobalContextMenu);
   await Promise.all([loadAll(), loadAiSettings(), loadModules()]);
+  _unlistenTasksImported = await listen<Task[]>('tasks-imported', (event) => {
+    applyImportedTasks(event.payload);
+  });
   // 初始化插件系统（扫描 + 加载配置）
   const { loadPlugins } = usePluginLoader();
   loadPlugins();
@@ -205,6 +213,10 @@ function handleSwitchModule(module: AppModule) {
   activeModule.value = module;
 }
 
+function openImportWindow() {
+  void invoke('show_import_window');
+}
+
 function clearTaskFilters() {
   selectDate(null);
   toggleTag('');
@@ -219,6 +231,25 @@ function selectTaskView(view: TaskView) {
 }
 
 const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
+const importDiscoveryVisible = ref(false);
+const IMPORT_DISCOVERY_DISMISSED_KEY = 'prism-import-discovery-dismissed';
+
+function loadImportDiscoveryHint() {
+  try {
+    importDiscoveryVisible.value = !localStorage.getItem(IMPORT_DISCOVERY_DISMISSED_KEY);
+  } catch {
+    importDiscoveryVisible.value = true;
+  }
+}
+
+function dismissImportDiscoveryHint() {
+  importDiscoveryVisible.value = false;
+  try {
+    localStorage.setItem(IMPORT_DISCOVERY_DISMISSED_KEY, 'true');
+  } catch {
+    // 存储不可用时仅关闭本次提示。
+  }
+}
 </script>
 
 <template>
@@ -410,7 +441,25 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
               </button>
             </div>
             <div class="main-input">
-              <TaskInput :ai-enabled="aiEnabled" @add="addTask" />
+              <TaskInput :ai-enabled="aiEnabled" @add="addTask" @import-task="openImportWindow" />
+              <div class="task-import-shortcuts" aria-label="任务导入快捷键">
+                <span>快捷键</span>
+                <span>文字 <kbd>Ctrl+Shift+I</kbd></span>
+                <span>截图 <kbd>Ctrl+Alt+I</kbd></span>
+              </div>
+              <Transition name="motion-fade">
+                <div
+                  v-if="importDiscoveryVisible"
+                  class="task-import-discovery"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <div>
+                    <strong>支持从聊天记录或屏幕截图批量创建任务</strong>
+                  </div>
+                  <button type="button" @click="dismissImportDiscoveryHint">知道了</button>
+                </div>
+              </Transition>
             </div>
           </div>
 
@@ -1042,6 +1091,47 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   position: relative;
 }
 
+/* 快捷键说明紧跟导入入口，避免与页面统计信息混排。 */
+.task-import-shortcuts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px var(--space-md);
+  margin-top: var(--space-sm);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.task-import-shortcuts > span:first-child {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.task-import-shortcuts kbd {
+  margin-left: 3px;
+  padding: 1px 4px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+/* 首次说明只作为导入区域的辅助信息，不占用页面标题层级。 */
+.task-import-discovery {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  width: 100%;
+  margin-top: var(--space-sm);
+  padding: 7px 0 0 10px;
+  border-left: 2px solid var(--accent-muted);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
 /* 扫描线 */
 .main-header::after {
   content: '';
@@ -1076,6 +1166,46 @@ const settingsInitialSub = ref<SettingsSubModule | undefined>(undefined);
   color: var(--text-tertiary);
   letter-spacing: 0;
   margin-top: 4px;
+}
+
+.task-import-discovery div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px var(--space-sm);
+  min-width: 0;
+}
+
+.task-import-discovery strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.task-import-discovery span {
+  color: var(--text-muted);
+}
+
+.task-import-discovery button {
+  flex-shrink: 0;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.task-import-discovery button:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+[data-theme='hud'] .task-import-shortcuts kbd {
+  border-radius: 0;
+}
+
+[data-theme='hud'] .task-import-discovery {
+  border-left-color: var(--accent);
 }
 
 .clear-completed-btn {

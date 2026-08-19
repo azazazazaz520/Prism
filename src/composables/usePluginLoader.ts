@@ -9,6 +9,7 @@ import { activatePluginPage, registerSandboxView } from '../plugin-api/views-imp
 import { SandboxPluginSession } from '../plugin-api/sandbox-session';
 
 type PluginState = 'disabled' | 'activating' | 'active' | 'deactivating';
+export type PluginScanState = 'idle' | 'scanning' | 'success' | 'error';
 
 interface PluginEntry {
   manifest: PluginManifest;
@@ -27,6 +28,9 @@ interface PluginConfig {
 
 const pluginEntries = shallowRef<Map<string, PluginEntry>>(new Map());
 let loaded = false;
+const scanState = ref<PluginScanState>('idle');
+const scanError = ref('');
+let scanPromise: Promise<void> | null = null;
 
 /** 各插件的激活世代号：停用/重载时递增，使在途激活失效（审查报告 H-3） */
 const pluginGenerations = new Map<string, number>();
@@ -50,53 +54,130 @@ function markFailure(entry: PluginEntry, error: unknown): void {
   };
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function sameManifest(left: PluginManifest, right: PluginManifest): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function createPluginEntry(
+  manifest: PluginManifest,
+  config: PluginConfig | undefined,
+): PluginEntry {
+  const lastError = manifest.contributes?.commands?.some(
+    (item) => !item.id.startsWith(`${manifest.id}.`),
+  )
+    ? '插件命令 ID 必须以插件 ID 为前缀'
+    : undefined;
+
+  return {
+    manifest,
+    enabled: config?.enabled ?? false,
+    state: 'disabled',
+    diagnostics: {
+      status: lastError ? 'error' : 'ok',
+      errorCount: lastError ? 1 : 0,
+      lastError,
+    },
+    lastError,
+  };
+}
+
 export function usePluginLoader() {
-  async function loadPlugins(): Promise<void> {
-    if (loaded) return;
-    loaded = true;
+  async function performScan(): Promise<void> {
     try {
-      const manifests = await invoke<PluginManifest[]>('scan_plugins');
+      const rawManifests = await invoke<PluginManifest[]>('scan_plugins');
       const configs = await invoke<Record<string, PluginConfig>>('get_plugin_configs');
-      const map = new Map<string, PluginEntry>();
+      const manifests = new Map<string, PluginManifest>();
 
-      for (const raw of manifests) {
+      for (const raw of rawManifests) {
         if (!validateManifest(raw)) continue;
-        const manifest = raw as PluginManifest;
-        const config = configs[manifest.id];
-        let lastError: string | undefined;
-        if (
-          manifest.contributes?.commands?.some((item) => !item.id.startsWith(`${manifest.id}.`))
-        ) {
-          lastError = '插件命令 ID 必须以插件 ID 为前缀';
-        }
-        map.set(manifest.id, {
-          manifest,
-          enabled: config?.enabled ?? false,
-          state: 'disabled',
-          diagnostics: {
-            status: lastError ? 'error' : 'ok',
-            errorCount: lastError ? 1 : 0,
-            lastError,
-          },
-          lastError,
-        });
+        manifests.set(raw.id, raw);
       }
-      pluginEntries.value = map;
 
-      for (const [id, entry] of map) {
-        if (!entry.enabled) continue;
-        const permissions = entry.manifest.permissions ?? [];
-        if (JSON.stringify(configs[id]?.permissions ?? []) !== JSON.stringify(permissions)) {
-          void invoke('set_plugin_config', {
-            pluginId: id,
-            config: { enabled: true, permissions },
-          });
+      const currentEntries = pluginEntries.value;
+      const nextEntries = new Map<string, PluginEntry>();
+
+      // 先清理已删除或 manifest 已变化的插件，避免旧沙箱和注册项残留。
+      for (const [id, entry] of currentEntries) {
+        const manifest = manifests.get(id);
+        if (!manifest || !sameManifest(entry.manifest, manifest)) {
+          await deactivatePlugin(id);
         }
-        void activatePlugin(id);
       }
+
+      for (const [id, manifest] of manifests) {
+        const current = currentEntries.get(id);
+        const config = configs[id];
+        if (current && sameManifest(current.manifest, manifest)) {
+          current.enabled = config?.enabled ?? false;
+          nextEntries.set(id, current);
+        } else {
+          nextEntries.set(id, createPluginEntry(manifest, config));
+        }
+      }
+
+      pluginEntries.value = nextEntries;
+
+      await Promise.all(
+        [...nextEntries].map(async ([id, entry]) => {
+          const permissions = entry.manifest.permissions ?? [];
+          if (
+            entry.enabled &&
+            JSON.stringify(configs[id]?.permissions ?? []) !== JSON.stringify(permissions)
+          ) {
+            await invoke('set_plugin_config', {
+              pluginId: id,
+              config: { enabled: entry.enabled, permissions },
+            }).catch((error) =>
+              diagnosticsLogger.warn('plugin', 'plugin.config_save_failed', '插件配置保存失败', {
+                error: errorMessage(error),
+                plugin_id: id,
+              }),
+            );
+          }
+          if (!entry.enabled) {
+            if (entry.state !== 'disabled') await deactivatePlugin(id);
+            return;
+          }
+          await activatePlugin(id);
+        }),
+      );
+      loaded = true;
     } catch (error) {
+      loaded = false;
+      scanError.value = errorMessage(error);
       diagnosticsLogger.error('plugin', 'plugin.scan_failed', '插件扫描失败', error);
     }
+  }
+
+  async function scanPlugins(force: boolean): Promise<void> {
+    if (scanPromise) {
+      await scanPromise;
+      if (!force) return;
+    }
+    if (!force && loaded) return;
+
+    scanState.value = 'scanning';
+    scanError.value = '';
+    const currentScan = performScan();
+    scanPromise = currentScan;
+    try {
+      await currentScan;
+      scanState.value = scanError.value ? 'error' : 'success';
+    } finally {
+      if (scanPromise === currentScan) scanPromise = null;
+    }
+  }
+
+  async function loadPlugins(): Promise<void> {
+    await scanPlugins(false);
+  }
+
+  async function rescanPlugins(): Promise<void> {
+    await scanPlugins(true);
   }
 
   async function activatePlugin(pluginId: string): Promise<void> {
@@ -248,7 +329,8 @@ export function usePluginLoader() {
       config: { enabled, permissions: entry.manifest.permissions ?? [] },
     }).catch((error) =>
       diagnosticsLogger.warn('plugin', 'plugin.config_save_failed', '插件配置保存失败', {
-        error: String(error),
+        error: errorMessage(error),
+        plugin_id: pluginId,
       }),
     );
     if (enabled) await activatePlugin(pluginId);
@@ -261,6 +343,7 @@ export function usePluginLoader() {
 
   return {
     loadPlugins,
+    rescanPlugins,
     activatePlugin,
     deactivatePlugin,
     reloadPlugin,
@@ -268,11 +351,17 @@ export function usePluginLoader() {
     entries,
     enabledPlugins,
     activePlugins,
+    scanState,
+    scanError,
     getEntry: (pluginId: string) => pluginEntries.value.get(pluginId),
   };
 }
 
 export function resetPluginLoaderForTests(): void {
   loaded = false;
+  scanState.value = 'idle';
+  scanError.value = '';
+  scanPromise = null;
   pluginEntries.value = new Map();
+  pluginGenerations.clear();
 }

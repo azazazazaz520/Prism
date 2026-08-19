@@ -84,6 +84,7 @@ export interface VendorPreset {
 /** 设置页子模块 */
 export type SettingsSubModule =
   | 'preferences'
+  | 'shortcuts'
   | 'vendors'
   | 'sync'
   | 'prompts'
@@ -99,6 +100,62 @@ export interface ParsedTask {
   important: boolean;
   pinned: boolean;
   is_daily: boolean;
+}
+
+/** 导入任务的来源类型。 */
+export type ImportSource = 'text' | 'screenshot';
+
+/** OCR 返回的单行识别结果。 */
+export interface OcrLine {
+  text: string;
+  confidence?: number;
+  bounds?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+}
+
+/** OCR 引擎的统一返回结构。 */
+export interface OcrResult {
+  text: string;
+  lines: OcrLine[];
+  language?: string;
+  confidence?: number;
+  provider: string;
+  warnings: string[];
+}
+
+/** 区域截图完成后注入导入窗口的统一载荷。 */
+export interface ScreenshotCapturePayload {
+  source: 'region';
+  text: string;
+  image_base64: string;
+  width: number;
+  height: number;
+}
+
+export type OcrStatus = 'idle' | 'processing' | 'success' | 'unavailable' | 'error';
+
+/** 导入窗口的统一草稿状态。截图和粘贴文字最终都进入 text 再解析任务。 */
+export interface ImportDraft {
+  source: ImportSource;
+  /** 用户粘贴的文字，切换到截图来源时继续保留。 */
+  text: string;
+  /** OCR 结果或用户根据截图手动输入的文字。 */
+  screenshotText: string;
+  screenshot: ScreenshotCapturePayload | null;
+  ocr: {
+    status: OcrStatus;
+    result: OcrResult | null;
+    message: string;
+  };
+}
+
+/** 原子批量导入命令返回的后端任务快照。 */
+export interface AddTasksBatchResult {
+  created: Task[];
 }
 
 /** AI 命令面板的执行模式 */

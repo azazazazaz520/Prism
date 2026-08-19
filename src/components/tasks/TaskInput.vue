@@ -15,6 +15,7 @@ const emit = defineEmits<{
     pinned: boolean,
     is_daily: boolean,
   ];
+  importTask: [];
 }>();
 
 const title = ref('');
@@ -142,7 +143,7 @@ function formatDueDate(d: string): string {
     <!-- 展开面板：聚焦后显示 -->
     <Transition name="expand">
       <div v-if="expanded" class="input-panel">
-        <!-- 快捷属性按钮行 -->
+        <!-- 快捷操作按钮行 -->
         <div class="quick-actions">
           <button
             type="button"
@@ -237,6 +238,28 @@ function formatDueDate(d: string): string {
             标签
           </button>
           <div class="quick-actions-right">
+            <button
+              type="button"
+              class="qa-btn import-task-btn"
+              title="从文字或截图导入任务"
+              aria-label="从文字或截图导入任务"
+              @click="emit('importTask')"
+            >
+              <svg
+                width="10"
+                height="10"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M5 4h10l4 4v12H5z" />
+                <path d="M15 4v5h4M8 13h8M8 17h5" />
+              </svg>
+              导入
+            </button>
             <div class="date-btn-wrapper">
               <button
                 ref="dateBtnRef"

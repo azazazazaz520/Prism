@@ -21,6 +21,18 @@ import { diagnosticsLogger } from '../diagnostics/invoke-logged';
 // 重新导出 — 保持向后兼容
 export { mergeTasksLWW } from './useFilterEngine';
 
+/** 按任务 ID 过滤已有任务以及同一事件载荷中的重复任务。 */
+export function selectNewImportedTasks(currentTasks: Task[], importedTasks: Task[]): Task[] {
+  const knownIds = new Set(currentTasks.map((task) => task.id));
+  const additions: Task[] = [];
+  for (const task of importedTasks) {
+    if (knownIds.has(task.id)) continue;
+    knownIds.add(task.id);
+    additions.push(task);
+  }
+  return additions;
+}
+
 /** 筛选状态（全局单例，确保跨组件共享） */
 const filterDate = ref<string | null>(null);
 const selectedTags = ref<string[]>([]);
@@ -589,6 +601,22 @@ export function useTaskStore() {
     'addTask',
   );
 
+  /**
+   * 接收独立导入窗口返回的后端任务快照，立即更新主窗口并复用普通任务同步路径。
+   * 事件可能重复送达，因此按任务 ID 去重。
+   */
+  function applyImportedTasks(importedTasks: Task[]) {
+    const additions = selectNewImportedTasks(tasks.value, importedTasks);
+    if (additions.length === 0) return;
+
+    tasks.value = [...tasks.value, ...additions];
+    syncAllTags(tasks.value);
+    additions.forEach(onTaskChanged);
+    diagnosticsLogger.info('task', 'task.import_applied', '导入任务已更新到主窗口', {
+      task_count: additions.length,
+    });
+  }
+
   const toggleTask = wrap(async (id: string) => {
     const canonical = await invoke<Task>('toggle_task', { id });
     tasks.value = tasks.value.map((t) => (t.id === id ? canonical : t));
@@ -806,6 +834,7 @@ export function useTaskStore() {
     pushTask,
     // CRUD
     addTask,
+    applyImportedTasks,
     toggleTask,
     toggleDailyTask,
     updateTask,

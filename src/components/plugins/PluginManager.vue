@@ -2,7 +2,8 @@
 import { onMounted } from 'vue';
 import { usePluginLoader } from '../../composables/usePluginLoader';
 
-const { loadPlugins, entries, togglePlugin } = usePluginLoader();
+const { loadPlugins, rescanPlugins, entries, togglePlugin, scanState, scanError } =
+  usePluginLoader();
 
 onMounted(() => {
   loadPlugins();
@@ -30,8 +31,29 @@ function statusClass(state: string): string {
   <div class="plugin-manager">
     <div class="pm-header">
       <h3 class="pm-title">已安装插件</h3>
-      <span class="pm-count">{{ entries.length }} 个</span>
+      <div class="pm-header-actions">
+        <span class="pm-count">{{ entries.length }} 个</span>
+        <button
+          type="button"
+          class="pm-scan-btn"
+          :disabled="scanState === 'scanning'"
+          @click="rescanPlugins"
+        >
+          {{ scanState === 'scanning' ? '扫描中…' : '重新扫描' }}
+        </button>
+      </div>
     </div>
+
+    <p v-if="scanError" class="pm-scan-feedback pm-scan-error" role="alert">
+      扫描失败：{{ scanError }}
+    </p>
+    <p
+      v-else-if="scanState === 'success'"
+      class="pm-scan-feedback pm-scan-success"
+      aria-live="polite"
+    >
+      扫描完成
+    </p>
 
     <div v-if="entries.length === 0" class="pm-empty">
       <div class="pm-empty-icon">
@@ -52,7 +74,7 @@ function statusClass(state: string): string {
       <p class="pm-empty-text">
         暂无安装的插件。将插件文件夹放入
         <code>~/.prism/plugins/</code>
-        后点击重新扫描。
+        后点击“重新扫描”。
       </p>
     </div>
 
@@ -124,6 +146,63 @@ function statusClass(state: string): string {
   font-family: var(--font-mono);
   font-size: 10px;
   color: var(--text-disabled);
+}
+
+.pm-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.pm-scan-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent);
+  font-size: 10px;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-duration-hover) var(--motion-ease-standard),
+    color var(--motion-duration-hover) var(--motion-ease-standard),
+    opacity var(--motion-duration-hover) var(--motion-ease-standard);
+}
+
+.pm-scan-btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--bg-primary);
+}
+
+.pm-scan-btn:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+
+[data-theme='hud'] .pm-scan-btn {
+  border-radius: 0;
+  clip-path: polygon(
+    4px 0%,
+    100% 0%,
+    100% calc(100% - 4px),
+    calc(100% - 4px) 100%,
+    0% 100%,
+    0% 4px
+  );
+}
+
+.pm-scan-feedback {
+  font-size: 11px;
+  line-height: 1.5;
+  margin: -2px 0 0;
+}
+
+.pm-scan-success {
+  color: var(--accent);
+}
+
+.pm-scan-error {
+  color: var(--danger);
 }
 
 .pm-empty {

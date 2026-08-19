@@ -16,31 +16,75 @@ export interface ScriptEntry {
   lastOutput?: string;
 }
 
+export type ScriptScanState = 'idle' | 'scanning' | 'success' | 'error';
+
 // ═══════════════════════════════════════════════════════════════
 //  全局单例
 // ═══════════════════════════════════════════════════════════════
 
 const scripts = shallowRef<ScriptEntry[]>([]);
 let loaded = false;
+const scanState = ref<ScriptScanState>('idle');
+const scanError = ref('');
+let scanPromise: Promise<void> | null = null;
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 export function useScriptRunner() {
-  async function loadScripts() {
-    if (loaded) return;
-    loaded = true;
+  async function performScan(): Promise<void> {
     try {
       const list =
         await invoke<{ name: string; description?: string; permissions: string[] }[]>(
           'scan_scripts',
         );
+      const previous = new Map(scripts.value.map((script) => [script.name, script]));
       scripts.value = list.map((m) => ({
         name: m.name,
         description: m.description,
         permissions: m.permissions,
-        status: 'idle' as const,
+        status: previous.get(m.name)?.status ?? ('idle' as const),
+        lastOutput: previous.get(m.name)?.lastOutput,
       }));
+      loaded = true;
     } catch (e) {
+      loaded = false;
+      scanError.value = errorMessage(e);
       diagnosticsLogger.error('scripts', 'scripts.scan_failed', '扫描脚本失败', e);
     }
+  }
+
+  async function scanScripts(force: boolean): Promise<void> {
+    if (scanPromise) {
+      await scanPromise;
+      if (!force) return;
+    }
+    if (!force && loaded) return;
+
+    scanState.value = 'scanning';
+    scanError.value = '';
+    const currentScan = performScan();
+    scanPromise = currentScan;
+    try {
+      await currentScan;
+      scanState.value = scanError.value ? 'error' : 'success';
+    } finally {
+      if (scanPromise === currentScan) scanPromise = null;
+    }
+  }
+
+  async function loadScripts(): Promise<void> {
+    await scanScripts(false);
+  }
+
+  async function rescanScripts(): Promise<void> {
+    if (scripts.value.some((script) => script.status === 'running')) {
+      scanError.value = '有脚本正在运行，请完成后再扫描。';
+      scanState.value = 'error';
+      return;
+    }
+    await scanScripts(true);
   }
 
   async function runScript(index: number) {
@@ -89,6 +133,17 @@ export function useScriptRunner() {
   return {
     scripts,
     loadScripts,
+    rescanScripts,
     runScript,
+    scanState,
+    scanError,
   };
+}
+
+export function resetScriptRunnerForTests(): void {
+  scripts.value = [];
+  loaded = false;
+  scanState.value = 'idle';
+  scanError.value = '';
+  scanPromise = null;
 }

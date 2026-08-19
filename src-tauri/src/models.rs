@@ -96,7 +96,7 @@ pub struct Vendor {
 // ═══════════════════════════════════════════════════════════════
 
 /// 结构化任务数据（存储于 data.json）
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DataStore {
     pub version: u32,
     pub tasks: Vec<Task>,

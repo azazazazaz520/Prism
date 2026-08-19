@@ -67,6 +67,16 @@ impl AppState {
         Ok(result)
     }
 
+    /// 通过候选数据修改任务存储，持久化成功后才替换内存状态。
+    /// 批量导入使用该入口，避免保存失败后内存保留未落盘任务。
+    pub fn write_data_candidate<F, R>(&self, f: F) -> Result<R, String>
+    where
+        F: FnOnce(&mut store::DataStore) -> Result<R, String>,
+    {
+        let mut data = self.data.lock().unwrap();
+        commit_data_candidate(&mut data, f, store::save_data)
+    }
+
     // ── ConfigStore 读写（新增） ──
 
     /// 读取配置的只读快照
@@ -112,6 +122,18 @@ impl AppState {
         store::save_sync(&sync)?;
         Ok(result)
     }
+}
+
+fn commit_data_candidate<F, R, S>(data: &mut store::DataStore, f: F, save: S) -> Result<R, String>
+where
+    F: FnOnce(&mut store::DataStore) -> Result<R, String>,
+    S: FnOnce(&store::DataStore) -> Result<(), String>,
+{
+    let mut candidate = data.clone();
+    let result = f(&mut candidate)?;
+    save(&candidate)?;
+    *data = candidate;
+    Ok(result)
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -308,6 +330,7 @@ pub fn run() {
             // 任务命令 (commands::tasks)
             commands::tasks::get_tasks,
             commands::tasks::get_all_tasks_including_deleted,
+            commands::tasks::add_tasks_batch,
             commands::tasks::add_task,
             commands::tasks::toggle_task,
             commands::tasks::toggle_daily_task,
@@ -372,6 +395,7 @@ pub fn run() {
             commands::ai::ai_regex_generate,
             commands::ai::ai_parse_wechat,
             commands::screenshot::crop_screenshot,
+            commands::screenshot::ocr_image,
             // Prompt 管理命令
             commands::prompt::list_prompts,
             commands::prompt::get_prompt,
@@ -433,4 +457,46 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::commit_data_candidate;
+    use crate::store;
+
+    #[test]
+    fn candidate_write_keeps_memory_unchanged_when_save_fails() {
+        let mut data = store::default_data_store();
+        let original_version = data.version;
+
+        let error = commit_data_candidate(
+            &mut data,
+            |candidate| {
+                candidate.version = 99;
+                Ok(())
+            },
+            |_| Err("模拟保存失败".into()),
+        )
+        .expect_err("保存失败应阻止候选状态提交");
+
+        assert_eq!(error, "模拟保存失败");
+        assert_eq!(data.version, original_version);
+    }
+
+    #[test]
+    fn candidate_write_commits_memory_after_save_succeeds() {
+        let mut data = store::default_data_store();
+
+        commit_data_candidate(
+            &mut data,
+            |candidate| {
+                candidate.version = 2;
+                Ok(())
+            },
+            |_| Ok(()),
+        )
+        .expect("保存成功后应提交候选状态");
+
+        assert_eq!(data.version, 2);
+    }
 }

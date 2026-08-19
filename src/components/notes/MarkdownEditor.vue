@@ -919,7 +919,7 @@ defineExpose({
   border-radius: 4px;
   background: var(--bg-tertiary);
   color: var(--accent);
-  font-family: 'Cascadia Code', 'Fira Code', monospace;
+  font-family: var(--font-mono);
   font-size: 0.92em;
 }
 

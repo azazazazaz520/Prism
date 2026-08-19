@@ -1,5 +1,6 @@
 import vueRuntime from 'vue/dist/vue.runtime.global.prod.js?raw';
 import { diagnosticsLogger, invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
+import type { Disposable } from '../types';
 
 export type SandboxViewLocation = 'sidebar' | 'panel' | 'settings' | 'rail' | 'page';
 
@@ -52,6 +53,11 @@ export const SANDBOX_PLUGIN_FACTORY_PARAMETERS = [
   'document',
   'localStorage',
   '__vue__',
+  '__prism_api__',
+  '__prism_commands__',
+  '__prism_menus__',
+  '__prism_tasks__',
+  '__prism_network__',
 ] as const;
 
 const SANDBOX_FACTORY_PARAMETER_LIST = SANDBOX_PLUGIN_FACTORY_PARAMETERS.map((name) =>
@@ -59,6 +65,9 @@ const SANDBOX_FACTORY_PARAMETER_LIST = SANDBOX_PLUGIN_FACTORY_PARAMETERS.map((na
 ).join(', ');
 
 export const SANDBOX_READY_TIMEOUT_MS = 10_000;
+
+/** 停用后等待沙箱 deactivate 完成的超时时间（毫秒，审查报告 H-5） */
+export const SANDBOX_DISPOSE_TIMEOUT_MS = 2_000;
 
 function createSandboxChannelId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -70,11 +79,21 @@ function createSandboxChannelId(): string {
 const BOOTSTRAP = String.raw`(() => {
   const config = __PRISM_CONFIG__;
   const pluginSource = __PRISM_SOURCE__;
+
+  // 屏蔽宿主能力全局对象，网络与存储一律走 RPC（纵深防御，审查报告 M-1/H-2）
+  try { delete window.__TAURI_INTERNALS__; } catch (e) { /* 只读属性时忽略 */ }
+  try { delete window.fetch; } catch (e) { /* 忽略 */ }
+  try { delete window.XMLHttpRequest; } catch (e) { /* 忽略 */ }
+  try { delete window.WebSocket; } catch (e) { /* 忽略 */ }
+
   const pending = new Map();
   const views = new Map();
   const commands = new Map();
   const menus = new Map();
   let disposed = false;
+  // 当前已挂载的视图实例：切换或停用时先卸载再替换，避免实例泄漏（审查报告 M-4）
+  let currentApp = null;      // Vue 应用实例
+  let currentDomView = null;  // Raw DOM 视图（registerDomView）
   let nextRequestId = 1;
   let nextDisposableId = 1;
 
@@ -219,12 +238,28 @@ const BOOTSTRAP = String.raw`(() => {
     if (!registration || !window.Vue) return;
     const root = document.getElementById('prism-plugin-view');
     if (!root) return;
+    // M-4：先卸载旧实例（触发 onUnmounted 清理），再清空挂载点，避免实例泄漏
+    if (currentApp) {
+      currentApp.unmount();
+      currentApp = null;
+    }
+    if (currentDomView && currentDomView !== registration.component) {
+      if (typeof currentDomView.unmount === 'function') currentDomView.unmount();
+      currentDomView = null;
+    }
     root.replaceChildren();
-    if (registration.component && typeof registration.component === 'object') {
+    // 判别：Vue 组件选项对象不含 mount 方法；registerDomView 的对象含 mount
+    if (
+      registration.component &&
+      typeof registration.component === 'object' &&
+      typeof registration.component.mount !== 'function'
+    ) {
       const app = window.Vue.createApp(registration.component, { pluginId: config.pluginId });
       app.config.errorHandler = reportRuntimeError;
+      currentApp = app;
       app.mount(root);
     } else if (registration.component && typeof registration.component.mount === 'function') {
+      currentDomView = registration.component;
       registration.component.mount(root);
     }
   }
@@ -263,7 +298,16 @@ const BOOTSTRAP = String.raw`(() => {
     menus.clear();
     commands.clear();
     views.clear();
+    // M-4：停用时先卸载当前实例，触发 onUnmounted 清理
+    if (currentApp) {
+      currentApp.unmount();
+      currentApp = null;
+    }
+    if (currentDomView && typeof currentDomView.unmount === 'function') currentDomView.unmount();
+    currentDomView = null;
     document.getElementById('prism-plugin-view')?.replaceChildren();
+    // 通知宿主清理完成，宿主随后移除 iframe（H-5）
+    postToHost({ kind: 'dispose-complete' });
   }
 
   (async () => {
@@ -273,7 +317,22 @@ const BOOTSTRAP = String.raw`(() => {
       Object.entries(snapshot || {}).forEach(([key, value]) => storageCache.set(key, value));
       lifecycle('storage_snapshot_completed');
       const factory = new Function(${SANDBOX_FACTORY_PARAMETER_LIST}, pluginSource + '\nreturn { activate: typeof activate === "function" ? activate : undefined, deactivate: typeof deactivate === "function" ? deactivate : undefined };');
-      const module = factory(window, document, storage, window.Vue);
+      const module = factory(
+        window,
+        document,
+        storage,
+        window.Vue,
+        // prism:api 等价对象（与宿主 capability 的 api 表面一致）
+        {
+          storage: ctx.storage,
+          ui: { notice: (message, level) => ctx.log(level || 'info', message) },
+          diagnostics: { log: (level, message) => ctx.log(level, message) },
+        },
+        ctx.commands,
+        ctx.menus,
+        ctx.tasks,
+        ctx.network,
+      );
       if (typeof module.activate !== 'function') throw new Error('插件未导出 activate 函数');
       lifecycle('activate_started');
       await module.activate(ctx);
@@ -292,9 +351,20 @@ function createSrcdoc(
   source: string,
   channelId: string,
 ): string {
-  const config = JSON.stringify({ pluginId, permissions, channelId });
-  const pluginSource = JSON.stringify(source);
-  return `<!doctype html><html><head><meta charset="utf-8"><style>:root{--theme-color-scheme:light}html,body,#prism-plugin-view{margin:0;min-height:100%;height:100%;overflow:auto;font-family:system-ui,sans-serif;background:var(--bg-primary,#f8fdfb);color:var(--text-primary,#1a2e2b)}</style><script>${vueRuntime}</script></head><body><div id="prism-plugin-view"></div><script>const __PRISM_CONFIG__=${config};const __PRISM_SOURCE__=${pluginSource};${BOOTSTRAP}</script></body></html>`;
+  const config = JSON.stringify({ pluginId, permissions, channelId }).replace(/</g, '\\u003c');
+  const pluginSource = JSON.stringify(source).replace(/</g, '\\u003c');
+  // 插件 iframe 独立 CSP：禁止直连网络（connect-src 继承 default-src 'none'），
+  // 网络访问必须经宿主 RPC（审查报告 H-2）；
+  // script-src 需同时允许 'unsafe-inline'（Vue 运行时与引导脚本）与
+  // 'unsafe-eval'（沙箱内 new Function 执行插件源码），两者均限于沙箱 iframe 内
+  return (
+    `<!doctype html><html><head><meta charset="utf-8">` +
+    `<meta http-equiv="Content-Security-Policy" ` +
+    `content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'">` +
+    `<style>:root{--theme-color-scheme:light}html,body,#prism-plugin-view{margin:0;min-height:100%;height:100%;overflow:auto;font-family:system-ui,sans-serif;background:var(--bg-primary,#f8fdfb);color:var(--text-primary,#1a2e2b)}</style>` +
+    `<script>${vueRuntime}</script></head><body><div id="prism-plugin-view"></div>` +
+    `<script>const __PRISM_CONFIG__=${config};const __PRISM_SOURCE__=${pluginSource};${BOOTSTRAP}<\/script></body></html>`
+  );
 }
 
 export class SandboxPluginSession implements SandboxViewSession {
@@ -321,6 +391,10 @@ export class SandboxPluginSession implements SandboxViewSession {
   private sandboxReady = false;
   private attachedView?: { container: HTMLElement; viewId: string };
   private readonly themeObserver: MutationObserver;
+  /** 宿主侧与沙箱注册对应的可释放资源，供 sandbox-dispose 消息定位清理（S-4） */
+  private readonly externalDisposables = new Map<string, Disposable>();
+  /** dispose-complete ack 到达时提前移除 iframe 的回调（H-5） */
+  private pendingRemoveIframe?: () => void;
 
   constructor(
     private readonly pluginId: string,
@@ -387,6 +461,11 @@ export class SandboxPluginSession implements SandboxViewSession {
     return this.ready;
   }
 
+  /** 登记宿主侧可释放资源，键格式为 `view:<id>` 或 `menu:<location>`（S-4） */
+  registerExternalDisposable(key: string, disposable: Disposable): void {
+    this.externalDisposables.set(key, disposable);
+  }
+
   attach(container: HTMLElement, viewId: string): void {
     if (this.disposed) return;
     this.attachedView = { container, viewId };
@@ -419,8 +498,19 @@ export class SandboxPluginSession implements SandboxViewSession {
     this.iframe.removeEventListener('load', this.handleIframeLoad);
     this.iframe.removeEventListener('error', this.handleIframeError);
     this.iframe.contentWindow?.postMessage({ kind: 'sandbox-command', command: 'dispose' }, '*');
-    window.removeEventListener('message', this.handleMessage);
-    this.iframe.remove();
+    // H-5：保留 iframe 与消息监听，等待沙箱 deactivate 完成（dispose-complete ack）
+    // 或超时后移除，避免异步清理被截断
+    const removeIframe = () => {
+      this.iframe.remove();
+      window.removeEventListener('message', this.handleMessage);
+    };
+    const timer = setTimeout(removeIframe, SANDBOX_DISPOSE_TIMEOUT_MS);
+    this.pendingRemoveIframe = () => {
+      clearTimeout(timer);
+      removeIframe();
+    };
+    for (const disposable of this.externalDisposables.values()) disposable.dispose();
+    this.externalDisposables.clear();
     this.rejectReady(new Error('插件沙箱已关闭'));
     for (const item of this.pending.values()) item.reject(new Error('插件沙箱已关闭'));
     this.pending.clear();
@@ -537,6 +627,21 @@ export class SandboxPluginSession implements SandboxViewSession {
       const items = (message.items || []) as SandboxMenuItem[];
       if (!this.hasMenuHandler) this.pendingMenus.push({ location, items });
       else this.onMenu(location, items);
+    }
+    if (message.kind === 'sandbox-dispose') {
+      // 沙箱内调用 Disposable.dispose() 时，释放对应的宿主注册（S-4）
+      const key = `${String(message.resource)}:${String(message.id)}`;
+      const disposable = this.externalDisposables.get(key);
+      if (disposable) {
+        disposable.dispose();
+        this.externalDisposables.delete(key);
+      }
+      return;
+    }
+    if (message.kind === 'dispose-complete') {
+      // 沙箱 deactivate 已完成，立即移除 iframe（H-5）
+      this.pendingRemoveIframe?.();
+      return;
     }
     if (message.kind === 'rpc') this.handleRpc(message as unknown as RpcRequest);
   };

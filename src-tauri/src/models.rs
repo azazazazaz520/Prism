@@ -96,7 +96,7 @@ pub struct Vendor {
 // ═══════════════════════════════════════════════════════════════
 
 /// 结构化任务数据（存储于 data.json）
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DataStore {
     pub version: u32,
     pub tasks: Vec<Task>,
@@ -128,7 +128,7 @@ pub struct PluginConfig {
 
 /// 应用配置（存储于 config.json），包含供应商、主题、提醒、模块开关、
 /// 笔记目录、仪表盘布局、插件配置等全部用户偏好。
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConfigStore {
     #[serde(default)]
     pub vendors: Vec<Vendor>,

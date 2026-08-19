@@ -2,6 +2,18 @@ use crate::store;
 use crate::task_service;
 use crate::task_service::{AddTaskInput, UpdateTaskInput};
 use crate::AppState;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddTasksBatchInput {
+    pub tasks: Vec<AddTaskInput>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AddTasksBatchResult {
+    pub created: Vec<store::Task>,
+}
 
 // ═══════════════════════════════════════════════════════════════
 //  只读命令 — 通过 AppState::read_data 一行委托
@@ -48,6 +60,17 @@ pub fn reset_daily_tasks(
 #[tauri::command]
 pub fn add_task(state: tauri::State<AppState>, args: AddTaskInput) -> Result<store::Task, String> {
     state.write_data(|d| task_service::add(d, args))
+}
+
+/// 原子批量新增任务：全部参数校验和持久化成功后才提交内存状态。
+#[tauri::command]
+pub fn add_tasks_batch(
+    state: tauri::State<AppState>,
+    args: AddTasksBatchInput,
+) -> Result<AddTasksBatchResult, String> {
+    state
+        .write_data_candidate(|data| task_service::add_batch(data, args.tasks))
+        .map(|created| AddTasksBatchResult { created })
 }
 
 /// 切换完成状态，返回后端时间戳规范化的任务快照供前端 LWW 使用

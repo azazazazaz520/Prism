@@ -173,7 +173,7 @@ async function resetPrompt() {
 .prompt-name {
   font-size: 13px;
   font-weight: 500;
-  font-family: monospace;
+  font-family: var(--font-mono);
 }
 .prompt-meta {
   display: flex;
@@ -187,7 +187,7 @@ async function resetPrompt() {
   background: var(--bg-tertiary, #f1f5f9);
   padding: 1px 5px;
   border-radius: 3px;
-  font-family: monospace;
+  font-family: var(--font-mono);
 }
 .customized-badge {
   font-size: 10px;
@@ -221,7 +221,7 @@ async function resetPrompt() {
 .detail-title {
   font-size: 15px;
   font-weight: 600;
-  font-family: monospace;
+  font-family: var(--font-mono);
 }
 .detail-actions {
   display: flex;
@@ -244,7 +244,7 @@ async function resetPrompt() {
 .editor-area {
   flex: 1;
   min-height: 300px;
-  font-family: monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.6;
   padding: 12px;

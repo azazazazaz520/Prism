@@ -53,6 +53,11 @@ export function registerSandboxView(
   registration: SandboxViewRegistration,
   onActivate?: () => void,
 ): Disposable {
+  // 沙箱路径与 legacy 路径保持一致：视图 ID 必须以插件 ID 为前缀（H-6）
+  const prefix = `${pluginId}.`;
+  if (!registration.id || !registration.id.startsWith(prefix)) {
+    throw new TypeError(`视图 ID "${registration.id}" 必须以 "${prefix}" 为前缀`);
+  }
   const view: ViewRegistration = {
     id: registration.id,
     pluginId,

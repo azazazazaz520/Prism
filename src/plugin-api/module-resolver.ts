@@ -45,7 +45,8 @@ export function parseModule(source: string): ParsedModule {
 function importToVar(from: string): string | null {
   if (from === 'vue') return '__vue__';
   if (from === 'prism:api') return '__prism_api__';
-  if (from === 'prism:commands' || from === 'prism:menus') return '__prism_commands__';
+  if (from === 'prism:commands') return '__prism_commands__';
+  if (from === 'prism:menus') return '__prism_menus__';
   if (from === 'prism:tasks') return '__prism_tasks__';
   if (from === 'prism:network') return '__prism_network__';
   return null; // 未知导入保留原样，让 Function 构造器报错

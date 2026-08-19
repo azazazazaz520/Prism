@@ -287,6 +287,7 @@ onUnmounted(() => {
 
 const subModules: { key: SettingsSubModule; label: string }[] = [
   { key: 'preferences', label: '偏好设置' },
+  { key: 'shortcuts', label: '快捷键' },
   { key: 'vendors', label: '供应商' },
   { key: 'prompts', label: 'Prompt' },
   { key: 'sync', label: '跨设备同步' },
@@ -327,6 +328,10 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
               <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
               <line x1="8" y1="21" x2="16" y2="21" />
               <line x1="12" y1="17" x2="12" y2="21" />
+            </template>
+            <template v-else-if="m.key === 'shortcuts'">
+              <rect x="3" y="5" width="18" height="14" rx="2" />
+              <path d="M7 9h.01M11 9h.01M15 9h.01M7 13h.01M11 13h.01M15 13h.01M7 17h8" />
             </template>
             <template v-else-if="m.key === 'vendors'">
               <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
@@ -500,6 +505,28 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
             </p>
             <p v-if="pandocTip" class="pandoc-tip">{{ pandocTip }}</p>
             <p class="setting-hint">用于将当前 Markdown 笔记导出为 Word 文档。</p>
+          </div>
+        </div>
+
+        <!-- 快捷键说明 -->
+        <div v-else-if="activeSub === 'shortcuts'" class="sub-page">
+          <div class="settings-group">
+            <div class="group-title">任务导入</div>
+            <div class="shortcut-row">
+              <div>
+                <div class="shortcut-name">导入文字</div>
+                <div class="shortcut-description">打开导入窗口，粘贴聊天记录并解析任务。</div>
+              </div>
+              <kbd>Ctrl+Shift+I</kbd>
+            </div>
+            <div class="shortcut-row">
+              <div>
+                <div class="shortcut-name">区域截图</div>
+                <div class="shortcut-description">选择屏幕区域，截图完成后进入导入窗口。</div>
+              </div>
+              <kbd>Ctrl+Alt+I</kbd>
+            </div>
+            <p class="setting-hint">截图进入导入窗口后，可以检查或手动修改文字，再进行任务解析。</p>
           </div>
         </div>
 
@@ -695,6 +722,43 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
 }
 .setting-row:last-of-type {
   border-bottom: none;
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-md) 0;
+  border-bottom: 1px solid var(--bg-hover);
+}
+
+.shortcut-row:last-of-type {
+  border-bottom: none;
+}
+
+.shortcut-name {
+  color: var(--text-secondary);
+  font-size: var(--text-base);
+}
+
+.shortcut-description {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.shortcut-row kbd {
+  flex-shrink: 0;
+  padding: 4px 7px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  white-space: nowrap;
 }
 
 .setting-row label {
@@ -908,6 +972,16 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
 [data-theme='hud'] .setting-row,
 [data-theme='hud'] .setting-row {
   border-bottom-color: var(--border-subtle);
+}
+
+[data-theme='hud'] .shortcut-row {
+  border-bottom-color: var(--border-subtle);
+}
+
+[data-theme='hud'] .shortcut-row kbd {
+  border-radius: 0;
+  background: var(--bg-secondary);
+  border-color: var(--border-line);
 }
 
 [data-theme='hud'] .select-trigger,

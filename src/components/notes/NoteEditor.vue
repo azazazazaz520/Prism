@@ -51,7 +51,10 @@ import {
   shouldScheduleNoteSave,
   useNoteDocumentStore,
 } from '../../composables/useNoteDocumentStore';
-import { useNoteSaveController } from '../../composables/useNoteSaveController';
+import {
+  useNoteSaveController,
+  type NoteSaveResult,
+} from '../../composables/useNoteSaveController';
 import { useNoteSidebarLayout } from '../../composables/useNoteSidebarLayout';
 import {
   beginNoteSelfWrite,
@@ -112,6 +115,12 @@ const content = computed({
 const isDirty = computed(() =>
   activeNotePath.value ? documentStore.ensure(activeNotePath.value).dirty : false,
 );
+const activeSaveStatus = computed(() =>
+  activeNotePath.value ? documentStore.ensure(activeNotePath.value).saveStatus : 'idle',
+);
+const activeSaveError = computed(() =>
+  activeNotePath.value ? documentStore.ensure(activeNotePath.value).saveError : null,
+);
 const currentFileMtime = computed(() =>
   activeNotePath.value ? documentStore.ensure(activeNotePath.value).mtime : null,
 );
@@ -130,7 +139,7 @@ const {
   renameNotesUnderPath,
   projectTask,
   removeTaskFromAllNotes,
-} = useNoteTaskSync();
+} = useNoteTaskSync(documentStore);
 let projectingTaskReferences = false;
 let taskSyncTimer: ReturnType<typeof setTimeout> | null = null;
 let taskSnapshot = new Map<string, { title: string; completed: boolean }>();
@@ -643,7 +652,7 @@ async function reloadFromDisk(path = activeNotePath.value) {
 
 async function presentNoteConflict(path: string) {
   const document = documentStore.ensure(path);
-  if (document.conflict || conflictPath.value === path) return;
+  if (conflictPath.value === path) return;
 
   try {
     const meta = await invoke<{ content: string; mtime: string }>('read_note_meta', { path });
@@ -654,19 +663,23 @@ async function presentNoteConflict(path: string) {
 
     noteSaveController.cancel(path);
     documentStore.setConflict(path, meta.content, meta.mtime);
-    conflictPath.value = path;
-    confirmTitle.value = '文件已在外部修改';
-    confirmMessage.value =
-      '磁盘中的内容已经发生变化。请选择加载磁盘版本，或保留当前编辑内容并覆盖磁盘版本。';
-    confirmActionText.value = '加载磁盘版本';
-    confirmCancelText.value = '保留本地内容';
-    confirmDanger.value = false;
-    confirmVisible.value = true;
+    showNoteConflictPrompt(path);
   } catch (error) {
     diagnosticsLogger.error('notes', 'notes.conflict_read_failed', '读取外部修改失败', error, {
       path,
     });
   }
+}
+
+function showNoteConflictPrompt(path: string) {
+  conflictPath.value = path;
+  confirmTitle.value = '文件已在外部修改';
+  confirmMessage.value =
+    '磁盘中的内容已经发生变化。请选择加载磁盘版本，或保留当前编辑内容并覆盖磁盘版本。';
+  confirmActionText.value = '加载磁盘版本';
+  confirmCancelText.value = '保留本地内容';
+  confirmDanger.value = false;
+  confirmVisible.value = true;
 }
 
 /** 检查当前文件是否被外部修改，若变化则自动加载最新版本 */
@@ -891,15 +904,81 @@ function rememberNotePath(path: string) {
   localStorage.setItem(recentNotesStorageKey(), JSON.stringify(recentNotePaths.value));
 }
 
+interface WorkspaceFlushReport {
+  results: NoteSaveResult[];
+  savedPaths: string[];
+  failedPaths: string[];
+  conflictPaths: string[];
+  partiallySaved: boolean;
+}
+
+async function flushDirtyDocuments(): Promise<WorkspaceFlushReport> {
+  const paths = new Set<string>();
+  for (const [path, document] of documentStore.documents) {
+    if (document.dirty) paths.add(path);
+  }
+  for (const path of allWorkspaceTabPaths.value) {
+    if (documentStore.ensure(path).dirty) paths.add(path);
+  }
+
+  const results = (
+    await Promise.all(
+      [...paths].map(async (path) => {
+        const document = documentStore.ensure(path);
+        return queueNoteSave(
+          path,
+          { content: document.content, expectedMtime: document.mtime },
+          true,
+        );
+      }),
+    )
+  ).filter((result): result is NoteSaveResult => result !== null);
+
+  const savedPaths = results
+    .filter((result) => result.status === 'saved')
+    .filter((result) => result.generation === documentStore.ensure(result.path).generation)
+    .map((result) => result.path);
+  const failedPaths = results
+    .filter((result) => result.status === 'failed')
+    .map((result) => result.path);
+  const conflictPaths = results
+    .filter((result) => result.status === 'conflict')
+    .map((result) => result.path);
+
+  return {
+    results,
+    savedPaths,
+    failedPaths,
+    conflictPaths,
+    partiallySaved: savedPaths.length > 0 && savedPaths.length < paths.size,
+  };
+}
+
 async function switchNotesWorkspace(selected: string) {
   if (normalizeWorkspacePath(selected) === normalizeWorkspacePath(notesDir.value)) {
     workspaceMenuOpen.value = false;
     return;
   }
 
-  if (isDirty.value) {
-    clearPendingSave();
-    await handleManualSave();
+  const flushReport = await flushDirtyDocuments();
+  const remainingDirtyPaths = new Set<string>();
+  for (const [path, document] of documentStore.documents) {
+    if (document.dirty) remainingDirtyPaths.add(path);
+  }
+  for (const path of allWorkspaceTabPaths.value) {
+    if (documentStore.ensure(path).dirty) remainingDirtyPaths.add(path);
+  }
+  if (
+    remainingDirtyPaths.size > 0 ||
+    flushReport.failedPaths.length > 0 ||
+    flushReport.conflictPaths.length > 0
+  ) {
+    showStatus(
+      flushReport.conflictPaths.length > 0
+        ? '存在未处理的笔记冲突，无法切换工作区'
+        : '存在未保存的笔记，保存失败后无法切换工作区',
+    );
+    return;
   }
 
   try {
@@ -1256,11 +1335,35 @@ function getUntitledPath(parentDir: string): string {
   return `${prefix}未命名 ${index}.md`;
 }
 
+async function createEmptyNoteFile(path: string) {
+  let selfWriteToken: NoteSelfWriteToken | null = null;
+  noteSaveController.scheduleResult({
+    path,
+    snapshot: { content: '', expectedMtime: null },
+    source: 'editor',
+    write: async (request) => {
+      selfWriteToken = beginNoteSelfWrite(path);
+      return invoke<string>('write_note', {
+        path,
+        content: request.content,
+        expectedMtime: request.expectedMtime,
+      });
+    },
+    onSettled: () => {
+      if (selfWriteToken !== null) endNoteSelfWrite(path, selfWriteToken);
+    },
+  });
+  const result = await noteSaveController.flush(path);
+  if (!result || result.status !== 'saved') {
+    throw new Error(result?.status === 'failed' ? result.error.message : '创建文件失败');
+  }
+}
+
 /** 直接创建未命名文件，标题输入框会在打开后自动选中。 */
 async function createUntitledFile(parentDir = '') {
   const path = getUntitledPath(parentDir);
   try {
-    await invoke('write_note', { path, content: '' });
+    await createEmptyNoteFile(path);
     setNoteContent(path, '');
     if (parentDir) {
       const next = new Set(expanded.value);
@@ -1333,40 +1436,57 @@ function queueNoteSave(
   path: string,
   snapshot: { content: string; expectedMtime: string | null },
   flushNow = false,
-) {
+): Promise<NoteSaveResult | null> {
   saving.value = true;
   let selfWriteToken: NoteSelfWriteToken | null = null;
-  noteSaveController.schedule(
+  const generation = noteSaveController.scheduleResult({
     path,
     snapshot,
-    async (nextSnapshot) => {
+    source: 'editor',
+    write: async (request) => {
+      documentStore.markSaving(path, request.generation);
       selfWriteToken = beginNoteSelfWrite(path);
       return invoke<string>('write_note', {
         path,
-        content: nextSnapshot.content,
-        expectedMtime: nextSnapshot.expectedMtime,
+        content: request.content,
+        expectedMtime: request.expectedMtime,
       });
     },
-    (writtenMtime, savedSnapshot) => {
-      noteContentCache.set(path, savedSnapshot.content);
-      setNoteContent(path, savedSnapshot.content);
-      documentStore.markSaved(path, writtenMtime);
-      saving.value = false;
+    readConflict: async () => {
+      const meta = await invoke<{ content: string; mtime: string }>('read_note_meta', { path });
+      return { diskContent: meta.content, diskMtime: meta.mtime };
     },
-    async (error) => {
-      const message = error instanceof Error ? error.message : String(error);
-      if (message.startsWith(FILE_CHANGED_EXTERNALLY)) {
-        await presentNoteConflict(path);
+    onResult: (result) => {
+      if (result.status === 'saved') {
+        noteContentCache.set(path, snapshot.content);
+        setNoteContent(path, snapshot.content);
+        documentStore.markSaved(path, result.mtime, result.generation);
+      } else if (result.status === 'conflict') {
+        documentStore.setConflict(path, result.diskContent, result.diskMtime, result.generation);
+        showNoteConflictPrompt(path);
       } else {
-        diagnosticsLogger.error('notes', 'notes.save_failed', '保存笔记失败', error, { path });
+        documentStore.markSaveFailed(path, result.generation, result.error.cause);
+        diagnosticsLogger.error('notes', 'notes.save_failed', '保存笔记失败', result.error.cause, {
+          path,
+          generation: result.generation,
+        });
       }
+    },
+    onSettled: () => {
+      if (selfWriteToken !== null) endNoteSelfWrite(path, selfWriteToken);
       saving.value = false;
     },
-    () => {
-      if (selfWriteToken !== null) endNoteSelfWrite(path, selfWriteToken);
-    },
-  );
-  return flushNow ? noteSaveController.flush(path) : Promise.resolve();
+  });
+  documentStore.markScheduled(path, generation);
+  return flushNow ? noteSaveController.flush(path) : Promise.resolve(null);
+}
+
+/** 保存失败后由状态栏“重试”按钮触发，立即以当前内容重新保存。 */
+async function retrySave() {
+  const path = activeNotePath.value;
+  if (!path) return;
+  const document = documentStore.ensure(path);
+  await queueNoteSave(path, { content: document.content, expectedMtime: document.mtime }, true);
 }
 
 watch(content, (val) => {
@@ -1466,7 +1586,7 @@ async function createFile(parentDir: string) {
   const fileName = name.endsWith('.md') ? name : `${name}.md`;
   const path = parentDir ? `${parentDir}/${fileName}` : fileName;
   try {
-    await invoke('write_note', { path, content: '' });
+    await createEmptyNoteFile(path);
     setNoteContent(path, '');
     // 确保父目录展开
     if (parentDir) {
@@ -2006,6 +2126,9 @@ onUnmounted(() => {
             :cursor-line="cursorLine"
             :cursor-col="cursorCol"
             :saving="saving"
+            :save-status="activeSaveStatus"
+            :save-error="activeSaveError"
+            @retry="retrySave"
           />
         </div>
         <NoteContextPanel

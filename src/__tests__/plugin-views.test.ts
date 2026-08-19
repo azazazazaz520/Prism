@@ -145,3 +145,30 @@ describe('Views API', () => {
     expect(remaining.length).toBe(0);
   });
 });
+
+describe('registerSandboxView ID 前缀校验（H-6）', () => {
+  const pluginId = 'com.example.test';
+  const session = {} as import('../plugin-api/sandbox-session').SandboxViewSession;
+
+  it('接受带插件 ID 前缀的视图', () => {
+    const disposable = registerSandboxView(pluginId, session, {
+      id: `${pluginId}.hello`,
+      location: 'panel',
+    });
+    expect(getViewRegistrations('panel').some((v) => v.id === `${pluginId}.hello`)).toBe(true);
+    disposable.dispose();
+    expect(getViewRegistrations('panel')).toHaveLength(0);
+  });
+
+  it('拒绝无前缀的视图 ID', () => {
+    expect(() =>
+      registerSandboxView(pluginId, session, { id: 'hello', location: 'panel' }),
+    ).toThrow('必须以');
+  });
+
+  it('拒绝含路径字符的视图 ID', () => {
+    expect(() => registerSandboxView(pluginId, session, { id: '../x', location: 'panel' })).toThrow(
+      '必须以',
+    );
+  });
+});

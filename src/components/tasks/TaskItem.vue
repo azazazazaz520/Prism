@@ -4,6 +4,7 @@ import type { Task } from '../../types';
 import { diagnosticsLogger } from '../../diagnostics/invoke-logged';
 import { getMenuRegistrations } from '../../plugin-api/menus-impl';
 import { useContextMenu } from '../../composables/useContextMenu';
+import { sanitizeIconMarkup } from '../../utils/plugin-icon';
 
 const props = defineProps<{
   task: Task;
@@ -447,8 +448,12 @@ async function handlePluginMenuAction(action: () => void | Promise<void>) {
                 @click="handlePluginMenuAction(reg.item.action)"
               >
                 <span class="plugin-menu-label">
-                  <!-- 插件提供的 SVG 图标 -->
-                  <span v-if="reg.item.icon" class="plugin-menu-icon" v-html="reg.item.icon"></span>
+                  <!-- 插件提供的 SVG 图标（经 DOMPurify SVG 白名单消毒，S-1） -->
+                  <span
+                    v-if="reg.item.icon"
+                    class="plugin-menu-icon"
+                    v-html="sanitizeIconMarkup(reg.item.icon)"
+                  ></span>
                   {{ reg.item.label }}
                 </span>
                 <span class="plugin-menu-badge">{{ reg.pluginId }}</span>

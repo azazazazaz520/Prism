@@ -31,6 +31,13 @@ describe('parseModule', () => {
     expect(deps).toContain('__prism_commands__');
   });
 
+  it('将 prism:menus import 重写为 __prism_menus__ 解构', () => {
+    const src = `import { menus } from 'prism:menus';`;
+    const { body, deps } = parseModule(src);
+    expect(body).toContain('const { menus } = __prism_menus__');
+    expect(deps).toContain('__prism_menus__');
+  });
+
   it('将 prism:tasks import 重写为 __prism_tasks__ 解构', () => {
     const src = `import { tasks } from 'prism:tasks';`;
     const { body, deps } = parseModule(src);
@@ -117,5 +124,21 @@ describe('parseModule', () => {
     const src = `import { ref, computed as c } from 'vue';`;
     const { body } = parseModule(src);
     expect(body).toContain('const { ref, computed: c } = __vue__');
+  });
+
+  it('所有映射变量均在沙箱工厂参数中（S-3 契约一致）', () => {
+    const cases: Array<[string, string]> = [
+      ['vue', '__vue__'],
+      ['prism:api', '__prism_api__'],
+      ['prism:commands', '__prism_commands__'],
+      ['prism:menus', '__prism_menus__'],
+      ['prism:tasks', '__prism_tasks__'],
+      ['prism:network', '__prism_network__'],
+    ];
+    for (const [from, varName] of cases) {
+      const { body } = parseModule(`import { x } from '${from}';`);
+      expect(body).toContain(`= ${varName}`);
+      expect(SANDBOX_PLUGIN_FACTORY_PARAMETERS).toContain(varName);
+    }
   });
 });

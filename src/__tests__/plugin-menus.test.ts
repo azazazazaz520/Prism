@@ -5,6 +5,7 @@ import {
   createMenusAPI,
   getMenuRegistrations,
   clearMenuRegistrations,
+  registerSandboxMenus,
 } from '../plugin-api/menus-impl';
 
 beforeEach(() => {
@@ -189,5 +190,45 @@ describe('Menus API', () => {
     const items = getMenuRegistrations('editor-context');
     await items[0].item.action();
     expect(called).toBe(true);
+  });
+});
+
+describe('registerSandboxMenus ID 前缀校验（H-6）', () => {
+  const pluginId = 'com.example.test';
+
+  it('接受带插件 ID 前缀的菜单项', () => {
+    const disposable = registerSandboxMenus(
+      pluginId,
+      'task-context',
+      [{ id: `${pluginId}.hello`, label: '测试' }],
+      async () => {},
+    );
+    expect(getMenuRegistrations('task-context').some((m) => m.id === `${pluginId}.hello`)).toBe(
+      true,
+    );
+    disposable.dispose();
+    expect(getMenuRegistrations('task-context')).toHaveLength(0);
+  });
+
+  it('拒绝无前缀的菜单 ID', () => {
+    expect(() =>
+      registerSandboxMenus(
+        pluginId,
+        'task-context',
+        [{ id: 'hello', label: '测试' }],
+        async () => {},
+      ),
+    ).toThrow('必须以');
+  });
+
+  it('拒绝含路径字符的菜单 ID', () => {
+    expect(() =>
+      registerSandboxMenus(
+        pluginId,
+        'task-context',
+        [{ id: '../x', label: '测试' }],
+        async () => {},
+      ),
+    ).toThrow('必须以');
   });
 });

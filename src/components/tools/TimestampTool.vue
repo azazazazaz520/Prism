@@ -173,7 +173,7 @@ function clearAll() {
 }
 
 .current-timestamp code {
-  font-family: 'Fira Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   font-weight: var(--font-weight-semibold);
   color: var(--accent);
   background: var(--accent-light);
@@ -274,7 +274,7 @@ function clearAll() {
 .pane-content {
   flex: 1;
   padding: var(--space-md);
-  font-family: 'Fira Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   font-size: var(--text-sm);
   line-height: 1.6;
   color: var(--text-primary);

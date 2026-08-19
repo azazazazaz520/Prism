@@ -116,12 +116,13 @@ pub fn set_notes_directory(
     }
     fs::remove_file(&test_file).ok();
 
+    // 先准备新监听器；配置持久化失败时，旧配置和旧监听器仍然保持有效。
+    let watcher = FileWatcher::start(app_handle, path.clone())?;
+
     state.with_config_mut(|config| {
         config.notes_dir = Some(path);
     })?;
 
-    let notes_dir = state.with_config(store::get_notes_dir);
-    let watcher = FileWatcher::start(app_handle, notes_dir);
     *state.file_watcher.lock().unwrap() = Some(watcher);
     Ok(())
 }

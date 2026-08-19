@@ -124,6 +124,58 @@ pub fn add(data: &mut store::DataStore, input: AddTaskInput) -> store::Task {
     task
 }
 
+/// 批量新增任务。全部参数先完成校验和规范化，再统一写入候选 DataStore。
+pub fn add_batch(
+    data: &mut store::DataStore,
+    inputs: Vec<AddTaskInput>,
+) -> Result<Vec<store::Task>, String> {
+    if inputs.is_empty() {
+        return Err("没有可导入的任务".into());
+    }
+
+    let normalized = inputs
+        .into_iter()
+        .enumerate()
+        .map(|(index, input)| normalize_batch_input(index, input))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(normalized
+        .into_iter()
+        .map(|input| add(data, input))
+        .collect())
+}
+
+fn normalize_batch_input(index: usize, mut input: AddTaskInput) -> Result<AddTaskInput, String> {
+    input.title = input.title.trim().to_string();
+    if input.title.is_empty() {
+        return Err(format!("第 {} 项任务标题为空", index + 1));
+    }
+
+    input.due_date = match input.due_date.take() {
+        Some(value) if value.trim().is_empty() => None,
+        Some(value) => {
+            let value = value.trim().to_string();
+            chrono::NaiveDate::parse_from_str(&value, "%Y-%m-%d")
+                .map_err(|_| format!("第 {} 项任务日期格式无效", index + 1))?;
+            Some(value)
+        }
+        None => None,
+    };
+
+    input.tags = input.tags.map(|tags| {
+        let mut normalized = Vec::new();
+        for tag in tags {
+            let tag = tag.trim().to_string();
+            if !tag.is_empty() && !normalized.contains(&tag) {
+                normalized.push(tag);
+            }
+        }
+        normalized
+    });
+
+    Ok(input)
+}
+
 /// 切换任务完成状态（自动记录完成/取消时间），返回更新后的任务快照
 pub fn toggle(data: &mut store::DataStore, id: &str) -> Option<store::Task> {
     let now = chrono::Utc::now().to_rfc3339();
@@ -249,5 +301,64 @@ pub fn clear_completed(data: &mut store::DataStore) {
 pub fn delete_tag(data: &mut store::DataStore, tag: &str) {
     for task in data.tasks.iter_mut() {
         task.tags.retain(|t| t != tag);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{add_batch, AddTaskInput};
+    use crate::store;
+
+    fn input(title: &str, due_date: Option<&str>) -> AddTaskInput {
+        AddTaskInput {
+            title: title.to_string(),
+            due_date: due_date.map(str::to_string),
+            tags: Some(vec![" 工作 ".into(), "工作".into(), " ".into()]),
+            important: Some(false),
+            pinned: Some(false),
+            is_daily: Some(false),
+            parent_id: None,
+        }
+    }
+
+    #[test]
+    fn add_batch_validates_all_items_before_mutating_store() {
+        let mut data = store::default_data_store();
+        let error = add_batch(
+            &mut data,
+            vec![input("第一项", None), input("  ", Some("2026-08-20"))],
+        )
+        .expect_err("空标题应阻止整批写入");
+
+        assert_eq!(error, "第 2 项任务标题为空");
+        assert!(data.tasks.is_empty());
+    }
+
+    #[test]
+    fn add_batch_normalizes_fields_and_returns_created_tasks() {
+        let mut data = store::default_data_store();
+        let created = add_batch(
+            &mut data,
+            vec![
+                input("  提交报告  ", Some("2026-08-20")),
+                input("复盘", None),
+            ],
+        )
+        .expect("有效任务应成功写入");
+
+        assert_eq!(created.len(), 2);
+        assert_eq!(data.tasks.len(), 2);
+        assert_eq!(created[0].title, "提交报告");
+        assert_eq!(created[0].tags, vec!["工作"]);
+    }
+
+    #[test]
+    fn add_batch_rejects_invalid_date_without_mutating_store() {
+        let mut data = store::default_data_store();
+        let error = add_batch(&mut data, vec![input("提交报告", Some("明天"))])
+            .expect_err("无效日期应被拒绝");
+
+        assert_eq!(error, "第 1 项任务日期格式无效");
+        assert!(data.tasks.is_empty());
     }
 }

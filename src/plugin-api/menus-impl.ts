@@ -64,6 +64,13 @@ export function registerSandboxMenus(
   items: SandboxMenuItem[],
   invoke: (id: string) => Promise<void>,
 ): Disposable {
+  // 沙箱路径与 legacy 路径保持一致：菜单 ID 必须以插件 ID 为前缀（H-6）
+  const prefix = `${pluginId}.`;
+  for (const item of items) {
+    if (!item.id || !item.id.startsWith(prefix)) {
+      throw new TypeError(`菜单 ID "${item.id}" 必须以 "${prefix}" 为前缀`);
+    }
+  }
   const registrations: MenuRegistration[] = items.map((item) => ({
     id: item.id,
     pluginId,

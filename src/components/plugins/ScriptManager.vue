@@ -2,7 +2,7 @@
 import { onMounted } from 'vue';
 import { useScriptRunner } from '../../composables/useScriptRunner';
 
-const { scripts, loadScripts, runScript } = useScriptRunner();
+const { scripts, loadScripts, rescanScripts, runScript, scanState, scanError } = useScriptRunner();
 
 onMounted(() => {
   loadScripts();
@@ -33,8 +33,29 @@ function statusClass(s: string): string {
   <div class="script-manager">
     <div class="sm-header">
       <h3 class="sm-title">脚本</h3>
-      <span class="sm-count">{{ scripts.length }} 个</span>
+      <div class="sm-header-actions">
+        <span class="sm-count">{{ scripts.length }} 个</span>
+        <button
+          type="button"
+          class="sm-scan-btn"
+          :disabled="scanState === 'scanning'"
+          @click="rescanScripts"
+        >
+          {{ scanState === 'scanning' ? '扫描中…' : '重新扫描' }}
+        </button>
+      </div>
     </div>
+
+    <p v-if="scanError" class="sm-scan-feedback sm-scan-error" role="alert">
+      扫描失败：{{ scanError }}
+    </p>
+    <p
+      v-else-if="scanState === 'success'"
+      class="sm-scan-feedback sm-scan-success"
+      aria-live="polite"
+    >
+      扫描完成
+    </p>
 
     <div v-if="scripts.length === 0" class="sm-empty">
       <div class="sm-empty-icon">
@@ -51,7 +72,7 @@ function statusClass(s: string): string {
         </svg>
       </div>
       <p class="sm-empty-text">
-        暂无脚本。将 .js 文件放入 <code>~/.prism/scripts/</code> 后点击重新扫描。
+        暂无脚本。将 .js 文件放入 <code>~/.prism/scripts/</code> 后点击“重新扫描”。
       </p>
       <p class="sm-empty-hint">
         脚本格式：以 <code>// ==PrismScript==</code> 开头，用 <code>// @permission</code> 声明权限
@@ -123,6 +144,63 @@ function statusClass(s: string): string {
   font-family: var(--font-mono);
   font-size: 10px;
   color: var(--text-disabled);
+}
+
+.sm-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.sm-scan-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent);
+  font-size: 10px;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-duration-hover) var(--motion-ease-standard),
+    color var(--motion-duration-hover) var(--motion-ease-standard),
+    opacity var(--motion-duration-hover) var(--motion-ease-standard);
+}
+
+.sm-scan-btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--bg-primary);
+}
+
+.sm-scan-btn:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+
+[data-theme='hud'] .sm-scan-btn {
+  border-radius: 0;
+  clip-path: polygon(
+    4px 0%,
+    100% 0%,
+    100% calc(100% - 4px),
+    calc(100% - 4px) 100%,
+    0% 100%,
+    0% 4px
+  );
+}
+
+.sm-scan-feedback {
+  font-size: 11px;
+  line-height: 1.5;
+  margin: -2px 0 0;
+}
+
+.sm-scan-success {
+  color: var(--accent);
+}
+
+.sm-scan-error {
+  color: var(--danger);
 }
 
 .sm-empty {

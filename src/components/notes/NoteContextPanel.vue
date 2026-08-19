@@ -33,7 +33,7 @@ function taskForReference(reference: TaskReference): Task | undefined {
     <template v-if="activeNotePath">
       <div class="context-heading">
         <div>
-          <span class="context-eyebrow">CONTEXT</span>
+          <span class="context-eyebrow">上下文</span>
           <h2>当前笔记</h2>
         </div>
         <span class="context-count">{{ taskReferences.length }}</span>
@@ -85,7 +85,7 @@ function taskForReference(reference: TaskReference): Task | undefined {
       </section>
     </template>
     <div v-else class="context-empty">
-      <span class="context-eyebrow">CONTEXT</span>
+      <span class="context-eyebrow">上下文</span>
       <h2>工作区概览</h2>
       <p>选择一篇笔记后，这里会显示任务、反向链接和笔记大纲。</p>
     </div>

@@ -150,7 +150,7 @@ async function copy() {
 }
 
 .uuid-text {
-  font-family: 'Fira Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   font-size: 18px;
   font-weight: var(--font-weight-semibold);
   color: var(--text-primary);

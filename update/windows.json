@@ -1,8 +1,8 @@
 {
-  "download_url": "https://github.com/azazazazaz520/Prism/releases/download/v0.4.4/Prism_0.4.4_x64-setup.exe",
-  "release_date": "2026-08-12T06:18:47.4730616Z",
-  "release_url": "https://github.com/azazazazaz520/Prism/releases/tag/v0.4.4",
-  "release_notes": "## Changes since v0.4.3\n\n- fix: 修复生产环境插件沙箱激活超时 (asd_fire)\n- chore: 同步稳定版更新清单 (github-actions[bot])",
-  "sha256": "bea62969486f45d340dd347197c64cc0e523757e67ba1f0509c2a15da45dd4bb",
-  "version": "0.4.4"
+  "release_url": "https://github.com/azazazazaz520/Prism/releases/tag/v0.4.5",
+  "download_url": "https://github.com/azazazazaz520/Prism/releases/download/v0.4.5/Prism_0.4.5_x64-setup.exe",
+  "release_notes": "## Changes since v0.4.4\n\n- feat: 接入离线 OCR 并优化候选布局 (asd_fire)\n- feat: 完善插件重扫与任务导入流程 (asd_fire)\n- fix(plugin): 修复沙箱视图切换未卸载旧实例 (asd_fire)\n- fix(plugin): 修复插件系统安全与沙箱问题 (asd_fire)\n- chore(ui): 统一字体变量并中文化界面文案 (asd_fire)\n- fix(config): 配置原子写入并容错文件监听失败 (asd_fire)\n- fix(notes): 统一协调笔记保存并完善保存状态反馈 (asd_fire)\n- chore: 同步稳定版更新清单 (github-actions[bot])",
+  "version": "0.4.5",
+  "release_date": "2026-08-19T04:15:29.2180117Z",
+  "sha256": "a1ee261c6962a7bc9f97030196fee9d37c9bd3b9dd3be44708a9400515197691"
 }

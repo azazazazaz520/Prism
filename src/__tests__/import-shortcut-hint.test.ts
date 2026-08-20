@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp, nextTick } from 'vue';
+import ImportFloating from '../components/overlays/ImportFloating.vue';
 
 const mocks = vi.hoisted(() => ({
   emit: vi.fn().mockResolvedValue(undefined),
@@ -77,14 +78,14 @@ describe('导入任务窗口', () => {
     document.body.appendChild(host);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     unmount?.();
+    await nextTick();
     host.remove();
     unmount = undefined;
   });
 
   it('默认状态下显示区域截图快捷键', async () => {
-    const { default: ImportFloating } = await import('../components/overlays/ImportFloating.vue');
     const app = createApp(ImportFloating);
     app.mount(host);
     unmount = () => app.unmount();
@@ -340,7 +341,6 @@ describe('导入任务窗口', () => {
   });
 
   async function mountImportWindow() {
-    const { default: ImportFloating } = await import('../components/overlays/ImportFloating.vue');
     const app = createApp(ImportFloating);
     app.mount(host);
     unmount = () => app.unmount();

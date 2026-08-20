@@ -33,6 +33,7 @@ import NoteQuickSwitcher from './NoteQuickSwitcher.vue';
 import NoteTreePanel from './NoteTreePanel.vue';
 import NoteWorkspaceBoard from './NoteWorkspaceBoard.vue';
 import NoteStatusBar from './NoteStatusBar.vue';
+import NoteRecoveryPanel from './NoteRecoveryPanel.vue';
 import NoteSidebarToggle from './NoteSidebarToggle.vue';
 import NoteContextPanel from './NoteContextPanel.vue';
 import { createEditorMenuItems } from './noteEditorMenus';
@@ -58,10 +59,19 @@ import {
 import { useNoteSidebarLayout } from '../../composables/useNoteSidebarLayout';
 import {
   beginNoteSelfWrite,
+  completeNoteSelfWrite,
   endNoteSelfWrite,
-  isNoteSelfWriting,
+  shouldIgnoreNoteSelfWriteEvent,
   type NoteSelfWriteToken,
 } from '../../composables/useNoteSelfWriteTracker';
+import {
+  deleteNoteRecovery,
+  listNoteRecoveries,
+  readNoteRecovery,
+  restoreNoteRecovery,
+  saveNoteRecovery,
+  type NoteRecoverySummary,
+} from '../../composables/useNoteRecovery';
 import { FILE_CHANGED_EXTERNALLY } from '../../utils/error-codes';
 import {
   createWorkspaceState,
@@ -263,6 +273,9 @@ interface ExportDocxResult {
 const notesDir = ref('');
 const recentWorkspaces = ref<string[]>([]);
 const workspaceMenuOpen = ref(false);
+const recoverySnapshots = ref<NoteRecoverySummary[]>([]);
+const recoveryPanelVisible = ref(false);
+const recoveryLoading = ref(false);
 
 /** 文件树中展开的文件夹路径集合 */
 const expanded = ref<Set<string>>(new Set(['inbox']));
@@ -662,6 +675,14 @@ async function presentNoteConflict(path: string) {
     }
 
     noteSaveController.cancel(path);
+    preserveNoteRecovery({
+      notePath: path,
+      content: document.content,
+      generation: document.generation,
+      documentMtime: document.mtime,
+      reason: 'conflict',
+      errorMessage: '检测到外部修改，已保留本地编辑内容',
+    });
     documentStore.setConflict(path, meta.content, meta.mtime);
     showNoteConflictPrompt(path);
   } catch (error) {
@@ -688,6 +709,8 @@ type NoteFileChangeEvent = {
   path: string;
   oldPath?: string;
   newPath?: string;
+  mtime?: string;
+  contentDigest?: string;
 };
 
 /** 外部重命名时先确认目标文件可读，再迁移编辑器状态，避免误删或覆盖内容。 */
@@ -879,6 +902,117 @@ function rememberWorkspace(path: string) {
   localStorage.setItem(RECENT_WORKSPACES_STORAGE_KEY, JSON.stringify(recentWorkspaces.value));
 }
 
+async function loadRecoverySnapshots() {
+  if (!notesDir.value) {
+    recoverySnapshots.value = [];
+    return;
+  }
+
+  recoveryLoading.value = true;
+  try {
+    const workspace = normalizeWorkspacePath(notesDir.value);
+    const snapshots = await listNoteRecoveries();
+    recoverySnapshots.value = snapshots.filter(
+      (snapshot) => normalizeWorkspacePath(snapshot.workspacePath) === workspace,
+    );
+  } catch (error) {
+    diagnosticsLogger.error('notes', 'notes.recovery_list_failed', '读取笔记恢复记录失败', error);
+    recoverySnapshots.value = [];
+  } finally {
+    recoveryLoading.value = false;
+  }
+}
+
+function preserveNoteRecovery(input: {
+  notePath: string;
+  content: string;
+  generation: number;
+  documentMtime: string | null;
+  reason: 'conflict' | 'save-failed' | 'external-delete';
+  errorMessage?: string | null;
+}) {
+  void saveNoteRecovery(input)
+    .then(() => loadRecoverySnapshots())
+    .catch((error) => {
+      diagnosticsLogger.error(
+        'notes',
+        'notes.recovery_save_failed',
+        '保存笔记恢复记录失败',
+        error,
+        {
+          path: input.notePath,
+          reason: input.reason,
+        },
+      );
+    });
+}
+
+async function restoreRecovery(id: string) {
+  const snapshot = recoverySnapshots.value.find((item) => item.id === id);
+  if (!snapshot) return;
+
+  const currentDocument = documentStore.documents.get(snapshot.notePath);
+  if (currentDocument?.dirty) {
+    const confirmed = await showConfirm(
+      '覆盖当前未保存内容',
+      `「${snapshot.notePath}」当前仍有未保存内容。恢复快照会替换当前编辑内容，是否继续？`,
+      '继续恢复',
+      true,
+    );
+    if (!confirmed) return;
+  }
+
+  recoveryLoading.value = true;
+  let restoreToken: NoteSelfWriteToken | null = null;
+  try {
+    if (currentDocument?.dirty) noteSaveController.cancel(snapshot.notePath);
+    const recovery = await readNoteRecovery(id);
+    const token = beginNoteSelfWrite(snapshot.notePath, { content: recovery.content });
+    restoreToken = token;
+    const result = await restoreNoteRecovery(id);
+    completeNoteSelfWrite(snapshot.notePath, token, {
+      mtime: result.mtime,
+      content: recovery.content,
+    });
+    await loadTree();
+    await openPathInActivePane(snapshot.notePath);
+    await loadRecoverySnapshots();
+    recoveryPanelVisible.value = false;
+    showStatus(
+      result.snapshotDeleted
+        ? `已恢复「${snapshot.notePath}」`
+        : `已恢复「${snapshot.notePath}」，但恢复记录删除失败`,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('NOTE_RECOVERY_CONFLICT')) {
+      showStatus('恢复被阻止：笔记在创建恢复记录后又发生了变化');
+    } else {
+      showStatus(`恢复笔记失败：${message}`);
+    }
+    diagnosticsLogger.error('notes', 'notes.recovery_restore_failed', '恢复笔记失败', error, {
+      id,
+      path: snapshot.notePath,
+    });
+  } finally {
+    if (restoreToken !== null) endNoteSelfWrite(snapshot.notePath, restoreToken);
+    recoveryLoading.value = false;
+  }
+}
+
+async function removeRecovery(id: string) {
+  try {
+    await deleteNoteRecovery(id);
+    await loadRecoverySnapshots();
+    showStatus('已删除恢复记录');
+  } catch (error) {
+    showStatus(`删除恢复记录失败：${error instanceof Error ? error.message : String(error)}`);
+    diagnosticsLogger.error('notes', 'notes.recovery_delete_failed', '删除恢复记录失败', error, {
+      id,
+    });
+  }
+}
+
 function recentNotesStorageKey() {
   return `${NOTE_RECENT_STORAGE_PREFIX}${normalizeWorkspacePath(notesDir.value)}`;
 }
@@ -995,8 +1129,10 @@ async function switchNotesWorkspace(selected: string) {
     noteContentCache.clear();
     documentStore.clearAll();
     resetNotes();
+    recoverySnapshots.value = [];
     expanded.value = new Set(['inbox']);
     await loadTree();
+    await loadRecoverySnapshots();
   } catch (e) {
     diagnosticsLogger.error('notes', 'notes.switch_workspace_failed', '切换笔记工作区失败', e);
     showStatus(`切换笔记工作区失败: ${e}`);
@@ -1342,12 +1478,30 @@ async function createEmptyNoteFile(path: string) {
     snapshot: { content: '', expectedMtime: null },
     source: 'editor',
     write: async (request) => {
-      selfWriteToken = beginNoteSelfWrite(path);
-      return invoke<string>('write_note', {
+      const token = beginNoteSelfWrite(path, {
+        content: request.content,
+        expectedMtime: request.expectedMtime,
+      });
+      selfWriteToken = token;
+      const mtime = await invoke<string>('write_note', {
         path,
         content: request.content,
         expectedMtime: request.expectedMtime,
       });
+      completeNoteSelfWrite(path, token, { mtime, content: request.content });
+      return mtime;
+    },
+    onResult: (result) => {
+      if (result.status === 'failed') {
+        preserveNoteRecovery({
+          notePath: path,
+          content: '',
+          generation: result.generation,
+          documentMtime: null,
+          reason: 'save-failed',
+          errorMessage: result.error.message,
+        });
+      }
     },
     onSettled: () => {
       if (selfWriteToken !== null) endNoteSelfWrite(path, selfWriteToken);
@@ -1445,12 +1599,18 @@ function queueNoteSave(
     source: 'editor',
     write: async (request) => {
       documentStore.markSaving(path, request.generation);
-      selfWriteToken = beginNoteSelfWrite(path);
-      return invoke<string>('write_note', {
+      const token = beginNoteSelfWrite(path, {
+        content: request.content,
+        expectedMtime: request.expectedMtime,
+      });
+      selfWriteToken = token;
+      const mtime = await invoke<string>('write_note', {
         path,
         content: request.content,
         expectedMtime: request.expectedMtime,
       });
+      completeNoteSelfWrite(path, token, { mtime, content: request.content });
+      return mtime;
     },
     readConflict: async () => {
       const meta = await invoke<{ content: string; mtime: string }>('read_note_meta', { path });
@@ -1462,9 +1622,25 @@ function queueNoteSave(
         setNoteContent(path, snapshot.content);
         documentStore.markSaved(path, result.mtime, result.generation);
       } else if (result.status === 'conflict') {
+        preserveNoteRecovery({
+          notePath: path,
+          content: result.localContent,
+          generation: result.generation,
+          documentMtime: snapshot.expectedMtime,
+          reason: 'conflict',
+          errorMessage: '磁盘内容已发生变化，未覆盖外部修改',
+        });
         documentStore.setConflict(path, result.diskContent, result.diskMtime, result.generation);
         showNoteConflictPrompt(path);
       } else {
+        preserveNoteRecovery({
+          notePath: path,
+          content: snapshot.content,
+          generation: result.generation,
+          documentMtime: snapshot.expectedMtime,
+          reason: 'save-failed',
+          errorMessage: result.error.message,
+        });
         documentStore.markSaveFailed(path, result.generation, result.error.cause);
         diagnosticsLogger.error('notes', 'notes.save_failed', '保存笔记失败', result.error.cause, {
           path,
@@ -1883,10 +2059,12 @@ let fileTreeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** 处理文件系统监听事件 */
 function handleFileChangeEvent(event: NoteFileChangeEvent) {
+  const version = { mtime: event.mtime, contentDigest: event.contentDigest };
+  if (shouldIgnoreNoteSelfWriteEvent(event.path, event.kind, version)) return;
   if (
-    isNoteSelfWriting(event.path) ||
-    (event.oldPath ? isNoteSelfWriting(event.oldPath) : false) ||
-    (event.newPath ? isNoteSelfWriting(event.newPath) : false)
+    event.kind === 'rename' &&
+    event.newPath &&
+    shouldIgnoreNoteSelfWriteEvent(event.newPath, event.kind, version)
   ) {
     return;
   }
@@ -1904,7 +2082,18 @@ function handleFileChangeEvent(event: NoteFileChangeEvent) {
       break;
     case 'remove':
       if (documentStore.documents.get(event.path)?.dirty) {
+        const document = documentStore.ensure(event.path);
+        const generation = document.generation;
         noteSaveController.cancel(event.path);
+        documentStore.markSaveFailed(event.path, generation, new Error('文件已被外部删除'));
+        preserveNoteRecovery({
+          notePath: event.path,
+          content: document.content,
+          generation: document.generation,
+          documentMtime: document.mtime,
+          reason: 'external-delete',
+          errorMessage: '文件已被外部删除，已保留删除前的本地内容',
+        });
         diagnosticsLogger.warn(
           'notes',
           'notes.external_remove_preserved',
@@ -1989,6 +2178,7 @@ async function initializeNotesWorkspace() {
   await loadNotesDir();
   loadRecentNotePaths();
   await loadTree();
+  await loadRecoverySnapshots();
   await restoreNoteSession();
   void refreshIndex();
 }
@@ -2128,7 +2318,9 @@ onUnmounted(() => {
             :saving="saving"
             :save-status="activeSaveStatus"
             :save-error="activeSaveError"
+            :recovery-count="recoverySnapshots.length"
             @retry="retrySave"
+            @open-recoveries="recoveryPanelVisible = true"
           />
         </div>
         <NoteContextPanel
@@ -2187,6 +2379,15 @@ onUnmounted(() => {
       :recent-paths="recentNotePaths"
       @select="selectQuickSwitcherPath"
       @cancel="closeNoteQuickSwitcher"
+    />
+
+    <NoteRecoveryPanel
+      :visible="recoveryPanelVisible"
+      :loading="recoveryLoading"
+      :snapshots="recoverySnapshots"
+      @close="recoveryPanelVisible = false"
+      @restore="restoreRecovery"
+      @remove="removeRecovery"
     />
 
     <Transition name="motion-fade">

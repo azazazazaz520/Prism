@@ -2,6 +2,7 @@ use std::fs;
 use tauri::{AppHandle, State};
 
 use crate::file_watcher::FileWatcher;
+use crate::note_recovery;
 use crate::note_service;
 use crate::store;
 use crate::AppState;
@@ -125,4 +126,55 @@ pub fn set_notes_directory(
 
     *state.file_watcher.lock().unwrap() = Some(watcher);
     Ok(())
+}
+
+/// 保存笔记恢复快照。快照写入应用数据目录，不进入用户笔记工作区。
+#[tauri::command]
+pub fn save_note_recovery(
+    note_path: String,
+    content: String,
+    generation: u64,
+    document_mtime: Option<String>,
+    reason: String,
+    error_message: Option<String>,
+    state: State<AppState>,
+) -> Result<note_recovery::NoteRecoverySummary, String> {
+    let workspace_path = state.with_config(store::get_notes_dir);
+    note_recovery::save(
+        &workspace_path,
+        note_path,
+        content,
+        generation,
+        document_mtime,
+        reason,
+        error_message,
+    )
+}
+
+/// 列出应用数据目录中可恢复的笔记快照。
+#[tauri::command]
+pub fn list_note_recoveries() -> Result<Vec<note_recovery::NoteRecoverySummary>, String> {
+    note_recovery::list()
+}
+
+/// 读取指定恢复快照的完整正文。
+#[tauri::command]
+pub fn read_note_recovery(id: String) -> Result<note_recovery::NoteRecoverySnapshot, String> {
+    note_recovery::read(&id)
+}
+
+/// 删除指定恢复快照。
+#[tauri::command]
+pub fn delete_note_recovery(id: String) -> Result<(), String> {
+    note_recovery::delete(&id)
+}
+
+/// 按快照基准版本恢复笔记，并校验恢复后的正文。
+#[tauri::command]
+pub fn restore_note_recovery(
+    id: String,
+    state: State<AppState>,
+) -> Result<note_recovery::NoteRecoveryRestoreResult, String> {
+    let workspace_path = state.with_config(store::get_notes_dir);
+    note_recovery::restore(&id, &workspace_path)
 }

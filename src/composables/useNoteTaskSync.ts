@@ -9,9 +9,14 @@ import {
   updateTaskReferences,
   type TaskReferenceIndex,
 } from '../notes/task-references';
-import { beginNoteSelfWrite, endNoteSelfWrite } from './useNoteSelfWriteTracker';
+import {
+  beginNoteSelfWrite,
+  completeNoteSelfWrite,
+  endNoteSelfWrite,
+} from './useNoteSelfWriteTracker';
 import { useNoteSaveController, type NoteSaveResult } from './useNoteSaveController';
 import { useNoteDocumentStore } from './useNoteDocumentStore';
+import { saveNoteRecovery } from './useNoteRecovery';
 
 const noteContents = ref<Record<string, string>>({});
 const isIndexing = ref(false);
@@ -145,12 +150,18 @@ export function useNoteTaskSync(
       source: 'task-projection',
       write: async (request) => {
         documentStore.markSaving(path, request.generation);
-        selfWriteToken = beginNoteSelfWrite(path);
-        return invoke<string>('write_note', {
+        const token = beginNoteSelfWrite(path, {
+          content: request.content,
+          expectedMtime: request.expectedMtime,
+        });
+        selfWriteToken = token;
+        const mtime = await invoke<string>('write_note', {
           path,
           content: request.content,
           expectedMtime: request.expectedMtime,
         });
+        completeNoteSelfWrite(path, token, { mtime, content: request.content });
+        return mtime;
       },
       readConflict: async () => {
         const meta = await invoke<{ content: string; mtime: string }>('read_note_meta', { path });
@@ -160,8 +171,24 @@ export function useNoteTaskSync(
         if (result.status === 'saved') {
           documentStore.markSaved(path, result.mtime, result.generation);
         } else if (result.status === 'conflict') {
+          void saveNoteRecovery({
+            notePath: path,
+            content: result.localContent,
+            generation: result.generation,
+            documentMtime: expectedMtime,
+            reason: 'conflict',
+            errorMessage: '任务投影保存时检测到外部修改',
+          }).catch(() => undefined);
           documentStore.setConflict(path, result.diskContent, result.diskMtime, result.generation);
         } else {
+          void saveNoteRecovery({
+            notePath: path,
+            content,
+            generation: result.generation,
+            documentMtime: expectedMtime,
+            reason: 'save-failed',
+            errorMessage: result.error.message,
+          }).catch(() => undefined);
           documentStore.markSaveFailed(path, result.generation, result.error.cause);
         }
       },

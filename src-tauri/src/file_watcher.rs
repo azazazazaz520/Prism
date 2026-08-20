@@ -7,9 +7,10 @@
 
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
 
 const FILE_CHANGE_EVENT: &str = "notes://file-changed";
@@ -30,6 +31,12 @@ pub struct FileChangeEvent {
     /// 重命名后的相对路径，仅在 `rename` 事件中存在。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub new_path: Option<String>,
+    /// 事件发生后文件的修改时间，使用字符串避免 JavaScript 精度损失。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mtime: Option<String>,
+    /// 事件发生后文件内容的轻量指纹，用于关联延迟到达的自身写入事件。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_digest: Option<String>,
 }
 
 struct PendingRename {
@@ -121,7 +128,7 @@ fn handle_file_event(
         match mode {
             notify::event::RenameMode::Both => {
                 if let Some((old_path, new_path)) = rename_paths(&event.paths, notes_dir) {
-                    emit_rename(app_handle, old_path, new_path);
+                    emit_rename(app_handle, notes_dir, old_path, new_path);
                 }
             }
             notify::event::RenameMode::From => {
@@ -145,7 +152,7 @@ fn handle_file_event(
                             relative_markdown_path(&rename.path, notes_dir),
                             relative_markdown_path(new_path, notes_dir),
                         ) {
-                            emit_rename(app_handle, old_path, new_path);
+                            emit_rename(app_handle, notes_dir, old_path, new_path);
                         }
                     }
                 } else if let Some(new_path) = event
@@ -153,7 +160,7 @@ fn handle_file_event(
                     .first()
                     .and_then(|path| relative_markdown_path(path, notes_dir))
                 {
-                    emit_change(app_handle, "create", new_path);
+                    emit_change(app_handle, notes_dir, "create", new_path);
                 }
             }
             notify::event::RenameMode::Any | notify::event::RenameMode::Other => {}
@@ -170,32 +177,66 @@ fn handle_file_event(
             continue;
         };
 
-        emit_change(app_handle, kind, relative_path);
+        emit_change(app_handle, notes_dir, kind, relative_path);
     }
 }
 
-fn emit_change(app_handle: &AppHandle, kind: &str, path: String) {
+fn emit_change(app_handle: &AppHandle, notes_dir: &Path, kind: &str, path: String) {
+    let (mtime, content_digest) = if kind == "remove" {
+        (None, None)
+    } else {
+        file_version(&notes_dir.join(&path))
+    };
     let change = FileChangeEvent {
         kind: kind.to_string(),
         path,
         old_path: None,
         new_path: None,
+        mtime,
+        content_digest,
     };
     if let Err(error) = app_handle.emit(FILE_CHANGE_EVENT, change) {
         eprintln!("[prism] 文件监听事件发送失败: {error}");
     }
 }
 
-fn emit_rename(app_handle: &AppHandle, old_path: String, new_path: String) {
+fn emit_rename(app_handle: &AppHandle, notes_dir: &Path, old_path: String, new_path: String) {
+    let (mtime, content_digest) = file_version(&notes_dir.join(&new_path));
     let change = FileChangeEvent {
         kind: "rename".to_string(),
         path: new_path.clone(),
         old_path: Some(old_path),
         new_path: Some(new_path),
+        mtime,
+        content_digest,
     };
     if let Err(error) = app_handle.emit(FILE_CHANGE_EVENT, change) {
         eprintln!("[prism] 文件重命名事件发送失败: {error}");
     }
+}
+
+fn file_version(path: &Path) -> (Option<String>, Option<String>) {
+    let mtime = fs::metadata(path)
+        .ok()
+        .and_then(|metadata| metadata.modified().ok())
+        .map(|modified| {
+            modified
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+                .to_string()
+        });
+    let content_digest = fs::read(path).ok().map(|content| content_digest(&content));
+    (mtime, content_digest)
+}
+
+fn content_digest(content: &[u8]) -> String {
+    let mut hash = 0xcbf29ce484222325u64;
+    for byte in content {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    format!("{hash:016x}")
 }
 
 fn rename_paths(paths: &[PathBuf], notes_dir: &Path) -> Option<(String, String)> {
@@ -243,6 +284,12 @@ mod tests {
         assert_eq!(classify_event(&metadata), None);
         assert_eq!(classify_event(&content), Some("modify"));
         assert_eq!(classify_event(&rename), None);
+    }
+
+    #[test]
+    fn content_digest_is_stable_for_same_bytes() {
+        assert_eq!(content_digest(b"Prism"), content_digest(b"Prism"));
+        assert_ne!(content_digest(b"Prism"), content_digest(b"prism"));
     }
 
     #[test]

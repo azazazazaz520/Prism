@@ -11,6 +11,7 @@ use tauri::{Emitter, Manager, Runtime, UriSchemeResponder};
 pub(crate) mod ai;
 pub(crate) mod logging;
 pub(crate) mod models;
+pub(crate) mod note_recovery;
 pub(crate) mod note_service;
 pub(crate) mod persistence;
 pub(crate) mod plugin_protocol;
@@ -387,6 +388,11 @@ pub fn run() {
             commands::notes::rename_note_entry,
             commands::notes::get_notes_directory,
             commands::notes::set_notes_directory,
+            commands::notes::save_note_recovery,
+            commands::notes::list_note_recoveries,
+            commands::notes::read_note_recovery,
+            commands::notes::delete_note_recovery,
+            commands::notes::restore_note_recovery,
             // AI 命令 (commands::ai)
             commands::ai::ai_execute,
             commands::ai::ai_overdue_suggest,

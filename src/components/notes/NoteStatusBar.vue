@@ -8,16 +8,20 @@ const props = withDefaults(
     saving: boolean;
     saveStatus?: 'idle' | 'scheduled' | 'saving' | 'saved' | 'failed' | 'conflict';
     saveError?: string | null;
+    recoveryCount?: number;
   }>(),
   {
     saveStatus: 'idle',
     saveError: null,
+    recoveryCount: 0,
   },
 );
 
 const emit = defineEmits<{
   /** 保存失败后用户点击“重试”按钮，由父组件立即重新保存 */
   retry: [];
+  /** 用户打开笔记恢复列表 */
+  'open-recoveries': [];
 }>();
 </script>
 
@@ -48,6 +52,15 @@ const emit = defineEmits<{
       @click="emit('retry')"
     >
       重试
+    </button>
+    <button
+      v-if="props.recoveryCount > 0"
+      type="button"
+      class="statusbar-recovery"
+      :title="`${props.recoveryCount} 条可恢复记录`"
+      @click="emit('open-recoveries')"
+    >
+      恢复记录 {{ props.recoveryCount }}
     </button>
   </div>
 </template>
@@ -121,5 +134,22 @@ const emit = defineEmits<{
   border-color: var(--accent);
   background: var(--accent-light);
   color: var(--accent-hover);
+}
+
+.statusbar-recovery {
+  flex-shrink: 0;
+  padding: 1px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.statusbar-recovery:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 </style>

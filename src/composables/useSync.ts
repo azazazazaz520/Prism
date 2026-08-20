@@ -7,10 +7,39 @@ import { diagnosticsLogger } from '../diagnostics/invoke-logged';
 /** 离线操作队列：网络断开时暂存本地，恢复后批量推送 */
 const OFFLINE_QUEUE_KEY = 'prism_offline_queue';
 
-interface OfflineQueueItem {
+export interface OfflineQueueItem {
   type: 'upsert' | 'delete';
   table: string;
   data: Record<string, unknown>;
+}
+
+/**
+ * 执行单条离线操作的结果。Supabase 的请求失败可能通过返回 error 表示，
+ * 也可能由适配层直接抛出异常，因此调用方不能只依赖 Promise reject。
+ */
+export interface OfflineQueueExecutionResult {
+  error?: unknown | null;
+}
+
+/**
+ * 执行一批离线操作并返回未成功消费的队列项。
+ *
+ * 该函数不修改全局队列，便于在浏览器测试中验证“返回 error 也必须保留”的契约。
+ */
+export async function flushOfflineQueueItems(
+  queue: readonly OfflineQueueItem[],
+  execute: (item: OfflineQueueItem) => Promise<OfflineQueueExecutionResult | void>,
+): Promise<OfflineQueueItem[]> {
+  const failedItems: OfflineQueueItem[] = [];
+  for (const item of queue) {
+    try {
+      const result = await execute(item);
+      if (result?.error) throw result.error;
+    } catch {
+      failedItems.push(item);
+    }
+  }
+  return failedItems;
 }
 
 function loadOfflineQueue(): OfflineQueueItem[] {
@@ -29,6 +58,27 @@ function persistOfflineQueue(queue: OfflineQueueItem[]) {
     offlinePersistTimer = null;
     localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(offlineQueue));
   }, 100);
+}
+
+/**
+ * 恢复队列项中的当前身份字段。
+ *
+ * 启动期间可能先产生队列项、后恢复同步 Profile。此时旧载荷中的
+ * `profile_id: null` 会把共享任务当作仅用户私有任务重放，进而无法通过
+ * 共享任务的 RLS 更新检查。已有非空 Profile 归属必须保留，避免切换同步
+ * Profile 时误改动历史任务的归属。
+ */
+export function normalizeOfflineQueueItem(
+  item: OfflineQueueItem,
+  profileId: string | null,
+  uid: string | undefined,
+) {
+  const data = { ...item.data };
+  if (uid) data.user_id = uid;
+  if (profileId && data.profile_id == null) {
+    data.profile_id = profileId;
+  }
+  return { ...item, data };
 }
 
 const offlineQueue: OfflineQueueItem[] = loadOfflineQueue();
@@ -92,9 +142,7 @@ export function useSync() {
 
   /** 监听登录状态变化，刷新离线队列 */
   watch(isLoggedIn, (val) => {
-    if (val) {
-      flushOfflineQueue();
-    } else {
+    if (!val) {
       currentProfileId.value = null;
       syncStatus.value = 'idle';
     }
@@ -105,7 +153,9 @@ export function useSync() {
   async function pushTask(task: Task): Promise<void> {
     const uid = userId();
     if (!uid) return;
-    const profileId = getProfileId();
+    // 已关联任务的归属优先于当前 Profile，防止启动恢复尚未完成时将共享任务
+    // 写成 profile_id=null；新建的本地任务再使用当前设备的 Profile。
+    const profileId = task.profile_id ?? getProfileId();
     const supabase = getSupabaseClient();
 
     if (!isOnline.value) {
@@ -170,7 +220,7 @@ export function useSync() {
   async function pushDailyCompletion(dc: DailyCompletion): Promise<void> {
     const uid = userId();
     if (!uid) return;
-    const profileId = getProfileId();
+    const profileId = dc.profile_id ?? getProfileId();
     const supabase = getSupabaseClient();
 
     if (!isOnline.value) {
@@ -432,27 +482,32 @@ export function useSync() {
   async function flushOfflineQueue(): Promise<void> {
     if (offlineQueue.length === 0) return;
     const supabase = getSupabaseClient();
+    const uid = userId();
 
     syncStatus.value = 'syncing';
-    const queue = [...offlineQueue];
+    const queue = offlineQueue.map((item) =>
+      normalizeOfflineQueueItem(item, currentProfileId.value, uid),
+    );
     offlineQueue.length = 0;
     persistOfflineQueue(offlineQueue);
 
-    for (const item of queue) {
+    const failedItems = await flushOfflineQueueItems(queue, async (item) => {
+      if (item.type === 'delete') {
+        return supabase.from(item.table).delete().match(item.data);
+      }
+      return supabase.from(item.table).upsert(item.data);
+    });
+
+    for (const item of failedItems) {
       try {
-        if (item.type === 'delete') {
-          await supabase.from(item.table).delete().match(item.data);
-        } else {
-          await supabase.from(item.table).upsert(item.data);
-        }
-      } catch (e) {
         offlineQueue.push(item);
         persistOfflineQueue(offlineQueue);
         diagnosticsLogger.warn('sync', 'sync.offline_queue_item_failed', '离线队列推送失败', {
           type: item.type,
           table: item.table,
-          error: e instanceof Error ? e.message : String(e),
         });
+      } catch {
+        // 队列持久化失败不应阻止其他失败项继续回到内存队列。
       }
     }
 

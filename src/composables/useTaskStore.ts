@@ -88,6 +88,7 @@ export function useTaskStore() {
     lastSyncAt,
     offlineQueueCount,
     getProfileId,
+    flushOfflineQueue,
   } = useSync();
   const syncCode = useSyncCode();
   let syncPromise: Promise<void> | null = null;
@@ -428,29 +429,33 @@ export function useTaskStore() {
 
         if (!isLoggedIn.value) return;
 
-        for (const task of pendingResetTasks.value) {
-          pushTask(task).catch((e) =>
-            diagnosticsLogger.warn('sync', 'sync.reset_daily_push_failed', '每日任务重置推送失败', {
-              task_id: task.id,
-              error: e instanceof Error ? e.message : String(e),
-            }),
-          );
-        }
-        pendingResetTasks.value = [];
-
         const profileRestored = await syncCode.restoreProfile();
         if (profileRestored) {
-          syncCode
-            .mergeLocalToProfile(getProfileId()!)
-            .catch((e) =>
-              diagnosticsLogger.warn(
-                'sync',
-                'sync.merge_local_to_profile_failed',
-                '合并本地任务到远端 profile 失败',
-                { error: e instanceof Error ? e.message : String(e) },
+          // 必须先恢复 Profile 及当前匿名用户的成员关系，再推送跨天重置任务。
+          // 否则 profile_id 可能仍为 null，导致共享任务被降级为私有任务。
+          const resetTasks = pendingResetTasks.value;
+          pendingResetTasks.value = [];
+          await Promise.all(
+            resetTasks.map((task) =>
+              pushTask(task).catch((e) =>
+                diagnosticsLogger.warn(
+                  'sync',
+                  'sync.reset_daily_push_failed',
+                  '每日任务重置推送失败',
+                  {
+                    task_id: task.id,
+                    error: e instanceof Error ? e.message : String(e),
+                  },
+                ),
               ),
-            );
+            ),
+          );
+
+          await syncCode.mergeLocalToProfile(getProfileId()!);
         }
+        // 没有同步 Profile 时也要保留原有的 user_id 队列语义；有 Profile
+        // 时则在 Profile 恢复之后再重放，避免启动竞态载荷污染共享任务。
+        if (navigator.onLine) await flushOfflineQueue();
 
         await initSync();
         await pullRemoteAndMerge();

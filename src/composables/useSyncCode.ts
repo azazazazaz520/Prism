@@ -26,7 +26,7 @@ const pairError = ref<string | null>(null);
 
 export function useSyncCode() {
   const { user, isLoggedIn } = useAuth();
-  const { setProfileId, getProfileId } = useSync();
+  const { setProfileId, getProfileId, flushOfflineQueue } = useSync();
 
   /** 获取伪随机 UUID */
   function generateUUID(): string {
@@ -132,11 +132,12 @@ export function useSyncCode() {
       if (unlinkedTasks.length === 0) return;
 
       for (const task of unlinkedTasks) {
-        await supabase.from('tasks').upsert({
+        const { error } = await supabase.from('tasks').upsert({
           ...task,
           profile_id: profileId,
           user_id: user.value.id,
         });
+        if (error) throw error;
       }
     } catch (e) {
       diagnosticsLogger.warn(
@@ -150,61 +151,41 @@ export function useSyncCode() {
     }
   }
 
-  /**
-   * 确保当前用户在 user_profiles 中有记录。
-   * 匿名登录 session 过期/重建后 auth.uid() 会变化，
-   * 若 restoreProfile 只恢复 profile_id 而不重新关联用户，
-   * RLS 会拒绝后续 push 操作。
-   * 失败时静默忽略，由离线队列兜底。
-   */
-  async function ensureProfileMembership(syncCode: string): Promise<void> {
-    if (!user.value) return;
-
-    try {
-      await pairProfile('join', syncCode);
-    } catch (e) {
-      diagnosticsLogger.warn(
-        'sync',
-        'sync.ensure_profile_membership_failed',
-        '确保同步 profile 成员关系失败',
-        {
-          error: e instanceof Error ? e.message : String(e),
-        },
-      );
-    }
-  }
-
   /** 恢复已配对的 profile（启动时调用）
-   *  优先使用本地存储的 profile_id（离线安全），
-   *  仅当本地无 profile_id 时才查询 Supabase 验证。
-   *  恢复后异步确保 user_profiles 成员关系，
-   *  防止匿名 session 变化导致 RLS 拒绝后续操作。 */
+   *  在线时必须等待受保护的配对接口完成成员关系恢复，
+   *  防止匿名 session 变化或启动竞态导致后续 RLS 写入被拒绝；
+   *  离线时才使用本地 profile_id 继续保留本地优先与离线队列语义。 */
   async function restoreProfile(): Promise<boolean> {
     const config = await getSyncConfig();
     if (!config.sync_code) return false;
 
-    // 本地已有 profile_id → 直接使用，无需网络验证
-    if (config.profile_id) {
-      setProfileId(config.profile_id);
-      // 异步确保当前用户仍在 user_profiles 中
-      // fire-and-forget — 失败由 pushTask 离线队列兜底
-      ensureProfileMembership(config.sync_code);
-      return true;
+    // 网络不可用时不能调用 Edge Function，但仍需保留本地 Profile，
+    // 使任务修改进入带有正确 profile_id 的离线队列。
+    if (!navigator.onLine) {
+      if (config.profile_id) {
+        setProfileId(config.profile_id);
+        return true;
+      }
+      return false;
     }
 
-    // 本地无 profile_id → 通过受保护接口恢复（仅在线时可用，5s 超时）
     try {
-      const query = pairProfile('join', config.sync_code);
-      const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 5_000),
-      );
-      const profileId = await Promise.race([query, timeout]);
+      // 无论本地是否已有 profile_id，都重新 join 一次：该接口同时确保
+      // 当前匿名用户在 user_profiles 中有成员关系，而不是只恢复一个旧 ID。
+      const profileId = await pairProfile('join', config.sync_code);
 
-      // 回填本地配置，下次启动可离线恢复
-      await invoke('set_sync_config', { syncCode: config.sync_code, profileId });
+      if (profileId !== config.profile_id) {
+        await invoke('set_sync_config', { syncCode: config.sync_code, profileId });
+      }
       setProfileId(profileId);
+      // 认证恢复后再消费旧队列，避免用未恢复的身份字段重放任务。
+      await flushOfflineQueue();
       return true;
-    } catch {
+    } catch (e) {
+      setProfileId(null);
+      diagnosticsLogger.warn('sync', 'sync.restore_profile_failed', '恢复同步 profile 失败', {
+        error: e instanceof Error ? e.message : String(e),
+      });
       return false;
     }
   }

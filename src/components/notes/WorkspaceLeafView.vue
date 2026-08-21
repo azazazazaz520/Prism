@@ -533,15 +533,32 @@ defineExpose({
       />
       <div v-else class="split-pane-empty">
         <div class="split-pane-welcome">
-          <button class="split-pane-welcome-btn" @click="emit('create-note', leaf.id)">
-            新建笔记 <span>(Ctrl + N)</span>
-          </button>
-          <button class="split-pane-welcome-btn" @click="emit('open-workspace')">
-            打开工作区 <span>(Ctrl + O)</span>
-          </button>
-          <button class="split-pane-welcome-btn" @click="emit('close-leaf', leaf.id)">
-            关闭标签页
-          </button>
+          <div class="split-pane-welcome-eyebrow">笔记工作区</div>
+          <div class="split-pane-welcome-title">从一篇笔记开始</div>
+          <p class="split-pane-welcome-description">新建笔记，或打开已有的笔记工作区。</p>
+          <div class="split-pane-welcome-actions">
+            <button
+              type="button"
+              class="split-pane-welcome-btn split-pane-welcome-btn-primary"
+              @click="emit('create-note', leaf.id)"
+            >
+              新建笔记 <span>(Ctrl + N)</span>
+            </button>
+            <button
+              type="button"
+              class="split-pane-welcome-btn split-pane-welcome-btn-secondary"
+              @click="emit('open-workspace')"
+            >
+              打开工作区 <span>(Ctrl + O)</span>
+            </button>
+            <button
+              type="button"
+              class="split-pane-welcome-btn split-pane-welcome-btn-tertiary"
+              @click="emit('close-leaf', leaf.id)"
+            >
+              关闭标签页
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -950,23 +967,101 @@ defineExpose({
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
+  width: min(100%, 300px);
+}
+
+.workspace-leaf-view .split-pane-welcome-eyebrow {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.workspace-leaf-view .split-pane-welcome-title {
+  color: var(--text-primary);
+  font-size: var(--text-h2);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.4;
+}
+
+.workspace-leaf-view .split-pane-welcome-description {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  text-align: center;
+}
+
+.workspace-leaf-view .split-pane-welcome-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-sm);
+  width: min(100%, 260px);
+  margin-top: var(--space-sm);
 }
 
 .workspace-leaf-view .split-pane-welcome-btn {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  min-height: 36px;
+  padding: 0 var(--space-lg);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
   font: inherit;
   font-size: var(--text-sm);
   cursor: pointer;
+  transition:
+    background-color var(--motion-duration-hover) var(--motion-ease-standard),
+    border-color var(--motion-duration-hover) var(--motion-ease-standard),
+    color var(--motion-duration-hover) var(--motion-ease-standard);
 }
 
-.workspace-leaf-view .split-pane-welcome-btn:hover {
+.workspace-leaf-view .split-pane-welcome-btn-primary {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border-default));
+  background: var(--accent-bg);
   color: var(--accent-hover);
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  font-weight: var(--font-weight-semibold);
+}
+
+.workspace-leaf-view .split-pane-welcome-btn-secondary:hover,
+.workspace-leaf-view .split-pane-welcome-btn-secondary:focus-visible {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.workspace-leaf-view .split-pane-welcome-btn-tertiary {
+  min-height: 32px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.workspace-leaf-view .split-pane-welcome-btn-primary:hover,
+.workspace-leaf-view .split-pane-welcome-btn-primary:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-bg-active);
+  color: var(--accent-hover);
+}
+
+.workspace-leaf-view .split-pane-welcome-btn-tertiary:hover,
+.workspace-leaf-view .split-pane-welcome-btn-tertiary:focus-visible {
+  border-color: transparent;
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.workspace-leaf-view .split-pane-welcome-btn span {
+  color: inherit;
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-normal);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -70,6 +70,11 @@ function insertImage() {
 function horizontalRule() {
   props.editorRef?.insertText('\n---\n');
 }
+function insertTable() {
+  props.editorRef?.insertText(
+    '\n| 列 1 | 列 2 | 列 3 |\n| --- | --- | --- |\n|  |  |  |\n|  |  |  |\n',
+  );
+}
 </script>
 
 <template>
@@ -205,6 +210,24 @@ function horizontalRule() {
           <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
           <circle cx="8.5" cy="8.5" r="1.5" />
           <polyline points="21 15 16 10 5 21" />
+        </svg>
+      </button>
+      <button class="md-toolbar-btn" title="表格" @click="insertTable">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect x="3" y="4" width="18" height="16" rx="1" />
+          <line x1="3" y1="10" x2="21" y2="10" />
+          <line x1="3" y1="15" x2="21" y2="15" />
+          <line x1="10" y1="4" x2="10" y2="20" />
+          <line x1="16" y1="4" x2="16" y2="20" />
         </svg>
       </button>
       <button class="md-toolbar-btn" title="分割线" @click="horizontalRule">

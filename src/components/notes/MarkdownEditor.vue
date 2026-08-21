@@ -24,6 +24,12 @@ import { markdown } from '@codemirror/lang-markdown';
 import { bracketMatching } from '@codemirror/language';
 import { oneDarkTheme } from '@codemirror/theme-one-dark';
 import { replaceEditorDocument } from './editor-document-sync';
+import {
+  buildTableDecorations,
+  findTableBlocks,
+  isTableDelimiterRow,
+  type TableLine,
+} from './table-preview';
 
 // ── Props & Emits ──────────────────────────
 
@@ -384,6 +390,19 @@ const livePreviewPlugin = ViewPlugin.fromClass(
       const cursorPosition = view.state.selection.main.head;
       const cursorInside = (from: number, to: number) =>
         cursorPosition >= from && cursorPosition <= to;
+      const doc = view.state.doc;
+      const tableLines: TableLine[] = [];
+      for (let lineNumber = 1; lineNumber <= doc.lines; lineNumber += 1) {
+        const line = doc.line(lineNumber);
+        tableLines.push({
+          number: line.number,
+          text: line.text,
+          from: line.from,
+          to: line.to,
+        });
+      }
+      const tableBlocks = findTableBlocks(tableLines);
+      let tableSkipUntil = 0;
       const editableCodeLines = new Set<number>();
       let scanFence: { character: string; length: number; start: number } | null = null;
       for (let lineNumber = 1; lineNumber <= view.state.doc.lines; lineNumber += 1) {
@@ -428,6 +447,7 @@ const livePreviewPlugin = ViewPlugin.fromClass(
       let codeFence: { character: string; length: number; firstContent: boolean } | null = null;
       for (let lineNumber = 1; lineNumber <= view.state.doc.lines; lineNumber += 1) {
         const line = view.state.doc.line(lineNumber);
+        if (lineNumber <= tableSkipUntil) continue;
         const editingCodeBlock = editableCodeLines.has(lineNumber);
 
         const fenceMatch = codeFenceLine.exec(line.text);
@@ -481,6 +501,25 @@ const livePreviewPlugin = ViewPlugin.fromClass(
           builder.add(line.from, line.to, Decoration.mark({ class: 'cm-live-code-content' }));
           codeFence.firstContent = false;
           continue;
+        }
+
+        const tableBlock = tableBlocks.find(
+          (block) => lineNumber >= block.startLine && lineNumber <= block.endLine,
+        );
+        if (tableBlock) {
+          if (
+            !cursorInside(tableBlock.from, tableBlock.to) &&
+            lineNumber === tableBlock.startLine
+          ) {
+            tableSkipUntil = tableBlock.endLine;
+            continue;
+          }
+          if (cursorInside(tableBlock.from, tableBlock.to)) {
+            builder.add(line.from, line.from, Decoration.line({ class: 'cm-live-table-line' }));
+            if (isTableDelimiterRow(line.text) && !cursorInside(line.from, line.to)) {
+              builder.add(line.from, line.to, Decoration.mark({ class: 'cm-md-syntax' }));
+            }
+          }
         }
 
         const heading = /^(#{1,6})\s+/.exec(line.text);
@@ -561,6 +600,9 @@ function buildExtensions(codeLanguages: readonly LanguageDescription[] = []) {
     keymap.of([...defaultKeymap, ...historyKeymap]),
     taskCheckboxPlugin,
     livePreviewPlugin,
+    EditorView.decorations.compute(['doc', 'selection'], (state) =>
+      buildTableDecorations(state, state.selection.main.head),
+    ),
     saveKeymap,
     themeComp.of(isDark() ? oneDarkTheme : []),
     customTheme,
@@ -891,6 +933,39 @@ defineExpose({
   color: var(--text-secondary);
   font-family: var(--font-mono);
   font-size: 0.9em;
+}
+
+.codemirror-wrapper :deep(.cm-md-table) {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin: 0.9em 0;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.92em;
+  line-height: 1.6;
+}
+
+.codemirror-wrapper :deep(.cm-md-table th),
+.codemirror-wrapper :deep(.cm-md-table td) {
+  padding: 6px 12px;
+  border: 1px solid var(--border-subtle);
+  text-align: left;
+  vertical-align: top;
+}
+
+.codemirror-wrapper :deep(.cm-md-table th) {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.codemirror-wrapper :deep(.cm-md-table tr:nth-child(even) td) {
+  background: var(--bg-secondary);
+}
+
+.codemirror-wrapper :deep(.cm-live-table-line) {
+  font-variant-numeric: tabular-nums;
 }
 
 .codemirror-wrapper :deep(.cm-task-meta) {

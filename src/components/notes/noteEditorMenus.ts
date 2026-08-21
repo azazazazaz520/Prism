@@ -164,6 +164,15 @@ export function createInsertMenuItems(editor: EditorActions, text: string): Cont
       action: () => editor.insertText('\n---\n'),
     },
     {
+      id: 'editor-insert.table',
+      label: '表格',
+      separatorBefore: true,
+      action: () =>
+        editor.insertText(
+          '\n| 列 1 | 列 2 | 列 3 |\n| --- | --- | --- |\n|  |  |  |\n|  |  |  |\n',
+        ),
+    },
+    {
       id: 'editor-insert.code-block',
       label: '代码块',
       separatorBefore: true,

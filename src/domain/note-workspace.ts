@@ -3,6 +3,9 @@ export type WorkspaceDirection = 'horizontal' | 'vertical';
 export interface WorkspaceTab {
   id: string;
   path: string;
+  /** 当前标签自己的浏览历史（浏览器式） */
+  history?: string[];
+  historyIndex?: number;
 }
 
 export interface WorkspaceLeaf {
@@ -10,7 +13,7 @@ export interface WorkspaceLeaf {
   id: string;
   tabs: WorkspaceTab[];
   activeTabId: string | null;
-  /** 当前编辑区中打开过的文件路径，类似浏览器历史 */
+  /** 旧版单标签状态兼容字段 */
   history?: string[];
   historyIndex?: number;
 }
@@ -41,41 +44,54 @@ export function createLeaf(id: string, tabs: WorkspaceTab[] = []): WorkspaceLeaf
   return {
     type: 'leaf',
     id,
-    tabs: [...tabs],
+    tabs: tabs.map((tab) => ({
+      ...tab,
+      history: tab.history && tab.history.length > 0 ? tab.history : [tab.path],
+      historyIndex: tab.historyIndex ?? 0,
+    })),
     activeTabId: tabs[0]?.id ?? null,
-    history: tabs.map((tab) => tab.path),
-    historyIndex: tabs.length > 0 ? tabs.length - 1 : -1,
   };
 }
 
-/** 将旧版/外部工作区状态归一化为单标签 + 浏览器式历史。 */
+/** 将旧版/外部工作区状态归一化为多标签 + 每个标签独立的浏览历史。 */
 export function normalizeWorkspaceState(state: NoteWorkspaceState): NoteWorkspaceState {
   return {
     ...state,
     root: mapNode(state.root, (leaf) => {
-      const history =
-        leaf.history && leaf.history.length > 0 ? leaf.history : leaf.tabs.map((tab) => tab.path);
-      const currentTab =
-        leaf.tabs.find((tab) => tab.id === leaf.activeTabId) ??
-        leaf.tabs[leaf.tabs.length - 1] ??
-        null;
-      const currentPath = currentTab?.path ?? null;
-      const normalizedHistory =
-        currentPath && !history.includes(currentPath) ? [...history, currentPath] : history;
-      const historyIndex = currentPath ? normalizedHistory.indexOf(currentPath) : -1;
-      return {
-        ...leaf,
-        tabs: currentTab ? [currentTab] : [],
-        activeTabId: currentTab?.id ?? null,
-        history: normalizedHistory,
-        historyIndex,
-      };
+      const legacyHistory = leaf.history && leaf.history.length > 0 ? leaf.history : undefined;
+      const tabs = leaf.tabs.map((tab) => {
+        if (tab.history && tab.history.length > 0) {
+          return {
+            ...tab,
+            historyIndex: tab.historyIndex ?? tab.history.length - 1,
+          };
+        }
+        if (legacyHistory && leaf.tabs.length === 1 && legacyHistory.includes(tab.path)) {
+          return {
+            ...tab,
+            history: legacyHistory,
+            historyIndex: leaf.historyIndex ?? legacyHistory.length - 1,
+          };
+        }
+        return { ...tab, history: [tab.path], historyIndex: 0 };
+      });
+      const activeTabId =
+        leaf.activeTabId && tabs.some((tab) => tab.id === leaf.activeTabId)
+          ? leaf.activeTabId
+          : (tabs[0]?.id ?? null);
+      return { ...leaf, tabs, activeTabId };
     }),
   };
 }
 
 export function createTab(path: string, id = path): WorkspaceTab {
   return { id, path };
+}
+
+let nextTabSeq = 0;
+function nextTabId(path: string): string {
+  nextTabSeq += 1;
+  return `${path}#${nextTabSeq}`;
 }
 
 export function findLeaf(node: WorkspaceNode, leafId: string): WorkspaceLeaf | null {
@@ -131,15 +147,7 @@ export function splitLeafWithTab(
 
   const direction: WorkspaceDirection =
     zone === 'left' || zone === 'right' ? 'horizontal' : 'vertical';
-  const sourceHistory =
-    source.history && source.history.length > 0
-      ? source.history
-      : source.tabs.map((item) => item.path);
-  const newLeaf: WorkspaceLeaf = {
-    ...createLeaf(newLeafId, [tab]),
-    history: sourceHistory,
-    historyIndex: sourceHistory.length - 1,
-  };
+  const newLeaf = createLeaf(newLeafId, [tab]);
   const sourceTabs = source.tabs.filter((item) => item.id !== tabId);
   const sourceWithoutTab: WorkspaceLeaf = {
     ...source,
@@ -148,8 +156,6 @@ export function splitLeafWithTab(
       source.activeTabId === tabId
         ? (source.tabs.find((item) => item.id !== tabId)?.id ?? null)
         : source.activeTabId,
-    history: sourceTabs.length === 0 ? [] : sourceHistory.filter((path) => path !== tab.path),
-    historyIndex: sourceTabs.length === 0 ? -1 : Math.max(0, source.historyIndex ?? 0),
   };
   const rootWithoutTab = replaceNode(state.root, sourceLeafId, sourceWithoutTab);
   const currentTarget = findLeaf(rootWithoutTab, targetLeafId);
@@ -249,22 +255,51 @@ export function openTab(
   const leaf = findLeaf(state.root, leafId);
   if (!leaf) return state;
 
-  const history =
-    leaf.history && leaf.history.length > 0 ? leaf.history : leaf.tabs.map((tab) => tab.path);
-  const historyIndex = leaf.historyIndex ?? Math.max(0, history.length - 1);
-  const currentPath = leaf.tabs.find((tab) => tab.id === leaf.activeTabId)?.path;
-  const nextHistory =
-    currentPath === path ? history : [...history.slice(0, historyIndex + 1), path];
-  const tab = createTab(path, tabId);
+  const id = leaf.tabs.some((tab) => tab.id === tabId) ? nextTabId(path) : tabId;
+  const tab: WorkspaceTab = { id, path, history: [path], historyIndex: 0 };
   return {
     root: replaceNode(state.root, leafId, {
       ...leaf,
-      tabs: [tab],
-      activeTabId: tab.id,
-      history: nextHistory,
-      historyIndex: nextHistory.length - 1,
+      tabs: [...leaf.tabs, tab],
+      activeTabId: id,
     }),
     activeLeafId: leafId,
+  };
+}
+
+/** 在当前活动标签中打开文件，不新建标签，并记录到该标签的浏览器式历史。 */
+export function openInCurrentTab(
+  state: NoteWorkspaceState,
+  leafId: string,
+  path: string,
+): NoteWorkspaceState {
+  const leaf = findLeaf(state.root, leafId);
+  if (!leaf) return state;
+
+  const activeTab = leaf.tabs.find((tab) => tab.id === leaf.activeTabId) ?? leaf.tabs[0];
+  if (!activeTab) return openTab(state, leafId, path);
+
+  const history =
+    activeTab.history && activeTab.history.length > 0 ? activeTab.history : [activeTab.path];
+  const currentIndex = activeTab.historyIndex ?? history.length - 1;
+  const nextHistory =
+    activeTab.path === path ? history : [...history.slice(0, currentIndex + 1), path];
+  const updatedTab: WorkspaceTab = {
+    ...activeTab,
+    path,
+    history: nextHistory,
+    historyIndex: nextHistory.length - 1,
+  };
+  const tabs = leaf.tabs.map((tab) => (tab.id === activeTab.id ? updatedTab : tab));
+
+  return {
+    ...state,
+    activeLeafId: leafId,
+    root: replaceNode(state.root, leafId, {
+      ...leaf,
+      tabs,
+      activeTabId: activeTab.id,
+    }),
   };
 }
 
@@ -284,25 +319,28 @@ function navigateHistory(
   const leaf = findLeaf(state.root, leafId);
   if (!leaf) return state;
 
+  const activeTab = leaf.tabs.find((tab) => tab.id === leaf.activeTabId) ?? leaf.tabs[0];
+  if (!activeTab) return state;
+
   const history =
-    leaf.history && leaf.history.length > 0 ? leaf.history : leaf.tabs.map((tab) => tab.path);
-  const currentIndex = leaf.historyIndex ?? (history.length > 0 ? history.length - 1 : -1);
+    activeTab.history && activeTab.history.length > 0 ? activeTab.history : [activeTab.path];
+  const currentIndex = activeTab.historyIndex ?? history.length - 1;
   const nextIndex = currentIndex + delta;
   if (nextIndex < 0 || nextIndex >= history.length) return state;
 
   const path = history[nextIndex];
   if (!path) return state;
-  const tab = createTab(path, path);
+  const tabs = leaf.tabs.map((tab) =>
+    tab.id === activeTab.id ? { ...tab, path, history, historyIndex: nextIndex } : tab,
+  );
 
   return {
     ...state,
     activeLeafId: leafId,
     root: replaceNode(state.root, leafId, {
       ...leaf,
-      tabs: [tab],
-      activeTabId: tab.id,
-      history,
-      historyIndex: nextIndex,
+      tabs,
+      activeTabId: activeTab.id,
     }),
   };
 }
@@ -337,24 +375,22 @@ export function moveTab(
     };
   }
 
-  const sourceHistory =
-    source.history && source.history.length > 0
-      ? source.history
-      : source.tabs.map((item) => item.path);
   const sourceTabs = source.tabs.filter((item) => item.id !== tabId);
-  const targetLeaf: WorkspaceLeaf = {
-    ...target,
-    tabs: [tab],
-    activeTabId: tab.id,
-    history: sourceHistory,
-    historyIndex: sourceHistory.length - 1,
-  };
+  const insertionIndex = Math.min(Math.max(targetIndex, 0), target.tabs.length);
+  const targetTabs = [
+    ...target.tabs.slice(0, insertionIndex),
+    tab,
+    ...target.tabs.slice(insertionIndex),
+  ];
   const sourceLeaf: WorkspaceLeaf = {
     ...source,
     tabs: sourceTabs,
     activeTabId: source.activeTabId === tabId ? (sourceTabs[0]?.id ?? null) : source.activeTabId,
-    history: sourceTabs.length === 0 ? [] : sourceHistory.filter((path) => path !== tab.path),
-    historyIndex: sourceTabs.length === 0 ? -1 : Math.max(0, source.historyIndex ?? 0),
+  };
+  const targetLeaf: WorkspaceLeaf = {
+    ...target,
+    tabs: targetTabs,
+    activeTabId: tab.id,
   };
   const nextRoot = replaceNode(
     replaceNode(state.root, fromLeafId, sourceLeaf),
@@ -378,32 +414,29 @@ export function removeTabsByPath(
     candidate === path || (includeDescendants && candidate.startsWith(`${path}/`));
   let changed = false;
   const root = mapNode(state.root, (leaf) => {
-    const tabs = leaf.tabs.filter((tab) => {
-      const keep = !matches(tab.path);
-      if (!keep) changed = true;
-      return keep;
+    const nextTabs = leaf.tabs.flatMap((tab) => {
+      if (matches(tab.path)) {
+        changed = true;
+        return [];
+      }
+      const history = (tab.history && tab.history.length > 0 ? tab.history : [tab.path]).filter(
+        (path) => !matches(path),
+      );
+      if (history.length !== (tab.history?.length ?? 1)) changed = true;
+      const historyIndex = history.includes(tab.path)
+        ? history.indexOf(tab.path)
+        : Math.max(0, history.length - 1);
+      const nextPath = history[historyIndex] ?? tab.path;
+      return [{ ...tab, path: nextPath, history, historyIndex }];
     });
-    if (tabs.length === leaf.tabs.length) return leaf;
-    const history = (
-      leaf.history && leaf.history.length > 0 ? leaf.history : leaf.tabs.map((tab) => tab.path)
-    ).filter((path) => !matches(path));
-    const currentPath = leaf.tabs.find((tab) => tab.id === leaf.activeTabId)?.path;
-    const currentRemoved = Boolean(currentPath && matches(currentPath));
-    const currentIndex = currentPath ? history.indexOf(currentPath) : -1;
-    const originalIndex = leaf.historyIndex ?? Math.max(0, history.length - 1);
-    const nextIndex = currentRemoved
-      ? Math.max(0, history.length - 1)
-      : currentIndex >= 0
-        ? currentIndex
-        : Math.min(originalIndex, Math.max(0, history.length - 1));
-    const activePath = currentRemoved ? history[nextIndex] : currentPath;
-    const activeTab = activePath ? createTab(activePath, activePath) : null;
+    if (!changed) return leaf;
     return {
       ...leaf,
-      tabs: activeTab ? [activeTab] : [],
-      activeTabId: activeTab?.id ?? null,
-      history,
-      historyIndex: history.length > 0 ? nextIndex : -1,
+      tabs: nextTabs,
+      activeTabId:
+        leaf.activeTabId && nextTabs.some((tab) => tab.id === leaf.activeTabId)
+          ? leaf.activeTabId
+          : (nextTabs[0]?.id ?? null),
     };
   });
   if (!changed) return state;
@@ -426,18 +459,19 @@ export function renameTabPath(
     ...state,
     root: mapNode(state.root, (leaf) => {
       const renamePath = (path: string) => (path === oldPath ? newPath : path);
-      const history = (
-        leaf.history && leaf.history.length > 0 ? leaf.history : leaf.tabs.map((tab) => tab.path)
-      ).map(renamePath);
-      const tabs = leaf.tabs.map((tab) =>
-        tab.path === oldPath ? { ...tab, id: newPath, path: newPath } : tab,
-      );
-      const activeTabId = leaf.tabs.some(
-        (tab) => tab.path === oldPath && tab.id === leaf.activeTabId,
-      )
-        ? newPath
-        : leaf.activeTabId;
-      return { ...leaf, tabs, activeTabId, history };
+      const tabs = leaf.tabs.map((tab) => {
+        const nextPath = renamePath(tab.path);
+        const history = (tab.history && tab.history.length > 0 ? tab.history : [tab.path]).map(
+          renamePath,
+        );
+        return {
+          ...tab,
+          path: nextPath,
+          history,
+          historyIndex: tab.historyIndex ?? history.length - 1,
+        };
+      });
+      return { ...leaf, tabs };
     }),
   };
 }

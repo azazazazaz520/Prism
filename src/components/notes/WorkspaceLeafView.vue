@@ -75,13 +75,15 @@ const activeDocument = computed(() =>
   activeTab.value ? (props.documents.get(activeTab.value.path) ?? null) : null,
 );
 const canGoBack = computed(() => {
-  const history = props.leaf.history ?? [];
-  const index = props.leaf.historyIndex ?? -1;
+  const tab = activeTab.value;
+  const history = tab?.history ?? [];
+  const index = tab?.historyIndex ?? -1;
   return index > 0 && index < history.length;
 });
 const canGoForward = computed(() => {
-  const history = props.leaf.history ?? [];
-  const index = props.leaf.historyIndex ?? -1;
+  const tab = activeTab.value;
+  const history = tab?.history ?? [];
+  const index = tab?.historyIndex ?? -1;
   return index >= 0 && index < history.length - 1;
 });
 

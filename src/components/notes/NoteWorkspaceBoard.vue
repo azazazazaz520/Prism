@@ -12,6 +12,7 @@ import {
   createWorkspaceState,
   moveTab,
   openTab,
+  openInCurrentTab,
   resizeSplit,
   splitLeaf,
   splitLeafWithTab,
@@ -131,7 +132,7 @@ function handleSplitLeaf(leafId: string, direction: WorkspaceDirection) {
 }
 
 function handleOpenPath(path: string, leafId = state.value.activeLeafId) {
-  state.value = openTab(state.value, leafId, path);
+  state.value = openInCurrentTab(state.value, leafId, path);
   emit('state-change', state.value);
   const active = findLeafInTree(state.value.root, state.value.activeLeafId);
   const tab = active?.tabs.find((item) => item.path === path);
@@ -284,6 +285,10 @@ function findTabInTree(node: NoteWorkspaceState['root'], tabId: string): { path:
 
 defineExpose({
   openPath: (path: string, leafId = state.value.activeLeafId) => {
+    state.value = openInCurrentTab(state.value, leafId, path);
+    emit('state-change', state.value);
+  },
+  openPathInNewTab: (path: string, leafId = state.value.activeLeafId) => {
     state.value = openTab(state.value, leafId, path);
     emit('state-change', state.value);
   },

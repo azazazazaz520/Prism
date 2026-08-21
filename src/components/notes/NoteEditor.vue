@@ -264,6 +264,10 @@ async function openPathInActivePane(path: string, initialContent?: string) {
   workspaceBoardRef.value?.openPath(path);
   await loadWorkspacePath(path, initialContent);
 }
+async function openPathInNewTab(path: string, initialContent?: string) {
+  workspaceBoardRef.value?.openPathInNewTab(path);
+  await loadWorkspacePath(path, initialContent);
+}
 
 interface ExportDocxResult {
   output_path: string;

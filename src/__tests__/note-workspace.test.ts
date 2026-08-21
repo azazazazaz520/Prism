@@ -12,6 +12,7 @@ import {
   normalizeWorkspaceState,
   moveTab,
   openTab,
+  openInCurrentTab,
   renameTabPath,
   removeTabsByPath,
   resizeSplit,
@@ -91,15 +92,27 @@ describe('笔记工作区树', () => {
     expect(findLeaf(state.root, 'leaf-2')?.tabs.map((tab) => tab.path)).toEqual(['second.md']);
   });
 
-  it('同一编辑区打开新文档时替换当前标签并记录历史', () => {
+  it('在当前标签中打开新文档时替换路径并记录历史', () => {
     let state = createWorkspaceState();
-    state = openTab(state, 'leaf-1', 'same.md');
-    state = openTab(state, 'leaf-1', 'other.md');
-    state = openTab(state, 'leaf-1', 'same.md');
+    state = openInCurrentTab(state, 'leaf-1', 'same.md');
+    state = openInCurrentTab(state, 'leaf-1', 'other.md');
+    state = openInCurrentTab(state, 'leaf-1', 'same.md');
 
-    expect(findLeaf(state.root, 'leaf-1')?.tabs.map((tab) => tab.path)).toEqual(['same.md']);
-    expect(findLeaf(state.root, 'leaf-1')?.history).toEqual(['same.md', 'other.md', 'same.md']);
-    expect(findLeaf(state.root, 'leaf-1')?.historyIndex).toBe(2);
+    const leaf = findLeaf(state.root, 'leaf-1');
+    expect(leaf?.tabs.map((tab) => tab.path)).toEqual(['same.md']);
+    expect(leaf?.tabs[0].history).toEqual(['same.md', 'other.md', 'same.md']);
+    expect(leaf?.tabs[0].historyIndex).toBe(2);
+  });
+
+  it('openTab 会在当前编辑区新建标签页', () => {
+    let state = createWorkspaceState();
+    state = openTab(state, 'leaf-1', 'first.md');
+    state = openTab(state, 'leaf-1', 'second.md');
+    state = openTab(state, 'leaf-1', 'third.md');
+
+    const leaf = findLeaf(state.root, 'leaf-1');
+    expect(leaf?.tabs.map((tab) => tab.path)).toEqual(['first.md', 'second.md', 'third.md']);
+    expect(leaf?.tabs.map((tab) => tab.id)).toHaveLength(3);
   });
 
   it('从其他编辑区打开同一文档时在当前编辑区打开标签', () => {
@@ -117,8 +130,10 @@ describe('笔记工作区树', () => {
     state = openTab(state, 'leaf-1', 'old.md');
     state = renameTabPath(state, 'old.md', 'new.md');
 
-    expect(findLeaf(state.root, 'leaf-1')?.tabs).toEqual([{ id: 'new.md', path: 'new.md' }]);
-    expect(findLeaf(state.root, 'leaf-1')?.activeTabId).toBe('new.md');
+    expect(findLeaf(state.root, 'leaf-1')?.tabs).toEqual([
+      expect.objectContaining({ id: 'old.md', path: 'new.md' }),
+    ]);
+    expect(findLeaf(state.root, 'leaf-1')?.activeTabId).toBe('old.md');
   });
 
   it('拖动分隔条只调整相邻编辑区并保留其他分栏比例', () => {
@@ -134,26 +149,27 @@ describe('笔记工作区树', () => {
 
   it('后退和前进可以在当前标签的历史中切换', () => {
     let state = createWorkspaceState();
-    state = openTab(state, 'leaf-1', 'first.md');
-    state = openTab(state, 'leaf-1', 'second.md');
-    state = openTab(state, 'leaf-1', 'third.md');
+    state = openInCurrentTab(state, 'leaf-1', 'first.md');
+    state = openInCurrentTab(state, 'leaf-1', 'second.md');
+    state = openInCurrentTab(state, 'leaf-1', 'third.md');
 
-    expect(findLeaf(state.root, 'leaf-1')?.tabs.map((tab) => tab.path)).toEqual(['third.md']);
-    expect(findLeaf(state.root, 'leaf-1')?.history).toEqual(['first.md', 'second.md', 'third.md']);
+    const active = () => findLeaf(state.root, 'leaf-1')?.tabs[0];
+    expect(active()?.path).toBe('third.md');
+    expect(active()?.history).toEqual(['first.md', 'second.md', 'third.md']);
 
     state = goBack(state, 'leaf-1');
-    expect(findLeaf(state.root, 'leaf-1')?.tabs.map((tab) => tab.path)).toEqual(['second.md']);
+    expect(active()?.path).toBe('second.md');
     state = goBack(state, 'leaf-1');
-    expect(findLeaf(state.root, 'leaf-1')?.tabs.map((tab) => tab.path)).toEqual(['first.md']);
+    expect(active()?.path).toBe('first.md');
     state = goForward(state, 'leaf-1');
-    expect(findLeaf(state.root, 'leaf-1')?.tabs.map((tab) => tab.path)).toEqual(['second.md']);
+    expect(active()?.path).toBe('second.md');
 
-    state = openTab(state, 'leaf-1', 'fourth.md');
-    expect(findLeaf(state.root, 'leaf-1')?.history).toEqual(['first.md', 'second.md', 'fourth.md']);
-    expect(findLeaf(state.root, 'leaf-1')?.historyIndex).toBe(2);
+    state = openInCurrentTab(state, 'leaf-1', 'fourth.md');
+    expect(active()?.history).toEqual(['first.md', 'second.md', 'fourth.md']);
+    expect(active()?.historyIndex).toBe(2);
   });
 
-  it('旧版多标签状态可以归一化为当前标签和历史', () => {
+  it('旧版多标签状态可以归一化为每个标签独立历史', () => {
     let state = createWorkspaceState();
     state = {
       ...state,
@@ -163,9 +179,10 @@ describe('笔记工作区树', () => {
 
     const normalized = normalizeWorkspaceState(state);
     const leaf = findLeaf(normalized.root, 'leaf-1');
-    expect(leaf?.tabs.map((tab) => tab.path)).toEqual(['second.md']);
-    expect(leaf?.history).toEqual(['first.md', 'second.md']);
-    expect(leaf?.historyIndex).toBe(1);
+    expect(leaf?.tabs.map((tab) => tab.path)).toEqual(['first.md', 'second.md']);
+    expect(leaf?.tabs[0].history).toEqual(['first.md']);
+    expect(leaf?.tabs[1].history).toEqual(['second.md']);
+    expect(leaf?.activeTabId).toBe('second.md');
   });
 
   it('删除目录时清理所有编辑区中的子路径标签', () => {

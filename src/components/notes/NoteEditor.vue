@@ -1531,7 +1531,7 @@ async function createUntitledFile(parentDir = '') {
       expanded.value = next;
     }
     focusTitleAfterOpen = true;
-    await openPathInActivePane(path, '');
+    await openPathInNewTab(path, '');
     void refreshDirectory(parentDir);
   } catch (e) {
     showStatus(`创建文件失败: ${e}`);
@@ -1776,7 +1776,7 @@ async function createFile(parentDir: string) {
       next.add(parentDir);
       expanded.value = next;
     }
-    await openPathInActivePane(path, '');
+    await openPathInNewTab(path, '');
     void refreshDirectory(parentDir);
   } catch (e) {
     showStatus(`创建文件失败: ${e}`);

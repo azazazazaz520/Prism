@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue';
 /**
  * 笔记上下文面板：展示当前笔记的任务引用、反向链接与大纲。
  */
@@ -22,6 +23,12 @@ const emit = defineEmits<{
   'open-path': [path: string];
   'navigate-outline': [line: number];
 }>();
+const activeSection = ref<'outline' | 'tasks' | 'links'>('outline');
+const sections = [
+  { id: 'outline' as const, label: '大纲' },
+  { id: 'tasks' as const, label: '任务' },
+  { id: 'links' as const, label: '链接' },
+];
 
 function taskForReference(reference: TaskReference): Task | undefined {
   return props.tasks.find((task) => task.id === reference.taskId);
@@ -38,7 +45,28 @@ function taskForReference(reference: TaskReference): Task | undefined {
         </div>
         <span class="context-count">{{ taskReferences.length }}</span>
       </div>
-      <section class="context-section">
+      <nav class="context-tabs" aria-label="上下文面板">
+        <button
+          v-for="section in sections"
+          :key="section.id"
+          type="button"
+          class="context-tab"
+          :class="{ active: activeSection === section.id }"
+          @click="activeSection = section.id"
+        >
+          {{ section.label }}
+        </button>
+      </nav>
+      <div v-if="activeSection === 'outline' && outline.length === 0" class="context-empty-section">
+        暂无大纲
+      </div>
+      <div
+        v-if="activeSection === 'links' && backlinkPaths.length === 0"
+        class="context-empty-section"
+      >
+        暂无反向链接
+      </div>
+      <section v-if="activeSection === 'tasks'" class="context-section">
         <div class="context-section-title">本页任务</div>
         <button
           v-for="reference in taskReferences"
@@ -57,7 +85,7 @@ function taskForReference(reference: TaskReference): Task | undefined {
           + 新建正式任务
         </button>
       </section>
-      <section v-if="backlinkPaths.length > 0" class="context-section">
+      <section v-if="activeSection === 'links' && backlinkPaths.length > 0" class="context-section">
         <div class="context-section-title">反向链接 · {{ backlinkPaths.length }}</div>
         <button
           v-for="path in backlinkPaths"
@@ -70,7 +98,7 @@ function taskForReference(reference: TaskReference): Task | undefined {
           <small>{{ path }}</small>
         </button>
       </section>
-      <section v-if="outline.length > 0" class="context-section">
+      <section v-if="activeSection === 'outline' && outline.length > 0" class="context-section">
         <div class="context-section-title">{{ outlinePanelLabel }}</div>
         <button
           v-for="item in outline"
@@ -139,6 +167,49 @@ function taskForReference(reference: TaskReference): Task | undefined {
   color: var(--accent);
   font-size: 11px;
   font-weight: 700;
+}
+
+.context-tabs {
+  display: flex;
+  gap: 4px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.context-tab {
+  flex: 1;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.context-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.context-tab.active {
+  border-color: var(--border-default);
+  background: var(--bg-primary);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.context-empty-section {
+  padding: 16px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.7;
 }
 
 .context-section {
@@ -252,7 +323,15 @@ function taskForReference(reference: TaskReference): Task | undefined {
 
 @media (max-width: 1180px) {
   .note-context-panel {
-    display: none;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 280px;
+    flex: none;
+    z-index: 20;
+    border-left: 1px solid var(--border-default);
+    box-shadow: var(--shadow-lg, 0 12px 32px rgba(0, 0, 0, 0.18));
   }
 }
 </style>

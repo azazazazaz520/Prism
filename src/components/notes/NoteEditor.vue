@@ -75,6 +75,7 @@ import {
 import { FILE_CHANGED_EXTERNALLY } from '../../utils/error-codes';
 import {
   createWorkspaceState,
+  normalizeWorkspaceState,
   listLeaves,
   removeTabsByPath,
   renameTabPath,
@@ -1287,10 +1288,11 @@ async function restoreNoteSession() {
   const state = loadNoteSession();
   if (!state) return;
   if (state.workspaceState) {
-    workspaceBoardState.value = state.workspaceState;
+    const restoredState = normalizeWorkspaceState(state.workspaceState);
+    workspaceBoardState.value = restoredState;
     await nextTick();
     syncWorkspacePaneTabs();
-    for (const leaf of listLeaves(state.workspaceState.root)) {
+    for (const leaf of listLeaves(restoredState.root)) {
       for (const tab of leaf.tabs) await loadWorkspacePath(tab.path);
     }
     titleDraft.value = getActiveWorkspacePath()?.split('/').pop()?.replace(/\.md$/i, '') || '';
@@ -2011,6 +2013,29 @@ function selectQuickSwitcherPath(path: string) {
 
 function handleKeyboardShortcuts(event: KeyboardEvent) {
   if (!props.active) return;
+  if (
+    event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey &&
+    !taskPickerVisible.value &&
+    !noteQuickSwitcherVisible.value &&
+    !dialogVisible.value &&
+    !confirmVisible.value
+  ) {
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      event.stopPropagation();
+      workspaceBoardRef.value?.goBack();
+      return;
+    }
+    if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      event.stopPropagation();
+      workspaceBoardRef.value?.goForward();
+      return;
+    }
+  }
   const modifier = event.ctrlKey || event.metaKey;
   if (
     !modifier ||
@@ -2266,6 +2291,7 @@ onUnmounted(() => {
             @rename-path="handleWorkspaceRename"
             @create-note="handleWorkspaceCreateNote"
             @open-workspace="openNotesWorkspace"
+            @open-quick-switcher="openFileLibrary"
             @open-menu="showSplitPaneMenu"
             @open-context-menu="showContextMenu"
             @state-change="handleWorkspaceStateChange"

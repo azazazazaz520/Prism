@@ -61,8 +61,11 @@ const emit = defineEmits<{
   'file-drop': [path: string];
   'create-note': [leafId: string];
   'open-workspace': [];
+  'open-quick-switcher': [];
   'open-menu': [event: MouseEvent];
   'open-context-menu': [event: MouseEvent];
+  'go-back': [leafId: string];
+  'go-forward': [leafId: string];
 }>();
 
 const activeTab = computed(
@@ -71,6 +74,16 @@ const activeTab = computed(
 const activeDocument = computed(() =>
   activeTab.value ? (props.documents.get(activeTab.value.path) ?? null) : null,
 );
+const canGoBack = computed(() => {
+  const history = props.leaf.history ?? [];
+  const index = props.leaf.historyIndex ?? -1;
+  return index > 0 && index < history.length;
+});
+const canGoForward = computed(() => {
+  const history = props.leaf.history ?? [];
+  const index = props.leaf.historyIndex ?? -1;
+  return index >= 0 && index < history.length - 1;
+});
 
 watch(
   () => activeTab.value?.path,
@@ -475,8 +488,26 @@ defineExpose({
 
     <div class="split-pane-document-header">
       <div class="split-pane-header-side">
-        <button type="button" class="split-pane-nav-btn" disabled aria-label="后退">‹</button>
-        <button type="button" class="split-pane-nav-btn" disabled aria-label="前进">›</button>
+        <button
+          type="button"
+          class="split-pane-nav-btn"
+          :disabled="!canGoBack"
+          aria-label="后退"
+          title="后退"
+          @click="emit('go-back', leaf.id)"
+        >
+          ‹
+        </button>
+        <button
+          type="button"
+          class="split-pane-nav-btn"
+          :disabled="!canGoForward"
+          aria-label="前进"
+          title="前进"
+          @click="emit('go-forward', leaf.id)"
+        >
+          ›
+        </button>
       </div>
       <input
         v-if="activeTab"
@@ -554,9 +585,9 @@ defineExpose({
             <button
               type="button"
               class="split-pane-welcome-btn split-pane-welcome-btn-tertiary"
-              @click="emit('close-leaf', leaf.id)"
+              @click="emit('open-quick-switcher')"
             >
-              关闭标签页
+              搜索笔记 <span>(Ctrl + P)</span>
             </button>
           </div>
         </div>

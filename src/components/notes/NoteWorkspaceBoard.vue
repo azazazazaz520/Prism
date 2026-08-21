@@ -7,6 +7,8 @@ import {
   activateTab,
   closeLeaf,
   closeTab,
+  goBack,
+  goForward,
   createWorkspaceState,
   moveTab,
   openTab,
@@ -37,6 +39,7 @@ const emit = defineEmits<{
   'rename-path': [path: string, title: string];
   'create-note': [leafId: string];
   'open-workspace': [];
+  'open-quick-switcher': [];
   'open-menu': [event: MouseEvent];
   'open-context-menu': [event: MouseEvent];
   'state-change': [state: NoteWorkspaceState];
@@ -133,6 +136,27 @@ function handleOpenPath(path: string, leafId = state.value.activeLeafId) {
   const active = findLeafInTree(state.value.root, state.value.activeLeafId);
   const tab = active?.tabs.find((item) => item.path === path);
   if (tab) emit('open-path', tab.path, active.id);
+}
+
+function getLeafActivePath(leafId: string): string | null {
+  const leaf = findLeafInTree(state.value.root, leafId);
+  return leaf?.tabs.find((tab) => tab.id === leaf.activeTabId)?.path ?? null;
+}
+
+function handleGoBack(leafId: string) {
+  const before = getLeafActivePath(leafId);
+  state.value = goBack(state.value, leafId);
+  emit('state-change', state.value);
+  const after = getLeafActivePath(leafId);
+  if (after && after !== before) emit('open-path', after, leafId);
+}
+
+function handleGoForward(leafId: string) {
+  const before = getLeafActivePath(leafId);
+  state.value = goForward(state.value, leafId);
+  emit('state-change', state.value);
+  const after = getLeafActivePath(leafId);
+  if (after && after !== before) emit('open-path', after, leafId);
 }
 
 function handleUpdateContent(path: string, content: string) {
@@ -275,6 +299,8 @@ defineExpose({
     state.value = closeLeaf(state.value, state.value.activeLeafId);
     emit('state-change', state.value);
   },
+  goBack: () => handleGoBack(state.value.activeLeafId),
+  goForward: () => handleGoForward(state.value.activeLeafId),
   insertText: (text: string) => leafRefs.get(state.value.activeLeafId)?.insertText(text),
   wrapSelection: (before: string, after: string) =>
     leafRefs.get(state.value.activeLeafId)?.wrapSelection(before, after),
@@ -330,6 +356,8 @@ defineExpose({
           :dragging-tab-label="draggingTabLabel"
           :drop-zone="dropTarget?.leafId === leaf.id ? dropTarget.zone : null"
           @activate-tab="handleActivateTab"
+          @go-back="handleGoBack"
+          @go-forward="handleGoForward"
           @close-tab="handleCloseTab"
           @close-leaf="handleCloseLeaf"
           @split-leaf="handleSplitLeaf"
@@ -344,6 +372,7 @@ defineExpose({
           @file-drop="(path) => handleFileDrop(leaf.id, path)"
           @create-note="handleCreateNote"
           @open-workspace="emit('open-workspace')"
+          @open-quick-switcher="emit('open-quick-switcher')"
           @open-menu="emit('open-menu', $event)"
           @open-context-menu="emit('open-context-menu', $event)"
         >

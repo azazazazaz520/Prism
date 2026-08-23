@@ -227,37 +227,6 @@ class HorizontalRuleWidget extends WidgetType {
   }
 }
 
-class CodeFenceWidget extends WidgetType {
-  constructor(
-    private readonly from: number,
-    private readonly closing: boolean,
-  ) {
-    super();
-  }
-
-  eq(other: CodeFenceWidget) {
-    return other.from === this.from && other.closing === this.closing;
-  }
-
-  toDOM(view: EditorView) {
-    const fence = document.createElement('div');
-    fence.className = `cm-live-code-fence${this.closing ? ' cm-live-code-fence-bottom' : ' cm-live-code-fence-top'}`;
-    fence.setAttribute('role', 'separator');
-    fence.setAttribute('aria-label', 'Markdown 代码块边界');
-    fence.addEventListener('mousedown', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      view.focus();
-      view.dispatch({ selection: { anchor: this.from } });
-    });
-    return fence;
-  }
-
-  ignoreEvent() {
-    return true;
-  }
-}
-
 const taskCheckboxPlugin = ViewPlugin.fromClass(
   class {
     decorations;
@@ -444,7 +413,7 @@ const livePreviewPlugin = ViewPlugin.fromClass(
         }
       }
 
-      let codeFence: { character: string; length: number; firstContent: boolean } | null = null;
+      let codeFence: { character: string; length: number } | null = null;
       for (let lineNumber = 1; lineNumber <= view.state.doc.lines; lineNumber += 1) {
         const line = view.state.doc.line(lineNumber);
         if (lineNumber <= tableSkipUntil) continue;
@@ -458,48 +427,30 @@ const livePreviewPlugin = ViewPlugin.fromClass(
           fenceMatch[1].length >= codeFence.length,
         );
         if (fenceMatch && (!codeFence || isClosingFence)) {
-          const fenceClasses = editingCodeBlock
-            ? [
-                'cm-live-code-block',
-                'cm-live-code-editing-fence',
-                isClosingFence ? 'cm-live-code-editing-bottom' : 'cm-live-code-editing-top',
-              ].join(' ')
-            : 'cm-live-code-fence-line';
+          const fenceClasses = [
+            'cm-live-code-block',
+            'cm-live-code-fence-line',
+            isClosingFence ? 'cm-live-code-fence-bottom' : 'cm-live-code-fence-top',
+          ].join(' ');
           builder.add(line.from, line.from, Decoration.line({ class: fenceClasses }));
           if (!editingCodeBlock) {
             builder.add(
               line.from,
               line.to,
-              Decoration.replace({
-                widget: new CodeFenceWidget(line.from, isClosingFence),
-              }),
+              Decoration.mark({ class: 'cm-live-code-fence-syntax' }),
             );
           }
 
           codeFence = isClosingFence
             ? null
-            : { character: fenceMatch[1][0], length: fenceMatch[1].length, firstContent: true };
+            : { character: fenceMatch[1][0], length: fenceMatch[1].length };
           continue;
         }
 
         if (codeFence) {
-          const nextLine =
-            lineNumber < view.state.doc.lines ? view.state.doc.line(lineNumber + 1) : null;
-          const nextFence = nextLine ? codeFenceLine.exec(nextLine.text) : null;
-          const nextIsClosingFence = Boolean(
-            nextFence &&
-            nextFence[1][0] === codeFence.character &&
-            nextFence[1].length >= codeFence.length,
-          );
-          const contentClasses = [
-            'cm-live-code-block',
-            'cm-live-code-content-line',
-            ...(codeFence.firstContent && !editingCodeBlock ? ['cm-live-code-content-first'] : []),
-            ...(nextIsClosingFence && !editingCodeBlock ? ['cm-live-code-content-last'] : []),
-          ].join(' ');
+          const contentClasses = ['cm-live-code-block', 'cm-live-code-content-line'].join(' ');
           builder.add(line.from, line.from, Decoration.line({ class: contentClasses }));
           builder.add(line.from, line.to, Decoration.mark({ class: 'cm-live-code-content' }));
-          codeFence.firstContent = false;
           continue;
         }
 
@@ -861,20 +812,16 @@ defineExpose({
   color: var(--text-secondary);
 }
 
-.codemirror-wrapper :deep(.cm-live-code-fence) {
-  display: block;
-  width: 100%;
-  height: 8px;
-  box-sizing: border-box;
-  background: transparent;
-  cursor: text;
+.codemirror-wrapper :deep(.cm-live-code-fence-line) {
+  height: 1.55em;
+  padding: 0 14px !important;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  line-height: 1.55;
 }
 
-.codemirror-wrapper :deep(.cm-live-code-fence-line) {
-  height: 8px;
-  padding: 0 !important;
-  line-height: 8px;
-  background: transparent;
+.codemirror-wrapper :deep(.cm-live-code-fence-syntax) {
+  color: transparent;
 }
 
 .codemirror-wrapper :deep(.cm-live-code-content-line) {
@@ -882,32 +829,16 @@ defineExpose({
   line-height: 1.55;
 }
 
-.codemirror-wrapper :deep(.cm-live-code-editing-fence) {
-  min-height: 1.55em;
-  padding: 0 14px !important;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  line-height: 1.55;
-}
-
-.codemirror-wrapper :deep(.cm-live-code-editing-top) {
+.codemirror-wrapper :deep(.cm-live-code-fence-top) {
   border-top: 1px solid var(--border-subtle);
   border-top-left-radius: var(--radius-sm);
   border-top-right-radius: var(--radius-sm);
 }
 
-.codemirror-wrapper :deep(.cm-live-code-editing-bottom) {
+.codemirror-wrapper :deep(.cm-live-code-fence-bottom) {
   border-bottom: 1px solid var(--border-subtle);
   border-bottom-left-radius: var(--radius-sm);
   border-bottom-right-radius: var(--radius-sm);
-}
-
-.codemirror-wrapper :deep(.cm-live-code-fence-top) {
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-}
-
-.codemirror-wrapper :deep(.cm-live-code-fence-bottom) {
-  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
 }
 
 .codemirror-wrapper :deep(.cm-live-code-block) {
@@ -915,18 +846,6 @@ defineExpose({
   background: var(--bg-tertiary);
   border-left: 1px solid var(--border-subtle);
   border-right: 1px solid var(--border-subtle);
-}
-
-.codemirror-wrapper :deep(.cm-live-code-content-first) {
-  border-top: 1px solid var(--border-subtle);
-  border-top-left-radius: var(--radius-sm);
-  border-top-right-radius: var(--radius-sm);
-}
-
-.codemirror-wrapper :deep(.cm-live-code-content-last) {
-  border-bottom: 1px solid var(--border-subtle);
-  border-bottom-left-radius: var(--radius-sm);
-  border-bottom-right-radius: var(--radius-sm);
 }
 
 .codemirror-wrapper :deep(.cm-live-code-content) {

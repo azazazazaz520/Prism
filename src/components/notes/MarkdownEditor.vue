@@ -28,6 +28,9 @@ import {
   buildTableDecorations,
   findTableBlocks,
   isTableDelimiterRow,
+  moveToNextCell,
+  moveToNextRow,
+  moveToPreviousCell,
   type TableLine,
 } from './table-preview';
 
@@ -152,6 +155,18 @@ const saveKeymap = keymap.of([
       return true;
     },
     preventDefault: true,
+  },
+]);
+
+const tableNavigationKeymap = keymap.of([
+  {
+    key: 'Tab',
+    run: (target) => moveToNextCell(target),
+    shift: (target) => moveToPreviousCell(target),
+  },
+  {
+    key: 'Enter',
+    run: (target) => moveToNextRow(target),
   },
 ]);
 
@@ -548,6 +563,7 @@ function buildExtensions(codeLanguages: readonly LanguageDescription[] = []) {
     dropCursor(),
     bracketMatching(),
     markdown({ codeLanguages }),
+    tableNavigationKeymap,
     keymap.of([...defaultKeymap, ...historyKeymap]),
     taskCheckboxPlugin,
     livePreviewPlugin,
@@ -744,6 +760,17 @@ defineExpose({
   overflow: hidden;
 }
 
+.codemirror-wrapper :deep(.cm-md-table td[contenteditable='true']),
+.codemirror-wrapper :deep(.cm-md-table th[contenteditable='true']) {
+  outline: none;
+  caret-color: currentColor;
+}
+
+.codemirror-wrapper :deep(.cm-md-table td),
+.codemirror-wrapper :deep(.cm-md-table th) {
+  cursor: text;
+}
+
 .codemirror-wrapper :deep(.cm-task-checkbox) {
   display: inline-flex;
   align-items: center;
@@ -928,5 +955,58 @@ defineExpose({
   .codemirror-wrapper :deep(.cm-content) {
     padding: 24px 20px 96px;
   }
+}
+</style>
+
+<style>
+.cm-md-table-context-menu {
+  position: fixed;
+  z-index: 9999;
+  min-width: 180px;
+  padding: 6px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated, var(--bg-primary));
+  box-shadow: var(--shadow-lg, 0 12px 32px rgba(0, 0, 0, 0.22));
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  user-select: none;
+}
+
+.cm-md-table-context-item {
+  position: relative;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.cm-md-table-context-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.cm-md-table-context-parent::after {
+  content: '›';
+  position: absolute;
+  right: 10px;
+  color: var(--text-muted);
+}
+
+.cm-md-table-context-submenu {
+  display: none;
+  position: absolute;
+  left: calc(100% - 2px);
+  top: -6px;
+  min-width: 180px;
+  padding: 6px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated, var(--bg-primary));
+  box-shadow: var(--shadow-lg, 0 12px 32px rgba(0, 0, 0, 0.22));
+}
+
+.cm-md-table-context-parent:hover > .cm-md-table-context-submenu {
+  display: block;
 }
 </style>

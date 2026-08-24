@@ -554,6 +554,8 @@ export class MarkdownTableWidget extends WidgetType {
   }
 
   toDOM(view: EditorView): HTMLElement {
+    const shell = document.createElement('div');
+    shell.className = 'cm-md-table-shell';
     const table = document.createElement('table');
     table.className = 'cm-md-table';
     table.setAttribute('role', 'table');
@@ -586,6 +588,7 @@ export class MarkdownTableWidget extends WidgetType {
       cell.spellcheck = false;
 
       let committed = false;
+      let hasInput = false;
       const commit = (nextRow?: number, nextColumn?: number): boolean => {
         if (committed) return false;
         committed = true;
@@ -594,7 +597,7 @@ export class MarkdownTableWidget extends WidgetType {
         cell.setAttribute('contenteditable', 'false');
         const textContent = cell.textContent ?? '';
         const value = textContent === '\u00a0' ? '' : textContent;
-        if (value === initialText) {
+        if (!hasInput || value === initialText) {
           cell.innerHTML = renderTableCell(initialText) || '&nbsp;';
           if (nextRow !== undefined && nextColumn !== undefined) {
             const targetCell = table.querySelector<HTMLElement>(
@@ -631,6 +634,9 @@ export class MarkdownTableWidget extends WidgetType {
       };
 
       activeCellCommit = commit;
+      cell.addEventListener('input', () => {
+        hasInput = true;
+      });
       cell.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
           event.preventDefault();
@@ -871,7 +877,8 @@ export class MarkdownTableWidget extends WidgetType {
       });
     }
 
-    return table;
+    shell.appendChild(table);
+    return shell;
   }
 
   ignoreEvent() {

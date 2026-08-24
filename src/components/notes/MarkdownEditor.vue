@@ -881,14 +881,23 @@ defineExpose({
   font-size: 0.9em;
 }
 
+.codemirror-wrapper :deep(.cm-md-table-shell) {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  padding: 0.9em 0;
+  box-sizing: border-box;
+  font-size: 0.92em;
+}
+
 .codemirror-wrapper :deep(.cm-md-table) {
   display: block;
   width: 100%;
   max-width: 100%;
-  margin: 0.9em 0;
+  margin: 0;
   overflow-x: auto;
   border-collapse: collapse;
-  font-size: 0.92em;
+  font-size: inherit;
   line-height: 1.6;
 }
 

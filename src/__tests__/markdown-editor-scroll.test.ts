@@ -13,6 +13,17 @@ const markdown = [
   '```',
 ].join('\n');
 
+const markdownWithTable = [
+  '# 前文',
+  '',
+  '| 服务 | 作用 |',
+  '| --- | --- |',
+  '| API | 接口 |',
+  '| Worker | 后台任务 |',
+  '',
+  '表格后的正文',
+].join('\n');
+
 async function waitForEditor(parent: HTMLElement): Promise<EditorView> {
   const deadline = Date.now() + 5_000;
   while (Date.now() < deadline) {
@@ -78,5 +89,19 @@ describe('Markdown 编辑器滚动稳定性', () => {
 
     expect(layoutClasses()).toEqual(previewClasses);
     expect(parent.querySelectorAll('.cm-live-code-fence-syntax')).toHaveLength(0);
+  });
+
+  it('表格垂直间距应包含在 CodeMirror 可测量的部件容器内', async () => {
+    parent = document.createElement('div');
+    document.body.appendChild(parent);
+    app = createApp(MarkdownEditor, { modelValue: markdownWithTable });
+    app.mount(parent);
+
+    await waitForEditor(parent);
+    const shell = parent.querySelector<HTMLElement>('.cm-md-table-shell');
+    const table = shell?.querySelector<HTMLElement>(':scope > .cm-md-table');
+
+    expect(shell).toBeTruthy();
+    expect(table).toBeTruthy();
   });
 });

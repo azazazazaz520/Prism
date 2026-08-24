@@ -213,6 +213,41 @@ describe('Markdown 表格解析', () => {
     }
   });
 
+  it('只点击带行内样式的单元格不会修改 Markdown 源码', async () => {
+    const parent = document.createElement('div');
+    document.body.appendChild(parent);
+    let view: EditorView | null = null;
+    try {
+      const markdown = '| 状态 | 处理方式 |\n| --- | --- |\n| **外部删除** | 恢复快照 |';
+      let documentChangeCount = 0;
+      const state = EditorState.create({
+        doc: markdown,
+        extensions: [
+          EditorView.decorations.compute(['doc', 'selection'], (state) =>
+            buildTableDecorations(state, state.selection.main.head),
+          ),
+          EditorView.updateListener.of((update) => {
+            if (update.docChanged) documentChangeCount += 1;
+          }),
+        ],
+      });
+      view = new EditorView({ state, parent });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const styledCell = parent.querySelectorAll('td')[0];
+      expect(styledCell?.querySelector('strong')).toBeTruthy();
+      styledCell?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      styledCell?.dispatchEvent(new Event('blur', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(view.state.doc.toString()).toBe(markdown);
+      expect(documentChangeCount).toBe(0);
+    } finally {
+      view?.destroy();
+      parent.remove();
+    }
+  });
+
   it('单元格内容中的换行不会破坏表格结构', () => {
     const parent = document.createElement('div');
     document.body.appendChild(parent);

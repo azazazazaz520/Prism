@@ -513,7 +513,7 @@ fn validate_network_url(url_str: &str, has_local_perm: bool) -> Result<(), Strin
     Ok(())
 }
 
-/// 解析域名并校验解析结果是否为公网 IP（审查报告 H-1）。
+/// 解析域名并校验解析结果是否为公网 IP。
 ///
 /// 域名形态校验无法阻止"域名指向内网"与 DNS rebinding，此处对 DNS 解析
 /// 结果逐 IP 复核：任何解析 IP 命中本地/私网段即拒绝。

@@ -1,8 +1,8 @@
 {
-  "sha256": "ee3cfd33bb985e05ad65ea278c86117b5516cb204e4f0fdfdbd1d5b90c2ff200",
-  "version": "0.4.6",
-  "release_notes": "## Changes since v0.4.5\n\n- fix: 修复 Markdown 表格编辑时结构异常 (asd_fire)\n- fix: 修复代码块编辑时的文档跳转 (asd_fire)\n- feat(notes): 支持 Markdown 表格实时预览与插入 (asd_fire)\n- fix(notes): 新建笔记按钮改为新标签页打开 (asd_fire)\n- fix(notes): 恢复多标签页并保留浏览器式前进后退历史 (asd_fire)\n- feat(notes): 实现单标签浏览器式前进后退与上下文面板优化 (asd_fire)\n- feat(notes): 优化笔记空状态引导与弱化文字对比度 (asd_fire)\n- fix: 完善笔记保存冲突与恢复机制 (asd_fire)\n- fix: 修复任务同步启动竞态 (asd_fire)\n- chore: 同步稳定版更新清单 (github-actions[bot])",
-  "release_url": "https://github.com/azazazazaz520/Prism/releases/tag/v0.4.6",
-  "download_url": "https://github.com/azazazazaz520/Prism/releases/download/v0.4.6/Prism_0.4.6_x64-setup.exe",
-  "release_date": "2026-08-23T14:44:59.7891399Z"
+  "download_url": "https://github.com/azazazazaz520/Prism/releases/download/v0.4.7/Prism_0.4.7_x64-setup.exe",
+  "release_notes": "## Changes since v0.4.6\n\n- chore(plugins): 更新网络校验注释 (asd_fire)\n- fix(sync): 修复同步恢复与 Realtime 生命周期 (asd_fire)\n- fix(sync): 完善每日完成记录的数据归属 (asd_fire)\n- fix(notes): 修复表格点击保存与光标偏移 (asd_fire)\n- chore: 同步稳定版更新清单 (github-actions[bot])",
+  "version": "0.4.7",
+  "release_url": "https://github.com/azazazazaz520/Prism/releases/tag/v0.4.7",
+  "release_date": "2026-08-26T16:40:55.2943660Z",
+  "sha256": "a8bfc234499b8a6d7d16f5db7d313f0849516d9762fab9ff66ecae1d611b2753"
 }

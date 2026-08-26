@@ -192,7 +192,7 @@ onMounted(async () => {
     if (e.detail) settingsInitialSub.value = e.detail;
     activeModule.value = 'settings';
   }) as EventListener);
-  // 仅在同步已配置时启动 30 秒轮询，作为 Realtime WebSocket 的兜底
+  // 每 5 分钟触发一次增量后台同步，用于补偿 Realtime 丢失并校正跨设备状态
   _pollInterval = setInterval(() => {
     pullAndMerge().catch(() => {});
   }, 5 * 60_000);

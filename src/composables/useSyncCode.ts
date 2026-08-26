@@ -3,6 +3,7 @@ import { invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
 import { diagnosticsLogger } from '../diagnostics/invoke-logged';
 import { useSync } from './useSync';
 import { useAuth, getSupabaseClient } from './useAuth';
+import type { DailyCompletion } from '../types';
 
 /**
  * SyncCode — 跨设备配对与 Profile 管理
@@ -26,7 +27,7 @@ const pairError = ref<string | null>(null);
 
 export function useSyncCode() {
   const { user, isLoggedIn } = useAuth();
-  const { setProfileId, getProfileId, flushOfflineQueue } = useSync();
+  const { setProfileId, getProfileId, pushDailyCompletion } = useSync();
 
   /** 获取伪随机 UUID */
   function generateUUID(): string {
@@ -139,6 +140,12 @@ export function useSyncCode() {
         });
         if (error) throw error;
       }
+
+      const localDailyCompletions = await invoke<DailyCompletion[]>('get_all_daily_completions');
+      const unlinkedDailyCompletions = localDailyCompletions.filter((dc) => !dc.profile_id);
+      for (const completion of unlinkedDailyCompletions) {
+        await pushDailyCompletion({ ...completion, profile_id: profileId });
+      }
     } catch (e) {
       diagnosticsLogger.warn(
         'sync',
@@ -178,8 +185,6 @@ export function useSyncCode() {
         await invoke('set_sync_config', { syncCode: config.sync_code, profileId });
       }
       setProfileId(profileId);
-      // 认证恢复后再消费旧队列，避免用未恢复的身份字段重放任务。
-      await flushOfflineQueue();
       return true;
     } catch (e) {
       setProfileId(null);

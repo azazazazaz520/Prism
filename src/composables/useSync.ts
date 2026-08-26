@@ -108,6 +108,11 @@ function scheduleRetry(fn: () => void) {
 /** 当前设备所属的 profile_id，由 useSyncCode 设置 */
 const currentProfileId = ref<string | null>(null);
 
+/** 当前 Realtime 频道及其重试状态。频道生命周期必须随 Profile 切换和退出登录结束。 */
+let activeRealtimeChannel: RealtimeChannel | null = null;
+let realtimeRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let realtimeSubscriptionGeneration = 0;
+
 /** 分页大小 */
 const PAGE_SIZE = 500;
 
@@ -137,7 +142,37 @@ export function useSync() {
   }
 
   function setProfileId(id: string | null) {
+    if (currentProfileId.value !== id) {
+      void unsubscribeFromChanges();
+    }
     currentProfileId.value = id;
+  }
+
+  async function unsubscribeFromChanges(): Promise<void> {
+    realtimeSubscriptionGeneration += 1;
+    if (realtimeRetryTimer) {
+      clearTimeout(realtimeRetryTimer);
+      realtimeRetryTimer = null;
+    }
+
+    const channel = activeRealtimeChannel;
+    activeRealtimeChannel = null;
+    if (channel) await channel.unsubscribe();
+  }
+
+  /** 判断指定每日完成记录的最后一个离线操作是否仍是待推送的新增。 */
+  function hasPendingDailyCompletion(taskId: string, date: string): boolean {
+    for (let index = offlineQueue.length - 1; index >= 0; index -= 1) {
+      const item = offlineQueue[index];
+      if (
+        item.table === 'daily_completions' &&
+        item.data.task_id === taskId &&
+        item.data.date === date
+      ) {
+        return item.type === 'upsert';
+      }
+    }
+    return false;
   }
 
   /** 监听登录状态变化，刷新离线队列 */
@@ -145,6 +180,7 @@ export function useSync() {
     if (!val) {
       currentProfileId.value = null;
       syncStatus.value = 'idle';
+      void unsubscribeFromChanges();
     }
   });
 
@@ -365,7 +401,7 @@ export function useSync() {
         },
       );
       syncStatus.value = 'error';
-      return [];
+      throw e;
     }
   }
 
@@ -414,7 +450,7 @@ export function useSync() {
         task_count: allTasks.length,
       });
       syncStatus.value = 'error';
-      return allTasks.length > 0 ? allTasks : [];
+      throw e;
     }
   }
 
@@ -428,10 +464,13 @@ export function useSync() {
     const profileId = getProfileId();
     if (!profileId) return null;
 
+    await unsubscribeFromChanges();
+
     const supabase = getSupabaseClient();
 
     // 用随机后缀避免 HMR 重载时频道名冲突
     const channelName = `tasks-changes-${Math.random().toString(36).slice(2, 8)}`;
+    const generation = realtimeSubscriptionGeneration;
     const channel = supabase
       .channel(channelName)
       .on(
@@ -455,20 +494,48 @@ export function useSync() {
           const eventType = payload.eventType as 'INSERT' | 'UPDATE' | 'DELETE';
           if (dc) onDailyCompletionChange(dc, eventType);
         },
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          syncStatus.value = 'idle';
-        } else if (status === 'CHANNEL_ERROR') {
-          syncStatus.value = 'error';
-          // 5 秒后重建频道
-          setTimeout(() => {
-            void channel.unsubscribe();
-            void subscribeToChanges(onTaskChange, onDailyCompletionChange);
-          }, 5000);
-        }
-      });
+      );
+    activeRealtimeChannel = channel;
 
+    channel.subscribe((status) => {
+      if (
+        generation !== realtimeSubscriptionGeneration ||
+        activeRealtimeChannel !== channel ||
+        getProfileId() !== profileId
+      ) {
+        return;
+      }
+
+      if (status === 'SUBSCRIBED') {
+        syncStatus.value = 'idle';
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        syncStatus.value = 'error';
+        if (realtimeRetryTimer) return;
+
+        // 5 秒后重建当前 Profile 的频道；退出登录或切换 Profile 后不再重试旧频道。
+        realtimeRetryTimer = setTimeout(() => {
+          realtimeRetryTimer = null;
+          if (
+            generation !== realtimeSubscriptionGeneration ||
+            getProfileId() !== profileId ||
+            !isOnline.value
+          ) {
+            return;
+          }
+
+          void (async () => {
+            await unsubscribeFromChanges();
+            if (getProfileId() === profileId && isOnline.value) {
+              await subscribeToChanges(onTaskChange, onDailyCompletionChange);
+            }
+          })().catch((e) => {
+            diagnosticsLogger.warn('sync', 'sync.realtime_retry_failed', 'Realtime 重连失败', {
+              error: e instanceof Error ? e.message : String(e),
+            });
+          });
+        }, 5_000);
+      }
+    });
     return channel;
   }
 
@@ -533,6 +600,8 @@ export function useSync() {
     pullTasks,
     pullDailyCompletions,
     subscribeToChanges,
+    unsubscribeFromChanges,
+    hasPendingDailyCompletion,
     flushOfflineQueue,
   };
 }

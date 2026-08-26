@@ -72,6 +72,10 @@ let undoTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** 是否已初始化认证和同步 */
 let syncInitialized = false;
+/** 多个组件实例共享同一条后台同步任务，避免重复恢复 Profile 或重复拉取。 */
+let syncPromise: Promise<void> | null = null;
+let realtimeInitialized = false;
+let realtimeProfileId: string | null = null;
 
 /** 为 sync pull 操作添加超时，离线时快速失败而非等待 HTTP 超时 */
 /** 任务看板 composable：组合 TaskRepo + FilterEngine + Sync，只做编排 */
@@ -84,17 +88,17 @@ export function useTaskStore() {
     pullTasks,
     pullDailyCompletions,
     subscribeToChanges,
+    unsubscribeFromChanges,
     syncStatus,
     lastSyncAt,
     offlineQueueCount,
     getProfileId,
+    hasPendingDailyCompletion,
     flushOfflineQueue,
   } = useSync();
   const syncCode = useSyncCode();
-  let syncPromise: Promise<void> | null = null;
-  let realtimeInitialized = false;
 
-  // ── 副作用（仅 App.vue 首调用时触发） ──────────────
+  // ── 副作用（同步任务由模块级状态统一去重） ──────────────
 
   // ── 同步回调 ──────────────────────────────
 
@@ -285,9 +289,7 @@ export function useTaskStore() {
                 ),
               );
             }
-            if (remoteDCs && remoteDCs.length > 0) {
-              await mergeDailyCompletions(remoteDCs);
-            }
+            await mergeDailyCompletions(remoteDCs);
           } catch (e) {
             diagnosticsLogger.warn('sync', 'sync.load_all_pull_failed', '加载远端同步数据失败', {
               error: e instanceof Error ? e.message : String(e),
@@ -346,9 +348,7 @@ export function useTaskStore() {
               ),
             );
           }
-          if (remoteDCs && remoteDCs.length > 0) {
-            await mergeDailyCompletions(remoteDCs);
-          }
+          await mergeDailyCompletions(remoteDCs);
         } catch (e) {
           diagnosticsLogger.warn('sync', 'sync.refresh_tasks_pull_failed', '刷新远端同步数据失败', {
             error: e instanceof Error ? e.message : String(e),
@@ -404,18 +404,21 @@ export function useTaskStore() {
     }
   }
 
-  async function pullRemoteAndMerge(): Promise<void> {
+  async function pullRemoteAndMerge(forceFull = false): Promise<void> {
     if (!isLoggedIn.value || !navigator.onLine) return;
 
     const [remoteTasks, remoteDCs] = await Promise.all([
-      withTimeout(pullTasks(true)),
+      withTimeout(pullTasks(forceFull)),
       withTimeout(pullDailyCompletions()),
     ]);
     await applyRemoteTasks(remoteTasks);
     await mergeDailyCompletions(remoteDCs);
   }
 
-  function startBackgroundSync(): Promise<void> {
+  function runBackgroundSync(options: {
+    restoreProfile: boolean;
+    forceFullPull: boolean;
+  }): Promise<void> {
     if (syncPromise) return syncPromise;
 
     syncPromise = (async () => {
@@ -429,36 +432,38 @@ export function useTaskStore() {
 
         if (!isLoggedIn.value) return;
 
-        const profileRestored = await syncCode.restoreProfile();
-        if (profileRestored) {
-          // 必须先恢复 Profile 及当前匿名用户的成员关系，再推送跨天重置任务。
-          // 否则 profile_id 可能仍为 null，导致共享任务被降级为私有任务。
-          const resetTasks = pendingResetTasks.value;
-          pendingResetTasks.value = [];
-          await Promise.all(
-            resetTasks.map((task) =>
-              pushTask(task).catch((e) =>
-                diagnosticsLogger.warn(
-                  'sync',
-                  'sync.reset_daily_push_failed',
-                  '每日任务重置推送失败',
-                  {
-                    task_id: task.id,
-                    error: e instanceof Error ? e.message : String(e),
-                  },
+        if (options.restoreProfile) {
+          const profileRestored = await syncCode.restoreProfile();
+          if (profileRestored) {
+            // 必须先恢复 Profile 及当前匿名用户的成员关系，再推送跨天重置任务。
+            // 否则 profile_id 可能仍为 null，导致共享任务被降级为私有任务。
+            const resetTasks = pendingResetTasks.value;
+            pendingResetTasks.value = [];
+            await Promise.all(
+              resetTasks.map((task) =>
+                pushTask(task).catch((e) =>
+                  diagnosticsLogger.warn(
+                    'sync',
+                    'sync.reset_daily_push_failed',
+                    '每日任务重置推送失败',
+                    {
+                      task_id: task.id,
+                      error: e instanceof Error ? e.message : String(e),
+                    },
+                  ),
                 ),
               ),
-            ),
-          );
+            );
 
-          await syncCode.mergeLocalToProfile(getProfileId()!);
+            await syncCode.mergeLocalToProfile(getProfileId()!);
+          }
         }
         // 没有同步 Profile 时也要保留原有的 user_id 队列语义；有 Profile
         // 时则在 Profile 恢复之后再重放，避免启动竞态载荷污染共享任务。
         if (navigator.onLine) await flushOfflineQueue();
 
         await initSync();
-        await pullRemoteAndMerge();
+        await pullRemoteAndMerge(options.forceFullPull);
       } catch (e) {
         syncError.value = e instanceof Error ? e.message : '后台同步失败';
         diagnosticsLogger.error('sync', 'sync.background_failed', '后台同步失败', e);
@@ -471,6 +476,16 @@ export function useTaskStore() {
     return syncPromise;
   }
 
+  /** 应用启动或登录后的完整恢复：恢复 Profile、重放队列并执行一次全量拉取。 */
+  function startBackgroundSync(): Promise<void> {
+    return runBackgroundSync({ restoreProfile: true, forceFullPull: true });
+  }
+
+  /** 正常运行期同步：不重新配对，只刷新队列并执行增量拉取。 */
+  function startIncrementalSync(): Promise<void> {
+    return runBackgroundSync({ restoreProfile: false, forceFullPull: false });
+  }
+
   async function loadAll() {
     await loadLocalTasks();
     void startBackgroundSync();
@@ -480,24 +495,45 @@ export function useTaskStore() {
     if (!silent) isLoading.value = true;
     try {
       await loadLocalTasks(true);
-      void startBackgroundSync();
+      void pullAndMerge().catch((e) =>
+        diagnosticsLogger.warn('sync', 'sync.refresh_pull_failed', '刷新后的增量同步失败', {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
     } finally {
       if (!silent) isLoading.value = false;
     }
   }
 
   async function pullAndMerge() {
-    await startBackgroundSync();
+    if (!isLoggedIn.value || !navigator.onLine) return;
+
+    const syncConfig = await syncCode.getSyncConfig();
+    // 配置存在但当前 Profile 丢失时，才重新进入恢复流程；正常轮询不重复调用配对接口。
+    if (syncConfig.sync_code && !getProfileId()) {
+      await startBackgroundSync();
+      return;
+    }
+
+    await startIncrementalSync();
   }
 
   async function initSync(): Promise<boolean> {
     if (!isLoggedIn.value) return false;
     const hasProfile = await syncCode.hasProfile();
     if (!hasProfile) return false;
-    if (realtimeInitialized) return true;
-    realtimeInitialized = true;
 
-    subscribeToChanges(
+    const profileId = getProfileId();
+    if (!profileId) return false;
+    if (realtimeInitialized && realtimeProfileId === profileId) return true;
+
+    if (realtimeInitialized || realtimeProfileId !== null) {
+      await unsubscribeFromChanges();
+      realtimeInitialized = false;
+      realtimeProfileId = null;
+    }
+
+    const channel = await subscribeToChanges(
       (remoteTask) => {
         const current = tasks.value.find((task) => task.id === remoteTask.id);
         if (current && new Date(remoteTask.updated_at) < new Date(current.updated_at)) return;
@@ -526,7 +562,7 @@ export function useTaskStore() {
           }
         } else {
           invoke('sync_remote_daily_completions', {
-            remoteCompletions: [{ task_id: dc.task_id, date: dc.date }],
+            remoteCompletions: [{ task_id: dc.task_id, date: dc.date, profile_id: dc.profile_id }],
           });
           if (dc.date === getTodayStr() && !dailyCompletedIds.value.includes(dc.task_id)) {
             const task = tasks.value.find((t) => t.id === dc.task_id);
@@ -537,7 +573,9 @@ export function useTaskStore() {
         }
       },
     );
-    return true;
+    realtimeInitialized = channel !== null;
+    realtimeProfileId = channel ? profileId : null;
+    return realtimeInitialized;
   }
 
   async function refreshDailyCompletions() {
@@ -546,21 +584,28 @@ export function useTaskStore() {
     });
   }
 
-  async function cleanStaleDailyCompletions(remoteDCs: Array<{ task_id: string; date: string }>) {
-    const remoteDates = [...new Set(remoteDCs.map((dc) => dc.date))];
-    for (const date of remoteDates) {
-      const remoteIds = remoteDCs.filter((dc) => dc.date === date).map((dc) => dc.task_id);
-      const localIds = await invoke<string[]>('get_daily_completions', { date });
-      for (const taskId of localIds) {
-        if (!remoteIds.includes(taskId)) {
-          await invoke('delete_daily_completion', { taskId, date });
-        }
+  async function cleanStaleDailyCompletions(remoteDCs: DailyCompletion[]) {
+    const localDCs = await invoke<DailyCompletion[]>('get_all_daily_completions');
+    const remoteKeys = new Set(remoteDCs.map((dc) => `${dc.task_id}\u0000${dc.date}`));
+    const profileId = getProfileId();
+
+    for (const local of localDCs) {
+      // 未关联 Profile 的本地记录可能仍在离线队列中；其他 Profile 的记录也不能被当前 Profile 清理。
+      if (local.profile_id !== profileId || hasPendingDailyCompletion(local.task_id, local.date)) {
+        continue;
+      }
+
+      const key = `${local.task_id}\u0000${local.date}`;
+      if (!remoteKeys.has(key)) {
+        await invoke('delete_daily_completion', {
+          taskId: local.task_id,
+          date: local.date,
+        });
       }
     }
   }
 
   async function mergeDailyCompletions(remoteDCs: DailyCompletion[]) {
-    if (remoteDCs.length === 0) return;
     try {
       await cleanStaleDailyCompletions(remoteDCs);
       await invoke('sync_remote_daily_completions', {
@@ -578,6 +623,7 @@ export function useTaskStore() {
         '合并每日完成记录失败',
         { error: e instanceof Error ? e.message : String(e) },
       );
+      throw e;
     }
   }
 

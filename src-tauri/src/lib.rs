@@ -343,6 +343,7 @@ pub fn run() {
             commands::tasks::get_all_tags,
             commands::tasks::delete_tag,
             commands::tasks::get_daily_completions,
+            commands::tasks::get_all_daily_completions,
             commands::tasks::reset_daily_tasks,
             commands::tasks::sync_remote_daily_completions,
             commands::tasks::delete_daily_completion,

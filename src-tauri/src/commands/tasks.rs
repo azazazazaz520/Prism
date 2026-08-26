@@ -39,9 +39,22 @@ pub fn get_all_tags(state: tauri::State<AppState>) -> Vec<String> {
     state.read_data(task_service::all_tags)
 }
 
+/// 按指定日期获取已完成的每日任务 ID。
+///
+/// `date` 采用 YYYY-MM-DD 格式。返回值的每个元素都是一个任务 ID，
+/// 用于刷新指定日期的界面完成状态。
 #[tauri::command]
 pub fn get_daily_completions(state: tauri::State<AppState>, date: String) -> Vec<String> {
     state.read_data(|d| task_service::daily_completions(d, &date))
+}
+
+/// 获取本地保存的全部每日完成记录。
+///
+/// 返回所有日期的 `DailyCompletion` 完整记录，包括任务 ID、日期和 Profile 归属，
+/// 用于同步快照校正和 Profile 配对迁移。
+#[tauri::command]
+pub fn get_all_daily_completions(state: tauri::State<AppState>) -> Vec<store::DailyCompletion> {
+    state.read_data(|d| d.daily_completions.clone())
 }
 
 /// 跨天重置每日任务的 completed 状态，返回被修改的任务快照供前端推送到远端同步后端
@@ -140,11 +153,15 @@ pub fn sync_remote_daily_completions(
 ) -> Result<(), String> {
     state.write_data(|d| {
         for remote in remote_completions {
-            let exists = d
+            if let Some(local) = d
                 .daily_completions
-                .iter()
-                .any(|dc| dc.task_id == remote.task_id && dc.date == remote.date);
-            if !exists {
+                .iter_mut()
+                .find(|dc| dc.task_id == remote.task_id && dc.date == remote.date)
+            {
+                if local.profile_id.is_none() {
+                    local.profile_id = remote.profile_id.clone();
+                }
+            } else {
                 d.daily_completions.push(remote);
             }
         }

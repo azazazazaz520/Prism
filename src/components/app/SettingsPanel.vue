@@ -20,6 +20,7 @@ import PluginManager from '../plugins/PluginManager.vue';
 import PluginViewHost from '../plugins/PluginViewHost.vue';
 import ScriptManager from '../plugins/ScriptManager.vue';
 import UpdateDialog from './UpdateDialog.vue';
+import PdfToWordSettings from './PdfToWordSettings.vue';
 import type {
   ReleaseInfo,
   UpdateCheckErrorCode,
@@ -506,6 +507,8 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
             <p v-if="pandocTip" class="pandoc-tip">{{ pandocTip }}</p>
             <p class="setting-hint">用于将当前 Markdown 笔记导出为 Word 文档。</p>
           </div>
+
+          <PdfToWordSettings />
         </div>
 
         <!-- 快捷键说明 -->

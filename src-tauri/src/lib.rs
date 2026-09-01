@@ -13,6 +13,7 @@ pub(crate) mod logging;
 pub(crate) mod models;
 pub(crate) mod note_recovery;
 pub(crate) mod note_service;
+pub(crate) mod pdf_to_word_service;
 pub(crate) mod persistence;
 pub(crate) mod plugin_protocol;
 pub(crate) mod prompt;
@@ -378,6 +379,15 @@ pub fn run() {
             // 笔记命令
             commands::export::export_note_to_docx,
             commands::export::get_pandoc_info,
+            // PDF 转 Word 命令
+            commands::pdf_to_word::pdf_to_word_get_config,
+            commands::pdf_to_word::pdf_to_word_save_config,
+            commands::pdf_to_word::pdf_to_word_clear_token,
+            commands::pdf_to_word::pdf_to_word_check_health,
+            commands::pdf_to_word::pdf_to_word_create_job,
+            commands::pdf_to_word::pdf_to_word_get_job,
+            commands::pdf_to_word::pdf_to_word_cancel_job,
+            commands::pdf_to_word::pdf_to_word_download_result,
             commands::notes::list_note_tree,
             commands::notes::list_note_dir,
             commands::notes::read_note,

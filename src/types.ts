@@ -243,6 +243,56 @@ export interface NotesLayoutState {
   expandedPaths: string[];
 }
 
+/** PDF 转 Word 服务返回的任务状态。 */
+export type PdfToWordJobStatus =
+  | 'queued'
+  | 'processing'
+  | 'succeeded'
+  | 'failed'
+  | 'cancelled'
+  | 'timed_out';
+
+/** PDF 转 Word 服务配置状态。 */
+export interface PdfToWordConfigStatus {
+  baseUrl: string | null;
+  configured: boolean;
+}
+
+/** PDF 转 Word 服务健康状态。 */
+export interface PdfToWordHealth {
+  status: string;
+  engine: string;
+  workerProcesses: number;
+  maxPendingJobs: number;
+  routeMode: string;
+  exportMode: string;
+  modelLoaded: boolean;
+  maxUploadBytes: number;
+  maxPages: number;
+}
+
+/** PDF 转 Word 任务快照。 */
+export interface PdfToWordJob {
+  jobId: string;
+  filename: string;
+  status: PdfToWordJobStatus;
+  progress: number;
+  route: string;
+  routeReason: string | null;
+  tableCount: number;
+  pageCount: number;
+  error: string | null;
+  createdAt: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+
+/** DOCX 下载结果。 */
+export interface PdfToWordDownloadResult {
+  outputPath: string;
+  bytes: number;
+}
+
 /** 笔记工作区中的一个编辑分栏。 */
 export interface NotePane {
   id: string;

@@ -30,6 +30,10 @@ async function saveAndTest() {
   try {
     await saveConfig(baseUrl.value, token.value || null);
     token.value = '';
+    if (!config.value.configured) {
+      tip.value = '服务地址已保存，但尚未检测到访问令牌';
+      return;
+    }
     await checkHealth();
     tip.value = `服务正常 · ${health.value?.engine || '转换引擎已就绪'}`;
   } catch {

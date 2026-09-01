@@ -29,6 +29,12 @@ const isSucceeded = computed(() => job.value?.status === 'succeeded');
 const isTerminal = computed(() =>
   ['succeeded', 'failed', 'cancelled', 'timed_out'].includes(job.value?.status ?? ''),
 );
+const configurationNotice = computed(() => {
+  if (!config.value.baseUrl) return '请先在设置的“偏好设置”中填写 PDF 转 Word 服务地址和令牌。';
+  if (!config.value.configured)
+    return '服务地址已保存，但访问令牌尚未配置，请先返回设置页保存令牌。';
+  return '';
+});
 
 const statusLabel = computed(() => {
   switch (job.value?.status) {
@@ -115,9 +121,9 @@ onMounted(() => {
 
 <template>
   <div class="pdf-tool">
-    <div v-if="!config.configured" class="pdf-notice">
-      <div class="pdf-notice-title">需要配置服务</div>
-      <p>请先在设置的“偏好设置”中填写 PDF 转 Word 服务地址和令牌。</p>
+    <div v-if="configurationNotice" class="pdf-notice">
+      <div class="pdf-notice-title">需要完成配置</div>
+      <p>{{ configurationNotice }}</p>
     </div>
 
     <section class="pdf-panel">

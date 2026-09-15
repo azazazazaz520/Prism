@@ -252,7 +252,7 @@ export type PdfToWordJobStatus =
   | 'cancelled'
   | 'timed_out';
 
-/** PDF 转 Word 服务配置状态。 */
+/** PDF 转 Word 内置服务状态。 */
 export interface PdfToWordConfigStatus {
   baseUrl: string | null;
   configured: boolean;

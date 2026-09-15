@@ -1,18 +1,23 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use keyring::Entry;
-use reqwest::{Client, RequestBuilder, Response, StatusCode};
+use reqwest::{Client, Response, StatusCode};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 use url::Url;
 
-const KEYRING_SERVICE: &str = "com.prism.desktop";
-const KEYRING_USER: &str = "pdf-to-word-token";
 const MAX_UPLOAD_BYTES: u64 = 50 * 1024 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// 返回 PDF 转 Word 服务地址。
+pub fn configured_base_url() -> Option<String> {
+    option_env!("PDF_TO_WORD_BASE_URL")
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
 
 /// PDF 转 Word 服务的任务快照。
 #[derive(Debug, Clone, Serialize)]
@@ -99,33 +104,39 @@ struct ApiError {
 /// 远程 PDF 转 Word API 的具体适配器。
 pub struct PdfToWordService {
     base_url: String,
-    token: Option<String>,
+    auth_token: String,
     client: Client,
 }
 
 impl PdfToWordService {
     /// 创建服务适配器并校验服务地址。
-    pub fn new(base_url: &str, token: Option<String>) -> Result<Self, String> {
+    pub fn new(base_url: &str, auth_token: String) -> Result<Self, String> {
         let base_url = validate_base_url(base_url)?;
         let client = Client::builder()
             .connect_timeout(CONNECT_TIMEOUT)
             .timeout(REQUEST_TIMEOUT)
             .build()
             .map_err(|_| "PDF_TO_WORD_NETWORK: 无法创建网络客户端".to_string())?;
-        let token = token
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty());
+        let auth_token = auth_token.trim().to_string();
+        if auth_token.is_empty() {
+            return Err("PDF_TO_WORD_AUTH_REQUIRED: 服务身份尚未建立".to_string());
+        }
         Ok(Self {
             base_url,
-            token,
+            auth_token,
             client,
         })
     }
 
-    /// 检查服务健康状态。服务端允许公开健康检查时无需令牌。
+    /// 检查服务健康状态。
     pub async fn health(&self) -> Result<PdfToWordHealth, String> {
-        let request = self.with_optional_auth(self.client.get(self.endpoint("/health")));
-        let response = request.send().await.map_err(classify_network_error)?;
+        let response = self
+            .client
+            .get(self.endpoint("/health"))
+            .bearer_auth(&self.auth_token)
+            .send()
+            .await
+            .map_err(classify_network_error)?;
         parse_json_response::<ApiHealth>(response)
             .await
             .map(Into::into)
@@ -133,7 +144,6 @@ impl PdfToWordService {
 
     /// 上传 PDF 并创建远程转换任务。
     pub async fn create_job(&self, input_path: &Path) -> Result<PdfToWordJob, String> {
-        let token = self.required_token()?;
         let metadata = tokio::fs::metadata(input_path)
             .await
             .map_err(|_| "PDF_TO_WORD_INPUT_MISSING: PDF 文件不存在或不可读".to_string())?;
@@ -172,7 +182,7 @@ impl PdfToWordService {
         let response = self
             .client
             .post(self.endpoint("/api/pdf-to-word/jobs"))
-            .bearer_auth(token)
+            .bearer_auth(&self.auth_token)
             .multipart(form)
             .send()
             .await
@@ -185,11 +195,10 @@ impl PdfToWordService {
     /// 获取远程转换任务状态。
     pub async fn get_job(&self, job_id: &str) -> Result<PdfToWordJob, String> {
         validate_job_id(job_id)?;
-        let token = self.required_token()?;
         let response = self
             .client
             .get(self.endpoint(&format!("/api/pdf-to-word/jobs/{job_id}")))
-            .bearer_auth(token)
+            .bearer_auth(&self.auth_token)
             .send()
             .await
             .map_err(classify_network_error)?;
@@ -201,11 +210,10 @@ impl PdfToWordService {
     /// 取消远程转换任务。
     pub async fn cancel_job(&self, job_id: &str) -> Result<PdfToWordJob, String> {
         validate_job_id(job_id)?;
-        let token = self.required_token()?;
         let response = self
             .client
             .delete(self.endpoint(&format!("/api/pdf-to-word/jobs/{job_id}")))
-            .bearer_auth(token)
+            .bearer_auth(&self.auth_token)
             .send()
             .await
             .map_err(classify_network_error)?;
@@ -221,7 +229,6 @@ impl PdfToWordService {
         output_path: &Path,
     ) -> Result<PdfToWordDownloadResult, String> {
         validate_job_id(job_id)?;
-        let token = self.required_token()?;
         let output_path = normalize_output_path(output_path)?;
         let parent = output_path
             .parent()
@@ -240,7 +247,7 @@ impl PdfToWordService {
             uuid::Uuid::new_v4().simple()
         ));
         let result = self
-            .download_to_temp(job_id, &temp_path, &output_path, token)
+            .download_to_temp(job_id, &temp_path, &output_path)
             .await;
         if result.is_err() {
             let _ = tokio::fs::remove_file(&temp_path).await;
@@ -253,12 +260,11 @@ impl PdfToWordService {
         job_id: &str,
         temp_path: &Path,
         output_path: &Path,
-        token: String,
     ) -> Result<PdfToWordDownloadResult, String> {
         let response = self
             .client
             .get(self.endpoint(&format!("/api/pdf-to-word/jobs/{job_id}/result")))
-            .bearer_auth(token)
+            .bearer_auth(&self.auth_token)
             .send()
             .await
             .map_err(classify_network_error)?;
@@ -290,19 +296,6 @@ impl PdfToWordService {
 
     fn endpoint(&self, path: &str) -> String {
         format!("{}{}", self.base_url, path)
-    }
-
-    fn required_token(&self) -> Result<String, String> {
-        self.token
-            .clone()
-            .ok_or("PDF_TO_WORD_AUTH_REQUIRED: 请先配置 PDF 转 Word 服务令牌".to_string())
-    }
-
-    fn with_optional_auth(&self, request: RequestBuilder) -> RequestBuilder {
-        match &self.token {
-            Some(token) => request.bearer_auth(token),
-            None => request,
-        }
     }
 }
 
@@ -349,45 +342,6 @@ pub fn validate_job_id(job_id: &str) -> Result<(), String> {
         return Err("PDF_TO_WORD_JOB_INVALID: 任务编号格式无效".to_string());
     }
     Ok(())
-}
-
-/// 读取操作系统凭据存储中的服务令牌。
-pub fn read_token() -> Result<Option<String>, String> {
-    let entry = credential_entry()?;
-    match entry.get_password() {
-        Ok(value) if !value.trim().is_empty() => Ok(Some(value)),
-        Ok(_) | Err(keyring::Error::NoEntry) => Ok(None),
-        Err(_) => Err("PDF_TO_WORD_CREDENTIALS: 无法读取服务令牌".to_string()),
-    }
-}
-
-/// 保存服务令牌到操作系统凭据存储。
-pub fn save_token(token: &str) -> Result<(), String> {
-    let token = token.trim();
-    if token.is_empty() {
-        return Err("PDF_TO_WORD_AUTH_REQUIRED: 服务令牌不能为空".to_string());
-    }
-    credential_entry()?
-        .set_password(token)
-        .map_err(|_| "PDF_TO_WORD_CREDENTIALS: 无法保存服务令牌".to_string())
-}
-
-/// 删除操作系统凭据存储中的服务令牌。
-pub fn clear_token() -> Result<(), String> {
-    match credential_entry()?.delete_credential() {
-        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-        Err(_) => Err("PDF_TO_WORD_CREDENTIALS: 无法清除服务令牌".to_string()),
-    }
-}
-
-/// 判断服务令牌是否已经配置。
-pub fn has_token() -> Result<bool, String> {
-    Ok(read_token()?.is_some())
-}
-
-fn credential_entry() -> Result<Entry, String> {
-    Entry::new(KEYRING_SERVICE, KEYRING_USER)
-        .map_err(|_| "PDF_TO_WORD_CREDENTIALS: 无法访问操作系统凭据存储".to_string())
 }
 
 async fn parse_json_response<T: DeserializeOwned>(response: Response) -> Result<T, String> {

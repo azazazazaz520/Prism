@@ -152,9 +152,6 @@ pub struct ConfigStore {
     /// Word 导出的默认 reference.docx 模板路径
     #[serde(default)]
     pub pandoc_reference_doc: Option<PathBuf>,
-    /// PDF 转 Word 服务地址；令牌保存在操作系统凭据存储中
-    #[serde(default)]
-    pub pdf_to_word_base_url: Option<String>,
     /// 仪表盘布局配置（JSON 字符串，前端序列化）
     #[serde(default)]
     pub dashboard_layout: Option<String>,
@@ -197,7 +194,6 @@ pub fn default_config_store() -> ConfigStore {
         notes_dir: None,
         pandoc_path: None,
         pandoc_reference_doc: None,
-        pdf_to_word_base_url: None,
         dashboard_layout: None,
         plugins: std::collections::HashMap::new(),
     }

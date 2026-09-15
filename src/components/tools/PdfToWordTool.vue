@@ -30,9 +30,7 @@ const isTerminal = computed(() =>
   ['succeeded', 'failed', 'cancelled', 'timed_out'].includes(job.value?.status ?? ''),
 );
 const configurationNotice = computed(() => {
-  if (!config.value.baseUrl) return '请先在设置的“偏好设置”中填写 PDF 转 Word 服务地址和令牌。';
-  if (!config.value.configured)
-    return '服务地址已保存，但访问令牌尚未配置，请先返回设置页保存令牌。';
+  if (!config.value.baseUrl) return 'PDF 转 Word 服务暂不可用，请稍后重试。';
   return '';
 });
 
@@ -132,7 +130,7 @@ onMounted(() => {
           <h3>PDF 转 Word</h3>
           <p>调用远程服务转换 PDF，完成后下载可编辑的 Word 文档。</p>
         </div>
-        <span v-if="config.configured" class="pdf-configured">服务已配置</span>
+        <span v-if="config.configured" class="pdf-configured">服务已就绪</span>
       </div>
 
       <button class="pdf-file-picker" type="button" :disabled="isSelecting" @click="choosePdf">

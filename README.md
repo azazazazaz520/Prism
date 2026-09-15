@@ -100,6 +100,16 @@ VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
 ```
 
+PDF 转 Word 服务地址从项目根目录的 `.env` 读取，并在构建时注入 Rust。将 Cloudflare 中配置的完整 HTTPS 地址填入：
+
+```dotenv
+PDF_TO_WORD_BASE_URL=
+```
+
+在等号后填写实际地址，例如 `https://` 加上 Cloudflare DNS 记录对应的完整域名。该变量不使用 `VITE_` 前缀，不会注入前端代码。修改 `.env` 后重新运行 `npm run tauri build`。
+
+GitHub Actions 发布构建使用仓库变量 `PDF_TO_WORD_BASE_URL`。在仓库的 `Settings → Secrets and variables → Actions → Variables` 中创建同名变量，值填写 Cloudflare 配置的完整 HTTPS 地址。工作流会将该变量传给 Tauri 构建。
+
 ## 快速开始
 
 ```bash

@@ -1,9 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { invokeMock } = vi.hoisted(() => ({ invokeMock: vi.fn() }));
+const { invokeMock, accessTokenMock } = vi.hoisted(() => ({
+  invokeMock: vi.fn(),
+  accessTokenMock: vi.fn().mockResolvedValue('test-jwt'),
+}));
 
 vi.mock('../diagnostics/invoke-logged', () => ({
   invokeWithDiagnostics: invokeMock,
+}));
+
+vi.mock('../composables/useAuth', () => ({
+  useAuth: () => ({ getAccessToken: accessTokenMock }),
 }));
 
 import { usePdfToWord } from '../composables/usePdfToWord';
@@ -29,6 +36,8 @@ describe('usePdfToWord', () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     invokeMock.mockReset();
+    accessTokenMock.mockReset();
+    accessTokenMock.mockResolvedValue('test-jwt');
   });
 
   it('创建任务后轮询，并在终态停止', async () => {
@@ -49,9 +58,16 @@ describe('usePdfToWord', () => {
 
     expect(invokeMock).toHaveBeenNthCalledWith(1, 'pdf_to_word_create_job', {
       inputPath: 'C:\\sample.pdf',
+      authToken: 'test-jwt',
     });
-    expect(invokeMock).toHaveBeenNthCalledWith(2, 'pdf_to_word_get_job', { jobId: 'job-1' });
-    expect(invokeMock).toHaveBeenNthCalledWith(3, 'pdf_to_word_get_job', { jobId: 'job-1' });
+    expect(invokeMock).toHaveBeenNthCalledWith(2, 'pdf_to_word_get_job', {
+      jobId: 'job-1',
+      authToken: 'test-jwt',
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(3, 'pdf_to_word_get_job', {
+      jobId: 'job-1',
+      authToken: 'test-jwt',
+    });
   });
 
   it('组件卸载前重置任务时会停止后续轮询', async () => {

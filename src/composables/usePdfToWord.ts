@@ -1,5 +1,6 @@
 import { computed, onUnmounted, ref } from 'vue';
 import { invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
+import { useAuth } from './useAuth';
 import type {
   PdfToWordConfigStatus,
   PdfToWordDownloadResult,
@@ -19,6 +20,7 @@ function toMessage(error: unknown): string {
 
 /** 管理 PDF 转 Word 服务配置、远程任务轮询和结果下载。 */
 export function usePdfToWord() {
+  const { getAccessToken } = useAuth();
   const config = ref<PdfToWordConfigStatus>({ baseUrl: null, configured: false });
   const health = ref<PdfToWordHealth | null>(null);
   const job = ref<PdfToWordJob | null>(null);
@@ -28,6 +30,14 @@ export function usePdfToWord() {
 
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
   let pollGeneration = 0;
+
+  async function invokeWithServiceAuth<T>(
+    command: string,
+    args: Record<string, unknown> = {},
+  ): Promise<T> {
+    const authToken = await getAccessToken();
+    return invoke<T>(command, { ...args, authToken });
+  }
 
   function stopPolling() {
     pollGeneration += 1;
@@ -45,38 +55,11 @@ export function usePdfToWord() {
     }
   }
 
-  async function saveConfig(baseUrl: string, token: string | null) {
-    isSaving.value = true;
-    errorMessage.value = '';
-    try {
-      config.value = await invoke<PdfToWordConfigStatus>('pdf_to_word_save_config', {
-        baseUrl,
-        token,
-      });
-    } catch (error) {
-      errorMessage.value = toMessage(error);
-      throw error;
-    } finally {
-      isSaving.value = false;
-    }
-  }
-
-  async function clearToken() {
-    errorMessage.value = '';
-    try {
-      await invoke('pdf_to_word_clear_token');
-      config.value = { ...config.value, configured: false };
-    } catch (error) {
-      errorMessage.value = toMessage(error);
-      throw error;
-    }
-  }
-
   async function checkHealth() {
     isLoading.value = true;
     errorMessage.value = '';
     try {
-      health.value = await invoke<PdfToWordHealth>('pdf_to_word_check_health');
+      health.value = await invokeWithServiceAuth<PdfToWordHealth>('pdf_to_word_check_health');
       return health.value;
     } catch (error) {
       health.value = null;
@@ -96,7 +79,7 @@ export function usePdfToWord() {
   async function pollJob(jobId: string, generation: number) {
     if (generation !== pollGeneration) return;
     try {
-      const current = await invoke<PdfToWordJob>('pdf_to_word_get_job', { jobId });
+      const current = await invokeWithServiceAuth<PdfToWordJob>('pdf_to_word_get_job', { jobId });
       if (generation !== pollGeneration) return;
       job.value = current;
       if (TERMINAL_STATUSES.has(current.status)) {
@@ -116,7 +99,9 @@ export function usePdfToWord() {
     isLoading.value = true;
     errorMessage.value = '';
     try {
-      const created = await invoke<PdfToWordJob>('pdf_to_word_create_job', { inputPath });
+      const created = await invokeWithServiceAuth<PdfToWordJob>('pdf_to_word_create_job', {
+        inputPath,
+      });
       job.value = created;
       const generation = pollGeneration;
       if (!TERMINAL_STATUSES.has(created.status)) {
@@ -137,7 +122,7 @@ export function usePdfToWord() {
     isLoading.value = true;
     errorMessage.value = '';
     try {
-      job.value = await invoke<PdfToWordJob>('pdf_to_word_cancel_job', {
+      job.value = await invokeWithServiceAuth<PdfToWordJob>('pdf_to_word_cancel_job', {
         jobId: job.value.jobId,
       });
     } catch (error) {
@@ -155,7 +140,7 @@ export function usePdfToWord() {
     isSaving.value = true;
     errorMessage.value = '';
     try {
-      return await invoke<PdfToWordDownloadResult>('pdf_to_word_download_result', {
+      return await invokeWithServiceAuth<PdfToWordDownloadResult>('pdf_to_word_download_result', {
         jobId: job.value.jobId,
         outputPath,
       });
@@ -184,8 +169,6 @@ export function usePdfToWord() {
     isSaving,
     isConfigured: computed(() => config.value.configured),
     loadConfig,
-    saveConfig,
-    clearToken,
     checkHealth,
     createJob,
     cancelJob,

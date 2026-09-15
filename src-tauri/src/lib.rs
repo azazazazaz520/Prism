@@ -381,8 +381,6 @@ pub fn run() {
             commands::export::get_pandoc_info,
             // PDF 转 Word 命令
             commands::pdf_to_word::pdf_to_word_get_config,
-            commands::pdf_to_word::pdf_to_word_save_config,
-            commands::pdf_to_word::pdf_to_word_clear_token,
             commands::pdf_to_word::pdf_to_word_check_health,
             commands::pdf_to_word::pdf_to_word_create_job,
             commands::pdf_to_word::pdf_to_word_get_job,

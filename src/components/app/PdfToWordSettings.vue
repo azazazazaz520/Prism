@@ -2,108 +2,58 @@
 import { computed, onMounted, ref } from 'vue';
 import { usePdfToWord } from '../../composables/usePdfToWord';
 
-const {
-  config,
-  health,
-  errorMessage,
-  isLoading,
-  isSaving,
-  loadConfig,
-  saveConfig,
-  clearToken,
-  checkHealth,
-} = usePdfToWord();
+const { config, health, errorMessage, isLoading, loadConfig, checkHealth } = usePdfToWord();
 
-const baseUrl = ref('');
-const token = ref('');
 const tip = ref('');
 
-const usesHttp = computed(() => baseUrl.value.trim().startsWith('http://'));
-
-async function load() {
-  await loadConfig();
-  baseUrl.value = config.value.baseUrl || '';
-}
-
-async function saveAndTest() {
-  tip.value = '';
-  try {
-    await saveConfig(baseUrl.value, token.value || null);
-    token.value = '';
-    if (!config.value.configured) {
-      tip.value = '服务地址已保存，但尚未检测到访问令牌';
-      return;
-    }
-    await checkHealth();
-    tip.value = `服务正常 · ${health.value?.engine || '转换引擎已就绪'}`;
-  } catch {
-    // 错误信息由 composable 提供给界面。
+const serviceStatus = computed(() => {
+  if (isLoading.value && !health.value) {
+    return { tone: 'checking', label: '检测中…', detail: '正在连接 PDF 转 Word 服务' };
   }
-}
+  if (health.value?.status === 'ok') {
+    return {
+      tone: 'available',
+      label: '服务正常',
+      detail: health.value.engine || '转换引擎已就绪',
+    };
+  }
+  if (errorMessage.value) {
+    return { tone: 'unavailable', label: '服务不可用', detail: '请稍后重新检测' };
+  }
+  return { tone: 'unknown', label: '尚未检测', detail: '点击重新检测服务状态' };
+});
 
-async function removeToken() {
+async function refresh() {
   tip.value = '';
+  await loadConfig();
+  if (!config.value.baseUrl) return;
+
   try {
-    await clearToken();
-    tip.value = '服务令牌已清除';
+    await checkHealth();
+    tip.value = '服务状态已更新';
   } catch {
     // 错误信息由 composable 提供给界面。
   }
 }
 
 onMounted(() => {
-  void load();
+  void refresh();
 });
 </script>
 
 <template>
-  <div class="pdf-settings-group">
-    <div class="pdf-settings-title">PDF 转 Word 服务</div>
-    <div class="pdf-settings-row">
-      <label for="pdf-to-word-url">服务地址</label>
-      <input
-        id="pdf-to-word-url"
-        v-model="baseUrl"
-        class="pdf-settings-input"
-        type="url"
-        placeholder="https://example.com"
-        autocomplete="off"
-      />
-    </div>
-    <div class="pdf-settings-row">
-      <label for="pdf-to-word-token">访问令牌</label>
-      <input
-        id="pdf-to-word-token"
-        v-model="token"
-        class="pdf-settings-input"
-        type="password"
-        placeholder="留空以保留当前令牌"
-        autocomplete="new-password"
-      />
-    </div>
-    <p v-if="usesHttp" class="pdf-settings-warning">
-      当前使用 HTTP，适合局域网或临时测试；生产环境建议配置 HTTPS。
-    </p>
-    <p class="pdf-settings-hint">
-      地址和令牌仅用于 PDF 转 Word 请求。令牌保存在本机系统凭据存储中，不会写入配置文件。
-    </p>
-    <div class="pdf-settings-actions">
-      <button
-        type="button"
-        class="about-btn"
-        :disabled="isSaving || isLoading"
-        @click="saveAndTest"
-      >
-        {{ isSaving || isLoading ? '处理中…' : '保存并测试' }}
-      </button>
-      <button
-        v-if="config.configured"
-        type="button"
-        class="text-action-btn"
-        :disabled="isSaving || isLoading"
-        @click="removeToken"
-      >
-        清除令牌
+  <div class="settings-group pdf-settings-card">
+    <div class="group-title pdf-settings-title">PDF 转 Word 服务</div>
+    <div class="pdf-settings-status">
+      <div class="pdf-settings-status-copy">
+        <span :class="['pdf-settings-status-dot', `is-${serviceStatus.tone}`]" aria-hidden="true" />
+        <div>
+          <strong>{{ serviceStatus.label }}</strong>
+          <p>{{ serviceStatus.detail }}</p>
+        </div>
+      </div>
+      <button type="button" class="pdf-settings-refresh" :disabled="isLoading" @click="refresh">
+        {{ isLoading ? '检测中…' : '重新检测' }}
       </button>
     </div>
     <p v-if="tip" class="pdf-settings-success" role="status">{{ tip }}</p>
@@ -112,73 +62,104 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.pdf-settings-group {
-  margin-top: var(--space-xl);
-  padding-top: var(--space-xl);
-  border-top: 1px solid var(--border-light);
-}
-
 .pdf-settings-title {
   margin-bottom: var(--space-md);
-  color: var(--text-secondary);
+  color: var(--text-primary);
   font-size: var(--text-sm);
   font-weight: var(--font-weight-semibold);
 }
 
-.pdf-settings-row {
+.pdf-settings-status {
   display: flex;
   align-items: center;
-  gap: var(--space-lg);
-  margin-bottom: var(--space-sm);
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-sm) 0;
 }
 
-.pdf-settings-row label {
-  width: 76px;
-  flex-shrink: 0;
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-}
-
-.pdf-settings-input {
+.pdf-settings-status-copy {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
   min-width: 0;
-  flex: 1;
-  padding: 7px 10px;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  outline: none;
+}
+
+.pdf-settings-status-copy strong {
+  display: block;
   color: var(--text-primary);
-  background: var(--bg-secondary);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-medium);
+}
+
+.pdf-settings-status-copy p {
+  margin: 3px 0 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.pdf-settings-status-dot {
+  width: 9px;
+  height: 9px;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  background: var(--text-muted);
+}
+
+.pdf-settings-status-dot.is-checking {
+  background: var(--accent);
+}
+
+.pdf-settings-status-dot.is-available {
+  background: var(--success, #2e9b68);
+}
+
+.pdf-settings-status-dot.is-unavailable {
+  background: var(--danger, #c44747);
+}
+
+.pdf-settings-refresh {
+  box-sizing: border-box;
+  flex-shrink: 0;
+  padding: 4px 14px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
   font: inherit;
   font-size: var(--text-sm);
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    transform 160ms var(--easing-standard),
+    border-color var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard);
 }
 
-.pdf-settings-input:focus {
+.pdf-settings-refresh:hover:not(:disabled) {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-muted);
+  color: var(--accent);
 }
 
-.pdf-settings-warning,
-.pdf-settings-hint,
+.pdf-settings-refresh:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.pdf-settings-refresh:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.pdf-settings-refresh:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .pdf-settings-success,
 .pdf-settings-error {
-  margin: var(--space-sm) 0 0 94px;
+  margin: var(--space-sm) 0 0;
   font-size: var(--text-xs);
-  line-height: 1.6;
-}
-
-.pdf-settings-warning {
-  color: var(--warning, #b07816);
-}
-
-.pdf-settings-hint {
-  color: var(--text-muted);
-}
-
-.pdf-settings-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-md);
-  margin: var(--space-md) 0 0 94px;
+  line-height: 1.5;
 }
 
 .pdf-settings-success {
@@ -190,23 +171,30 @@ onMounted(() => {
 }
 
 @media (max-width: 560px) {
-  .pdf-settings-row {
-    align-items: stretch;
+  .pdf-settings-status {
+    align-items: flex-start;
     flex-direction: column;
-    gap: var(--space-xs);
   }
+}
 
-  .pdf-settings-row label,
-  .pdf-settings-warning,
-  .pdf-settings-hint,
-  .pdf-settings-actions,
-  .pdf-settings-success,
-  .pdf-settings-error {
-    margin-left: 0;
-  }
+[data-theme='hud'] .pdf-settings-title {
+  color: var(--accent-dim);
+  font-family: var(--font-heading);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
 
-  .pdf-settings-row label {
-    width: auto;
-  }
+[data-theme='hud'] .pdf-settings-refresh {
+  border-radius: 0;
+  clip-path: polygon(
+    4px 0%,
+    100% 0%,
+    100% calc(100% - 4px),
+    calc(100% - 4px) 100%,
+    0% 100%,
+    0% 4px
+  );
+  background: var(--bg-secondary);
+  border-color: var(--border-line);
 }
 </style>

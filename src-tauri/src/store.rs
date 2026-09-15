@@ -127,7 +127,6 @@ mod tests {
             notes_dir: None,
             pandoc_path: None,
             pandoc_reference_doc: None,
-            pdf_to_word_base_url: None,
             dashboard_layout: None,
             plugins: std::collections::HashMap::new(),
         };

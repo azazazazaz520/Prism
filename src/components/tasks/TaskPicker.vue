@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
 import type { Task } from '../../types';
+import { getTodayStr } from '../../composables/useFilterEngine';
 
 const props = withDefaults(
   defineProps<{
@@ -63,7 +64,7 @@ function taskMeta(task: Task): string {
 }
 
 function formatDueDate(value: string): string {
-  if (value === new Date().toISOString().slice(0, 10)) return '今天';
+  if (value === getTodayStr()) return '今天';
   const date = new Date(`${value}T00:00:00`);
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat('zh-CN', { month: 'short', day: 'numeric' }).format(date);

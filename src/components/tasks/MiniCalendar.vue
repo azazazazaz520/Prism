@@ -5,6 +5,7 @@ import type { Task } from '../../types';
 const props = defineProps<{
   tasks: Task[];
   selectedDate: string | null;
+  today: string;
 }>();
 
 const emit = defineEmits<{
@@ -71,11 +72,7 @@ function selectDay(day: number) {
 }
 
 function isToday(day: number): boolean {
-  return (
-    currentYear.value === today.getFullYear() &&
-    currentMonth.value === today.getMonth() &&
-    day === today.getDate()
-  );
+  return dateKey(day) === props.today;
 }
 
 function isSelected(day: number): boolean {

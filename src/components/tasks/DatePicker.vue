@@ -25,7 +25,12 @@ function updatePosition() {
 watch(
   () => props.visible,
   (v) => {
-    if (v) updatePosition();
+    if (v) {
+      const currentDate = new Date();
+      currentYear.value = currentDate.getFullYear();
+      currentMonth.value = currentDate.getMonth();
+      updatePosition();
+    }
   },
 );
 
@@ -96,10 +101,11 @@ function clearDate() {
 }
 
 function isToday(day: number): boolean {
+  const currentDate = new Date();
   return (
-    currentYear.value === today.getFullYear() &&
-    currentMonth.value === today.getMonth() &&
-    day === today.getDate()
+    currentYear.value === currentDate.getFullYear() &&
+    currentMonth.value === currentDate.getMonth() &&
+    day === currentDate.getDate()
   );
 }
 </script>

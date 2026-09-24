@@ -1,8 +1,8 @@
 {
-  "download_url": "https://github.com/azazazazaz520/Prism/releases/download/v0.4.7/Prism_0.4.7_x64-setup.exe",
-  "release_notes": "## Changes since v0.4.6\n\n- chore(plugins): 更新网络校验注释 (asd_fire)\n- fix(sync): 修复同步恢复与 Realtime 生命周期 (asd_fire)\n- fix(sync): 完善每日完成记录的数据归属 (asd_fire)\n- fix(notes): 修复表格点击保存与光标偏移 (asd_fire)\n- chore: 同步稳定版更新清单 (github-actions[bot])",
-  "version": "0.4.7",
-  "release_url": "https://github.com/azazazazaz520/Prism/releases/tag/v0.4.7",
-  "release_date": "2026-08-26T16:40:55.2943660Z",
-  "sha256": "a8bfc234499b8a6d7d16f5db7d313f0849516d9762fab9ff66ecae1d611b2753"
+  "release_notes": "## Changes since v0.5.0-beta.1\n\n- fix: 修复 PDF 转 Word 任务与下载问题 (asd_fire)\n- fix: 修复任务日期跨天更新并补充许可证 (asd_fire)\n- feat(pdf-to-word): complete service integration and deployment config (asd_fire)\n- fix: 启用 PDF 转 Word 原生凭据存储 (asd_fire)\n- feat: 集成 PDF 转 Word 远程服务 (asd_fire)",
+  "version": "0.5.0",
+  "release_date": "2026-09-24T17:31:43.0696366Z",
+  "sha256": "8324bc76205372ea94b3ab47f1d1d8cb66da09089fdddd3c5e198ccafd4e6ba5",
+  "release_url": "https://github.com/azazazazaz520/Prism/releases/tag/v0.5.0",
+  "download_url": "https://github.com/azazazazaz520/Prism/releases/download/v0.5.0/Prism_0.5.0_x64-setup.exe"
 }

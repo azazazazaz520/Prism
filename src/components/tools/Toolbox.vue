@@ -7,6 +7,7 @@ import Base64Tool from './Base64Tool.vue';
 import TimestampTool from './TimestampTool.vue';
 import UuidTool from './UuidTool.vue';
 import ColorTool from './ColorTool.vue';
+import PdfToWordTool from './PdfToWordTool.vue';
 
 const props = defineProps<{ aiEnabled?: boolean }>();
 
@@ -61,6 +62,13 @@ const tools: ToolDef[] = [
     desc: 'HEX ↔ RGB ↔ HSL',
     hue: 140,
     icon: 'M12 2a10 10 0 1010 10A10 10 0 0012 2zm0 2a8 8 0 11-8 8 8 8 0 018-8z',
+  },
+  {
+    id: 'pdf-to-word',
+    name: 'PDF 转 Word',
+    desc: '转换 PDF，保留文本和表格',
+    hue: 10,
+    icon: 'M6 3h8l4 4v14H6zM14 3v5h5M8.5 13h7M8.5 17h5',
   },
 ];
 
@@ -199,6 +207,7 @@ function back() {
         <TimestampTool v-else-if="activeTool === 'timestamp'" />
         <UuidTool v-else-if="activeTool === 'uuid'" />
         <ColorTool v-else-if="activeTool === 'color'" />
+        <PdfToWordTool v-else-if="activeTool === 'pdf-to-word'" />
       </ToolShell>
     </Transition>
   </div>

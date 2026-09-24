@@ -44,6 +44,22 @@ export function getSupabaseClient(): SupabaseClient {
 export function useAuth() {
   const isLoggedIn = computed(() => !!session.value);
 
+  /** 确保匿名会话有效，并返回当前可用于服务端鉴权的短期 JWT。 */
+  async function getAccessToken(): Promise<string> {
+    await initAuth();
+    const client = getSupabaseClient();
+    const { data, error: sessionError } = await withTimeout(client.auth.getSession());
+    if (sessionError) throw sessionError;
+
+    if (data.session) {
+      session.value = data.session;
+      user.value = data.session.user;
+      return data.session.access_token;
+    }
+
+    throw new Error('PDF_TO_WORD_AUTH_REQUIRED: 无法建立服务身份，请稍后重试');
+  }
+
   /**
    * 初始化认证：恢复已有会话 → 若无则执行匿名登录
    * 在应用启动时调用一次
@@ -113,5 +129,6 @@ export function useAuth() {
     isLoading,
     error,
     initAuth,
+    getAccessToken,
   };
 }

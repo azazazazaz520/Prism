@@ -432,38 +432,35 @@ export function useTaskStore() {
 
         if (!isLoggedIn.value) return;
 
-        if (options.restoreProfile) {
-          const profileRestored = await syncCode.restoreProfile();
-          if (profileRestored) {
-            // 必须先恢复 Profile 及当前匿名用户的成员关系，再推送跨天重置任务。
-            // 否则 profile_id 可能仍为 null，导致共享任务被降级为私有任务。
-            const resetTasks = pendingResetTasks.value;
-            pendingResetTasks.value = [];
-            await Promise.all(
-              resetTasks.map((task) =>
-                pushTask(task).catch((e) =>
-                  diagnosticsLogger.warn(
-                    'sync',
-                    'sync.reset_daily_push_failed',
-                    '每日任务重置推送失败',
-                    {
-                      task_id: task.id,
-                      error: e instanceof Error ? e.message : String(e),
-                    },
-                  ),
+        const profileReady = options.restoreProfile ? await syncCode.restoreProfile() : true;
+        const resetTasks = profileReady ? pendingResetTasks.value : [];
+        if (resetTasks.length > 0) {
+          pendingResetTasks.value = [];
+          await Promise.all(
+            resetTasks.map((task) =>
+              pushTask(task).catch((e) =>
+                diagnosticsLogger.warn(
+                  'sync',
+                  'sync.reset_daily_push_failed',
+                  '每日任务重置推送失败',
+                  {
+                    task_id: task.id,
+                    error: e instanceof Error ? e.message : String(e),
+                  },
                 ),
               ),
-            );
-
-            await syncCode.mergeLocalToProfile(getProfileId()!);
-          }
+            ),
+          );
+        }
+        if (options.restoreProfile && profileReady) {
+          await syncCode.mergeLocalToProfile(getProfileId()!);
         }
         // 没有同步 Profile 时也要保留原有的 user_id 队列语义；有 Profile
         // 时则在 Profile 恢复之后再重放，避免启动竞态载荷污染共享任务。
         if (navigator.onLine) await flushOfflineQueue();
 
         await initSync();
-        await pullRemoteAndMerge(options.forceFullPull);
+        await pullRemoteAndMerge(options.forceFullPull || resetTasks.length > 0);
       } catch (e) {
         syncError.value = e instanceof Error ? e.message : '后台同步失败';
         diagnosticsLogger.error('sync', 'sync.background_failed', '后台同步失败', e);

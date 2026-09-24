@@ -28,6 +28,7 @@ import { useTaskStore } from './composables/useTaskStore';
 import { useAiStatus } from './composables/useAiStatus';
 import { usePluginLoader } from './composables/usePluginLoader';
 import { useContextMenu } from './composables/useContextMenu';
+import { getTodayStr } from './composables/useFilterEngine';
 
 // ── 模块注册表 ──────────────────────────────
 
@@ -85,15 +86,15 @@ const gridColumns = computed(() =>
 );
 
 const completedCount = computed(() => tasks.value.filter((task) => task.completed).length);
-const todayDate = new Date();
-const todayString = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`;
+const todayString = ref(getTodayStr());
 const overdueCount = computed(
   () =>
-    tasks.value.filter((task) => task.due_date && task.due_date < todayString && !task.completed)
-      .length,
+    tasks.value.filter(
+      (task) => task.due_date && task.due_date < todayString.value && !task.completed,
+    ).length,
 );
 const todayCount = computed(
-  () => tasks.value.filter((task) => task.due_date === todayString).length,
+  () => tasks.value.filter((task) => task.due_date === todayString.value).length,
 );
 type TaskView = 'all' | 'pending' | 'today' | 'overdue' | 'completed';
 const taskView = ref<TaskView>('all');
@@ -109,10 +110,10 @@ const visibleTasks = computed(() => {
     case 'pending':
       return filteredTasks.value.filter((task) => !task.completed);
     case 'today':
-      return filteredTasks.value.filter((task) => task.due_date === todayString);
+      return filteredTasks.value.filter((task) => task.due_date === todayString.value);
     case 'overdue':
       return filteredTasks.value.filter(
-        (task) => task.due_date && task.due_date < todayString && !task.completed,
+        (task) => task.due_date && task.due_date < todayString.value && !task.completed,
       );
     case 'completed':
       return filteredTasks.value.filter((task) => task.completed);
@@ -132,6 +133,13 @@ const hasTaskFilters = computed(
 let _unlistenFocus: (() => void) | null = null;
 let _unlistenTasksImported: (() => void) | null = null;
 let _pollInterval: ReturnType<typeof setInterval> | null = null;
+let _dateInterval: ReturnType<typeof setInterval> | null = null;
+function refreshCurrentDate() {
+  const current = getTodayStr();
+  if (current === todayString.value) return;
+  todayString.value = current;
+  void refreshTasks(true);
+}
 const _handleForceSync = async () => {
   await refreshTasks();
   // 推送插件创建/修改的任务到 Supabase
@@ -159,12 +167,20 @@ function onGlobalContextMenu(event: MouseEvent) {
   openContextMenu(event, createClipboardMenuItems(target));
 }
 
+function onNavigateSettings(event: Event) {
+  const detail = (event as CustomEvent<SettingsSubModule>).detail;
+  if (detail) settingsInitialSub.value = detail;
+  activeModule.value = 'settings';
+}
+
 onUnmounted(() => {
   _unlistenFocus?.();
   _unlistenTasksImported?.();
   window.removeEventListener('prism:force-sync', _handleForceSync);
   if (_pollInterval) clearInterval(_pollInterval);
+  if (_dateInterval) clearInterval(_dateInterval);
   document.removeEventListener('contextmenu', onGlobalContextMenu);
+  window.removeEventListener('prism:nav-settings', onNavigateSettings);
 });
 
 onMounted(async () => {
@@ -181,6 +197,7 @@ onMounted(async () => {
   const appWindow = getCurrentWindow();
   let lastRefresh = 0;
   _unlistenFocus = await appWindow.listen('tauri://focus', () => {
+    refreshCurrentDate();
     const now = Date.now();
     if (now - lastRefresh < 60_000) return;
     lastRefresh = now;
@@ -188,14 +205,12 @@ onMounted(async () => {
     loadAiSettings();
   });
   window.addEventListener('prism:force-sync', _handleForceSync);
-  window.addEventListener('prism:nav-settings', ((e: CustomEvent) => {
-    if (e.detail) settingsInitialSub.value = e.detail;
-    activeModule.value = 'settings';
-  }) as EventListener);
+  window.addEventListener('prism:nav-settings', onNavigateSettings);
   // 每 5 分钟触发一次增量后台同步，用于补偿 Realtime 丢失并校正跨设备状态
   _pollInterval = setInterval(() => {
     pullAndMerge().catch(() => {});
   }, 5 * 60_000);
+  _dateInterval = setInterval(refreshCurrentDate, 60_000);
 });
 
 // ── 模块切换 ──────────────────────────────
@@ -557,7 +572,12 @@ function dismissImportDiscoveryHint() {
         <span class="right-panel-label"><span class="rp-dot"></span>日历与标签</span>
       </div>
       <div class="right-panel-content">
-        <MiniCalendar :tasks="tasks" :selected-date="filterDate" @select-date="selectDate" />
+        <MiniCalendar
+          :tasks="tasks"
+          :selected-date="filterDate"
+          :today="todayString"
+          @select-date="selectDate"
+        />
         <div class="detail-section-header" style="margin-top: var(--space-md)">
           <span class="detail-section-label">标签筛选</span>
           <span class="detail-section-line"></span>

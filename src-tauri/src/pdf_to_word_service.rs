@@ -8,6 +8,7 @@ use tokio::io::AsyncWriteExt;
 use url::Url;
 
 const MAX_UPLOAD_BYTES: u64 = 50 * 1024 * 1024;
+const MAX_DOWNLOAD_BYTES: u64 = 256 * 1024 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 
@@ -269,12 +270,15 @@ impl PdfToWordService {
             .await
             .map_err(classify_network_error)?;
         let mut source = ensure_success(response).await?;
+        if let Some(length) = source.content_length() {
+            checked_download_size(0, length)?;
+        }
         let mut file = tokio::fs::File::create(temp_path)
             .await
             .map_err(|_| "PDF_TO_WORD_OUTPUT_FAILED: 无法创建临时文件".to_string())?;
         let mut total = 0u64;
         while let Some(chunk) = source.chunk().await.map_err(classify_network_error)? {
-            total = total.saturating_add(chunk.len() as u64);
+            total = checked_download_size(total, chunk.len() as u64)?;
             file.write_all(&chunk)
                 .await
                 .map_err(|_| "PDF_TO_WORD_OUTPUT_FAILED: 写入 Word 文件失败".to_string())?;
@@ -297,6 +301,14 @@ impl PdfToWordService {
     fn endpoint(&self, path: &str) -> String {
         format!("{}{}", self.base_url, path)
     }
+}
+
+fn checked_download_size(current: u64, next: u64) -> Result<u64, String> {
+    let total = current.saturating_add(next);
+    if total > MAX_DOWNLOAD_BYTES {
+        return Err("PDF_TO_WORD_LIMIT_EXCEEDED: Word 文件超过 256 MiB 下载限制".to_string());
+    }
+    Ok(total)
 }
 
 /// 校验并规范化服务地址。
@@ -506,5 +518,15 @@ mod tests {
             .starts_with("PDF_TO_WORD_LIMIT_EXCEEDED"));
         assert!(classify_http_error(StatusCode::TOO_MANY_REQUESTS, "")
             .starts_with("PDF_TO_WORD_QUEUE_FULL"));
+    }
+
+    #[test]
+    fn limits_download_size_before_writing_next_chunk() {
+        assert_eq!(
+            checked_download_size(MAX_DOWNLOAD_BYTES - 1, 1).unwrap(),
+            MAX_DOWNLOAD_BYTES
+        );
+        assert!(checked_download_size(MAX_DOWNLOAD_BYTES, 1).is_err());
+        assert!(checked_download_size(u64::MAX, 1).is_err());
     }
 }

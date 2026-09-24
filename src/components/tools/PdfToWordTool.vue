@@ -67,6 +67,18 @@ async function choosePdf() {
       filters: [{ name: 'PDF 文件', extensions: ['pdf'] }],
     });
     if (typeof selected !== 'string') return;
+    if (selected === selectedPath.value) return;
+    if (job.value && !isTerminal.value) {
+      try {
+        await cancelJob();
+      } catch {
+        return;
+      }
+      if (!isTerminal.value) {
+        localMessage.value = '正在取消当前任务，请稍后重新选择文件';
+        return;
+      }
+    }
     selectedPath.value = selected;
     resetJob();
   } catch {

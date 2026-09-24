@@ -9,13 +9,25 @@ import type {
 } from '../types';
 
 const POLL_DELAY_MS = 1500;
+const MAX_POLL_DELAY_MS = 30_000;
 const TERMINAL_STATUSES = new Set(['succeeded', 'failed', 'cancelled', 'timed_out']);
+const TRANSIENT_POLL_ERRORS = new Set([
+  'PDF_TO_WORD_NETWORK',
+  'PDF_TO_WORD_TIMEOUT',
+  'PDF_TO_WORD_SERVER_ERROR',
+  'PDF_TO_WORD_QUEUE_FULL',
+]);
 
 function toMessage(error: unknown): string {
   return String(error)
     .replace(/^[A-Z0-9_]+:\s*/, '')
     .replace(/（HTTP \d+）$/, '')
     .trim();
+}
+
+function isTransientPollError(error: unknown): boolean {
+  const code = String(error).match(/PDF_TO_WORD_[A-Z_]+/)?.[0];
+  return code !== undefined && TRANSIENT_POLL_ERRORS.has(code);
 }
 
 /** 管理 PDF 转 Word 服务配置、远程任务轮询和结果下载。 */
@@ -30,6 +42,7 @@ export function usePdfToWord() {
 
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
   let pollGeneration = 0;
+  let pollFailureCount = 0;
 
   async function invokeWithServiceAuth<T>(
     command: string,
@@ -41,6 +54,7 @@ export function usePdfToWord() {
 
   function stopPolling() {
     pollGeneration += 1;
+    pollFailureCount = 0;
     if (pollTimer) {
       clearTimeout(pollTimer);
       pollTimer = null;
@@ -70,10 +84,11 @@ export function usePdfToWord() {
     }
   }
 
-  function schedulePoll(jobId: string, generation: number) {
+  function schedulePoll(jobId: string, generation: number, delay = POLL_DELAY_MS) {
     pollTimer = setTimeout(() => {
+      pollTimer = null;
       void pollJob(jobId, generation);
-    }, POLL_DELAY_MS);
+    }, delay);
   }
 
   async function pollJob(jobId: string, generation: number) {
@@ -82,15 +97,19 @@ export function usePdfToWord() {
       const current = await invokeWithServiceAuth<PdfToWordJob>('pdf_to_word_get_job', { jobId });
       if (generation !== pollGeneration) return;
       job.value = current;
+      pollFailureCount = 0;
+      errorMessage.value = '';
       if (TERMINAL_STATUSES.has(current.status)) {
-        pollTimer = null;
         return;
       }
       schedulePoll(jobId, generation);
     } catch (error) {
       if (generation !== pollGeneration) return;
-      pollTimer = null;
       errorMessage.value = toMessage(error);
+      if (!isTransientPollError(error)) return;
+      pollFailureCount += 1;
+      const delay = Math.min(POLL_DELAY_MS * 2 ** Math.min(pollFailureCount, 5), MAX_POLL_DELAY_MS);
+      schedulePoll(jobId, generation, delay);
     }
   }
 
@@ -118,15 +137,20 @@ export function usePdfToWord() {
 
   async function cancelJob() {
     if (!job.value) return;
+    const jobId = job.value.jobId;
     stopPolling();
     isLoading.value = true;
     errorMessage.value = '';
     try {
       job.value = await invokeWithServiceAuth<PdfToWordJob>('pdf_to_word_cancel_job', {
-        jobId: job.value.jobId,
+        jobId,
       });
+      if (!TERMINAL_STATUSES.has(job.value.status)) schedulePoll(jobId, pollGeneration);
     } catch (error) {
       errorMessage.value = toMessage(error);
+      if (job.value?.jobId === jobId && !TERMINAL_STATUSES.has(job.value.status)) {
+        schedulePoll(jobId, pollGeneration);
+      }
       throw error;
     } finally {
       isLoading.value = false;

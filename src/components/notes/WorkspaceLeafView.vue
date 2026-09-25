@@ -64,6 +64,7 @@ const emit = defineEmits<{
   'open-quick-switcher': [];
   'open-menu': [event: MouseEvent];
   'open-context-menu': [event: MouseEvent];
+  'cursor-change': [line: number, col: number];
   'go-back': [leafId: string];
   'go-forward': [leafId: string];
 }>();
@@ -562,6 +563,7 @@ defineExpose({
         placeholder="开始编写 Markdown..."
         @update:model-value="emit('update-content', activeTab.path, $event)"
         @save="emit('save-path', activeTab.path)"
+        @cursor-change="(line, col) => emit('cursor-change', line, col)"
         @contextmenu="emit('open-context-menu', $event)"
       />
       <div v-else class="split-pane-empty">

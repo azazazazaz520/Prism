@@ -43,6 +43,7 @@ const emit = defineEmits<{
   'open-quick-switcher': [];
   'open-menu': [event: MouseEvent];
   'open-context-menu': [event: MouseEvent];
+  'cursor-change': [line: number, col: number];
   'state-change': [state: NoteWorkspaceState];
 }>();
 
@@ -166,6 +167,10 @@ function handleUpdateContent(path: string, content: string) {
 
 function handleSavePath(path: string) {
   emit('save-path', path);
+}
+
+function handleCursorChange(leafId: string, line: number, col: number) {
+  if (leafId === state.value.activeLeafId) emit('cursor-change', line, col);
 }
 
 function handleDragStart(leafId: string, tabId: string) {
@@ -380,6 +385,7 @@ defineExpose({
           @open-quick-switcher="emit('open-quick-switcher')"
           @open-menu="emit('open-menu', $event)"
           @open-context-menu="emit('open-context-menu', $event)"
+          @cursor-change="(line, col) => handleCursorChange(leaf.id, line, col)"
         >
           <template #leaf-tools="{ leaf }">
             <slot name="leaf-tools" :leaf="leaf" />

@@ -2298,6 +2298,7 @@ onUnmounted(() => {
             @open-quick-switcher="openFileLibrary"
             @open-menu="showSplitPaneMenu"
             @open-context-menu="showContextMenu"
+            @cursor-change="handleCursorChange"
             @state-change="handleWorkspaceStateChange"
           >
             <template #leaf-tools="{ leaf }">

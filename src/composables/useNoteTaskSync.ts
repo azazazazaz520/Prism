@@ -1,5 +1,5 @@
 import { ref } from 'vue';
-import { invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
+import { diagnosticsLogger, invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
 import type { FileEntry, Task } from '../types';
 import {
   buildTaskReferenceIndex,
@@ -19,26 +19,20 @@ import { useNoteDocumentStore } from './useNoteDocumentStore';
 import { saveNoteRecovery } from './useNoteRecovery';
 
 const noteContents = ref<Record<string, string>>({});
-const isIndexing = ref(false);
-const indexError = ref<string | null>(null);
 const writingPaths = new Set<string>();
 const noteRevisions = new Map<string, number>();
-
-function noteFiles(entries: FileEntry[]): string[] {
-  return entries.flatMap((entry) =>
-    entry.isDir
-      ? noteFiles(entry.children ?? [])
-      : entry.path.toLowerCase().endsWith('.md')
-        ? [entry.path]
-        : [],
-  );
-}
 
 /** 本地 Markdown 笔记的任务引用索引与投影服务。 */
 export function useNoteTaskSync(
   documentStore: ReturnType<typeof useNoteDocumentStore> = useNoteDocumentStore(),
 ) {
   const noteSaveController = useNoteSaveController();
+  const isIndexing = ref(false);
+  const indexError = ref<string | null>(null);
+  const isIndexComplete = ref(false);
+  let indexGeneration = 0;
+  let indexPromise: Promise<void> | null = null;
+  const pendingTaskProjections = new Map<string, Pick<Task, 'id' | 'title' | 'completed'>>();
   const referenceIndex = ref<TaskReferenceIndex>({
     byTaskId: new Map(),
     byNotePath: new Map(),
@@ -66,37 +60,139 @@ export function useNoteTaskSync(
     referenceIndex.value = { byTaskId, byNotePath };
   }
 
-  async function refreshIndex(tree?: FileEntry[]) {
-    isIndexing.value = true;
-    indexError.value = null;
-    try {
-      const entries = tree ?? (await invoke<FileEntry[]>('list_note_tree'));
-      const paths = noteFiles(entries);
-      const results: Array<readonly [string, string, number]> = [];
-      const revisionsAtStart = new Map(paths.map((path) => [path, noteRevisions.get(path) ?? 0]));
-      let nextIndex = 0;
-      const worker = async () => {
-        while (nextIndex < paths.length) {
-          const index = nextIndex++;
-          const path = paths[index];
-          results[index] = [
-            path,
-            await invoke<string>('read_note', { path }),
-            revisionsAtStart.get(path) ?? 0,
-          ];
+  function cancelIndex() {
+    indexGeneration += 1;
+    for (const [path, revision] of noteRevisions) noteRevisions.set(path, revision + 1);
+    indexPromise = null;
+    isIndexing.value = false;
+    isIndexComplete.value = false;
+  }
+
+  async function runIndex(generation: number) {
+    let directories = [''];
+    const paths: string[] = [];
+    let failures = 0;
+    while (directories.length > 0 && generation === indexGeneration) {
+      const directory = directories.shift()!;
+      try {
+        const entries = await invoke<FileEntry[]>('list_note_dir', { path: directory });
+        if (generation !== indexGeneration) return;
+        for (const entry of entries) {
+          if (entry.isDir) directories.push(entry.path);
+          else if (entry.path.toLowerCase().endsWith('.md')) paths.push(entry.path);
         }
-      };
-      await Promise.all(Array.from({ length: Math.min(4, paths.length) }, () => worker()));
+      } catch (error) {
+        failures += 1;
+        diagnosticsLogger.error(
+          'notes',
+          'notes.task_index_directory_failed',
+          '扫描任务索引时读取目录失败',
+          error,
+          {
+            path: directory,
+          },
+        );
+      }
+    }
+
+    for (let offset = 0; offset < paths.length && generation === indexGeneration; offset += 20) {
+      const batch = paths.slice(offset, offset + 20);
+      const revisions = new Map(batch.map((path) => [path, noteRevisions.get(path) ?? 0]));
+      const results: Array<readonly [string, string] | null> = new Array(batch.length);
+      let nextIndex = 0;
+      await Promise.all(
+        Array.from({ length: Math.min(4, batch.length) }, async () => {
+          while (nextIndex < batch.length) {
+            const index = nextIndex++;
+            const path = batch[index];
+            try {
+              results[index] = [path, await invoke<string>('read_note', { path })];
+            } catch (error) {
+              failures += 1;
+              diagnosticsLogger.error(
+                'notes',
+                'notes.task_index_note_failed',
+                '扫描任务索引时读取笔记失败',
+                error,
+                {
+                  path,
+                },
+              );
+              results[index] = null;
+            }
+          }
+        }),
+      );
+      if (generation !== indexGeneration) return;
       const nextContents = { ...noteContents.value };
-      for (const [path, content, revision] of results) {
-        if ((noteRevisions.get(path) ?? 0) === revision) nextContents[path] = content;
+      const byTaskId = new Map(referenceIndex.value.byTaskId);
+      const byNotePath = new Map(referenceIndex.value.byNotePath);
+      for (const result of results) {
+        if (!result) continue;
+        const [path, content] = result;
+        if ((noteRevisions.get(path) ?? 0) !== revisions.get(path)) continue;
+        nextContents[path] = content;
+        for (const reference of byNotePath.get(path) ?? []) {
+          const remaining = (byTaskId.get(reference.taskId) ?? []).filter(
+            (item) => item.notePath !== path,
+          );
+          if (remaining.length > 0) byTaskId.set(reference.taskId, remaining);
+          else byTaskId.delete(reference.taskId);
+        }
+        const references = parseTaskReferences(content, path);
+        byNotePath.set(path, references);
+        for (const reference of references) {
+          byTaskId.set(reference.taskId, [...(byTaskId.get(reference.taskId) ?? []), reference]);
+        }
       }
       noteContents.value = nextContents;
-      referenceIndex.value = buildTaskReferenceIndex(nextContents);
-    } catch (error) {
-      indexError.value = error instanceof Error ? error.message : String(error);
-    } finally {
-      isIndexing.value = false;
+      referenceIndex.value = { byTaskId, byNotePath };
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    }
+
+    if (generation === indexGeneration && failures === 0) {
+      await Promise.all([...pendingTaskProjections.values()].map((task) => projectTask(task)));
+    }
+    if (generation === indexGeneration && failures > 0) {
+      indexError.value = `索引未完整建立，${failures} 项读取失败`;
+    } else if (generation === indexGeneration) {
+      isIndexComplete.value = true;
+    }
+  }
+
+  function refreshIndex() {
+    if (isIndexComplete.value) return Promise.resolve();
+    if (isIndexing.value) return indexPromise ?? Promise.resolve();
+    const generation = ++indexGeneration;
+    isIndexing.value = true;
+    indexError.value = null;
+    indexPromise = runIndex(generation)
+      .catch((error) => {
+        if (generation === indexGeneration) {
+          indexError.value = error instanceof Error ? error.message : String(error);
+        }
+      })
+      .finally(() => {
+        if (generation === indexGeneration) {
+          isIndexing.value = false;
+          indexPromise = null;
+        }
+      });
+    return indexPromise;
+  }
+
+  async function ensureIndexReady() {
+    if (isIndexComplete.value) return;
+    let expectedGeneration = indexGeneration;
+    let pending = indexPromise;
+    if (!isIndexing.value) {
+      pending = refreshIndex();
+      expectedGeneration = indexGeneration;
+    }
+    await pending;
+    if (indexError.value !== null) throw new Error(indexError.value);
+    if (expectedGeneration !== indexGeneration || !isIndexComplete.value) {
+      throw new Error('任务引用索引已取消，无法确认全部笔记引用');
     }
   }
 
@@ -114,15 +210,20 @@ export function useNoteTaskSync(
       if (document.content !== noteContents.value[path]) setNoteContent(path, document.content);
       return;
     }
+    const revision = (noteRevisions.get(path) ?? 0) + 1;
+    noteRevisions.set(path, revision);
     try {
       const content = await invoke<string>('read_note', { path });
-      setNoteContent(path, content);
+      if ((noteRevisions.get(path) ?? 0) === revision) setNoteContent(path, content);
     } catch {
-      removeNote(path);
+      if ((noteRevisions.get(path) ?? 0) === revision) removeNote(path);
     }
   }
 
   function resetNotes() {
+    cancelIndex();
+    isIndexComplete.value = false;
+    pendingTaskProjections.clear();
     noteContents.value = {};
     referenceIndex.value = { byTaskId: new Map(), byNotePath: new Map() };
   }
@@ -212,7 +313,10 @@ export function useNoteTaskSync(
   function removeNotesUnderPath(path: string) {
     const next = { ...noteContents.value };
     for (const notePath of Object.keys(next)) {
-      if (notePath === path || notePath.startsWith(`${path}/`)) delete next[notePath];
+      if (notePath === path || notePath.startsWith(`${path}/`)) {
+        noteRevisions.set(notePath, (noteRevisions.get(notePath) ?? 0) + 1);
+        delete next[notePath];
+      }
     }
     noteContents.value = next;
     referenceIndex.value = buildTaskReferenceIndex(next);
@@ -221,6 +325,8 @@ export function useNoteTaskSync(
   function renameNote(oldPath: string, newPath: string) {
     const content = noteContents.value[oldPath];
     if (content === undefined) return;
+    noteRevisions.set(oldPath, (noteRevisions.get(oldPath) ?? 0) + 1);
+    noteRevisions.set(newPath, (noteRevisions.get(newPath) ?? 0) + 1);
     const next = { ...noteContents.value, [newPath]: content };
     delete next[oldPath];
     noteContents.value = next;
@@ -236,8 +342,8 @@ export function useNoteTaskSync(
       const newPath = `${newPrefix}${oldPath.slice(oldPrefix.length)}`;
       delete next[oldPath];
       next[newPath] = content;
-      noteRevisions.set(newPath, (noteRevisions.get(oldPath) ?? 0) + 1);
-      noteRevisions.delete(oldPath);
+      noteRevisions.set(oldPath, (noteRevisions.get(oldPath) ?? 0) + 1);
+      noteRevisions.set(newPath, (noteRevisions.get(newPath) ?? 0) + 1);
       changed = true;
     }
     if (changed) {
@@ -247,6 +353,7 @@ export function useNoteTaskSync(
   }
 
   async function projectTask(task: Pick<Task, 'id' | 'title' | 'completed'>) {
+    pendingTaskProjections.set(task.id, task);
     const references = referencesForTask(referenceIndex.value, task.id);
     const paths = [...new Set(references.map((reference) => reference.notePath))];
     await Promise.all(
@@ -267,6 +374,7 @@ export function useNoteTaskSync(
   }
 
   async function removeTaskFromAllNotes(taskId: string) {
+    await ensureIndexReady();
     const references = referencesForTask(referenceIndex.value, taskId);
     const paths = [...new Set(references.map((reference) => reference.notePath))];
     await Promise.all(
@@ -284,7 +392,10 @@ export function useNoteTaskSync(
         if (next === current) return;
         writingPaths.add(path);
         try {
-          await writeProjectedNote(path, next);
+          const result = await writeProjectedNote(path, next);
+          if (!result || result.status !== 'saved') {
+            throw new Error(`移除笔记中的任务引用失败：${path}`);
+          }
         } finally {
           writingPaths.delete(path);
         }
@@ -302,6 +413,8 @@ export function useNoteTaskSync(
     isIndexing,
     indexError,
     refreshIndex,
+    cancelIndex,
+    ensureIndexReady,
     refreshNoteIndex,
     setNoteContent,
     resetNotes,

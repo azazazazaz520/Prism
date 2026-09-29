@@ -140,8 +140,12 @@ const { tasks, toggleTask, toggleDailyTask, updateTask, addTask, deleteTask } = 
 const {
   noteContents,
   referenceIndex,
+  isIndexing,
+  indexError,
   setNoteContent,
   refreshIndex,
+  cancelIndex,
+  ensureIndexReady,
   refreshNoteIndex,
   removeNote,
   resetNotes,
@@ -153,6 +157,8 @@ const {
 } = useNoteTaskSync(documentStore);
 let projectingTaskReferences = false;
 let taskSyncTimer: ReturnType<typeof setTimeout> | null = null;
+let indexStartTimer: ReturnType<typeof setTimeout> | null = null;
+let notesEditorMounted = false;
 let taskSnapshot = new Map<string, { title: string; completed: boolean }>();
 let focusTitleAfterOpen = false;
 
@@ -322,6 +328,14 @@ function taskForReference(reference: TaskReference) {
   return tasks.value.find((task) => task.id === reference.taskId);
 }
 
+function scheduleTaskIndex() {
+  if (indexStartTimer) clearTimeout(indexStartTimer);
+  indexStartTimer = setTimeout(() => {
+    indexStartTimer = null;
+    if (notesEditorMounted) void refreshIndex();
+  }, 0);
+}
+
 /** 任务 Store 变化后，将正式任务投影回当前笔记的全部引用。 */
 watch(
   tasks,
@@ -463,13 +477,19 @@ async function deleteReferencedTask(reference: TaskReference) {
     `删除“${task.title}”后，所有笔记中的引用都会失效并被移除。`,
   );
   if (!confirmed) return;
-  for (const item of [...currentTaskReferences.value]
-    .filter((r) => r.taskId === task.id)
-    .reverse()) {
-    content.value = removeTaskReference(content.value, item.taskId, item.line);
+  try {
+    await ensureIndexReady();
+  } catch (error) {
+    showStatus(`笔记引用索引未完整建立，无法删除任务：${error}`);
+    return;
+  }
+  try {
+    await removeTaskFromAllNotes(task.id);
+  } catch (error) {
+    showStatus(`未能移除全部笔记引用，任务尚未删除：${error}`);
+    return;
   }
   await deleteTask(task.id);
-  await removeTaskFromAllNotes(task.id);
 }
 
 function showTaskReferenceMenu(event: MouseEvent, reference: TaskReference) {
@@ -1138,6 +1158,7 @@ async function switchNotesWorkspace(selected: string) {
     expanded.value = new Set(['inbox']);
     await loadTree();
     await loadRecoverySnapshots();
+    scheduleTaskIndex();
   } catch (e) {
     diagnosticsLogger.error('notes', 'notes.switch_workspace_failed', '切换笔记工作区失败', e);
     showStatus(`切换笔记工作区失败: ${e}`);
@@ -2186,6 +2207,7 @@ function getActiveWorkspacePath(): string | null {
 }
 
 onMounted(async () => {
+  notesEditorMounted = true;
   loadLayoutState();
   constrainOnResize();
   loadRecentWorkspaces();
@@ -2209,7 +2231,8 @@ async function initializeNotesWorkspace() {
   await loadTree();
   await loadRecoverySnapshots();
   await restoreNoteSession();
-  void refreshIndex();
+  await nextTick();
+  scheduleTaskIndex();
 }
 
 watch([openNoteTabs, activeNotePath, notesDir], saveNoteSession, { deep: true });
@@ -2223,6 +2246,10 @@ watch(
 );
 
 onUnmounted(() => {
+  notesEditorMounted = false;
+  if (indexStartTimer) clearTimeout(indexStartTimer);
+  indexStartTimer = null;
+  cancelIndex();
   if (taskSyncTimer) clearTimeout(taskSyncTimer);
   noteSaveController.dispose();
   if (fileTreeDebounceTimer) clearTimeout(fileTreeDebounceTimer);
@@ -2360,6 +2387,8 @@ onUnmounted(() => {
           :task-references="currentTaskReferences"
           :tasks="tasks"
           :backlink-paths="backlinkPaths"
+          :backlink-indexing="isIndexing"
+          :backlink-index-error="indexError"
           :outline="outline"
           :outline-panel-label="outlinePanelLabel"
           @toggle-task="handleTaskToggle"

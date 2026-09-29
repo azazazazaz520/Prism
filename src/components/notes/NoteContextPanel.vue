@@ -13,6 +13,8 @@ const props = defineProps<{
   taskReferences: TaskReference[];
   tasks: Task[];
   backlinkPaths: string[];
+  backlinkIndexing: boolean;
+  backlinkIndexError: string | null;
   outline: NoteOutlineItem[];
   outlinePanelLabel: string;
 }>();
@@ -64,7 +66,22 @@ function taskForReference(reference: TaskReference): Task | undefined {
         v-if="activeSection === 'links' && backlinkPaths.length === 0"
         class="context-empty-section"
       >
-        暂无反向链接
+        {{
+          backlinkIndexing
+            ? '正在建立反向链接索引…'
+            : backlinkIndexError
+              ? '反向链接索引未完整建立'
+              : '暂无反向链接'
+        }}
+      </div>
+      <div v-else-if="activeSection === 'links' && backlinkIndexing" class="context-empty-section">
+        正在建立反向链接索引，当前结果可能不完整
+      </div>
+      <div
+        v-else-if="activeSection === 'links' && backlinkIndexError"
+        class="context-empty-section"
+      >
+        反向链接索引未完整建立，当前结果可能不完整
       </div>
       <section v-if="activeSection === 'tasks'" class="context-section">
         <div class="context-section-title">本页任务</div>

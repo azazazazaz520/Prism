@@ -1,8 +1,8 @@
 {
-  "release_notes": "## Changes since v0.5.0-beta.1\n\n- fix: 修复 PDF 转 Word 任务与下载问题 (asd_fire)\n- fix: 修复任务日期跨天更新并补充许可证 (asd_fire)\n- feat(pdf-to-word): complete service integration and deployment config (asd_fire)\n- fix: 启用 PDF 转 Word 原生凭据存储 (asd_fire)\n- feat: 集成 PDF 转 Word 远程服务 (asd_fire)",
-  "version": "0.5.0",
-  "release_date": "2026-09-24T17:31:43.0696366Z",
-  "sha256": "8324bc76205372ea94b3ab47f1d1d8cb66da09089fdddd3c5e198ccafd4e6ba5",
-  "release_url": "https://github.com/azazazazaz520/Prism/releases/tag/v0.5.0",
-  "download_url": "https://github.com/azazazazaz520/Prism/releases/download/v0.5.0/Prism_0.5.0_x64-setup.exe"
+  "version": "0.5.1",
+  "release_notes": "## Changes since v0.5.0\n\n- perf: 分批建立笔记任务引用索引 (asd_fire)\n- fix: 修复笔记编辑器光标行列显示 (asd_fire)\n- chore: 同步稳定版更新清单 (github-actions[bot])",
+  "download_url": "https://github.com/azazazazaz520/Prism/releases/download/v0.5.1/Prism_0.5.1_x64-setup.exe",
+  "release_url": "https://github.com/azazazazaz520/Prism/releases/tag/v0.5.1",
+  "release_date": "2026-10-05T09:22:28.7745159Z",
+  "sha256": "ef1d6f82bb18cd39d0d5cfc354f9fdfea4d0b37d11d1cb88b5cfebbe0d2fa1c6"
 }

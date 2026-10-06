@@ -2698,10 +2698,6 @@ onUnmounted(() => {
   color: var(--text-primary);
 }
 
-.sidebar-toggle-strip {
-  display: none;
-}
-
 .editor-file-toggle {
   display: inline-flex;
   align-items: center;

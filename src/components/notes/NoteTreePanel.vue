@@ -5,11 +5,16 @@
  * 仅负责文件树的展示与交互事件转发，所有业务逻辑（打开、创建、重命名、
  * 删除、工作区切换）由父组件 NoteEditor 持有并通过事件驱动。
  */
-import { computed } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import type { FileEntry, FileTreeContextTarget } from '../../types';
 import { compactFileTree } from '../../utils/note-tree';
 import { filterFileTree, normalizeWorkspacePath } from '../../utils/note-editor';
 import TreeNode from './TreeNode.vue';
+import NoteSearchPanel from './NoteSearchPanel.vue';
+import type { NoteSearchMatch, NoteSearchResponse } from '../../notes/note-search';
+
+const activeView = ref<'files' | 'search'>('files');
+const searchPanelRef = ref<InstanceType<typeof NoteSearchPanel> | null>(null);
 
 const props = defineProps<{
   tree: FileEntry[];
@@ -19,10 +24,22 @@ const props = defineProps<{
   notesDir: string;
   recentWorkspaces: string[];
   workspaceMenuOpen: boolean;
+  searchQuery: string;
+  searchResponse: NoteSearchResponse | null;
+  searchLoading: boolean;
+  searchStale: boolean;
+  searchError: string | null;
+  displayedQuery: string;
 }>();
 
 const emit = defineEmits<{
   'update:search': [value: string];
+  'update:search-query': [value: string];
+  'search-now': [];
+  'clear-search': [];
+  'retry-search': [];
+  'search-escape': [];
+  'open-search-match': [path: string, match: NoteSearchMatch | null];
   'toggle-expand': [dirPath: string];
   'collapse-all': [];
   'new-note': [];
@@ -56,6 +73,14 @@ const notesDirShort = computed(() => {
 function isActiveWorkspace(path: string): boolean {
   return normalizeWorkspacePath(path) === normalizeWorkspacePath(props.notesDir);
 }
+
+async function openSearch() {
+  activeView.value = 'search';
+  await nextTick();
+  searchPanelRef.value?.focusInput();
+}
+
+defineExpose({ openSearch });
 </script>
 
 <template>
@@ -121,36 +146,74 @@ function isActiveWorkspace(path: string): boolean {
         </button>
       </div>
     </div>
-    <div class="tree-search">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="11" cy="11" r="7" />
-        <path d="m20 20-4-4" />
-      </svg>
-      <input
-        :value="search"
-        type="search"
-        placeholder="过滤文件树"
-        aria-label="过滤文件树"
-        @input="emit('update:search', ($event.target as HTMLInputElement).value)"
-      />
+    <div class="sidebar-tabs" role="tablist" aria-label="笔记侧栏视图">
+      <button
+        type="button"
+        role="tab"
+        :aria-selected="activeView === 'files'"
+        :class="{ active: activeView === 'files' }"
+        @click="activeView = 'files'"
+      >
+        文件
+      </button>
+      <button
+        type="button"
+        role="tab"
+        :aria-selected="activeView === 'search'"
+        :class="{ active: activeView === 'search' }"
+        @click="openSearch"
+      >
+        搜索
+      </button>
     </div>
-    <div class="tree-list">
-      <TreeNode
-        v-for="entry in filteredDisplayTree"
-        :key="entry.path"
-        :entry="entry"
-        :expanded="expanded"
-        :selected-path="selectedPath"
-        :depth="0"
-        @toggle-expand="emit('toggle-expand', $event)"
-        @select="emit('select', $event)"
-        @create-file="emit('create-file', $event)"
-        @create-folder="emit('create-folder', $event)"
-        @context-menu="(event, target) => emit('context-menu', event, target)"
-        @rename="(path, isDir) => emit('rename', path, isDir)"
-        @delete="emit('delete', $event)"
-      />
-    </div>
+    <template v-if="activeView === 'files'">
+      <div class="tree-search">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" />
+          <path d="m20 20-4-4" />
+        </svg>
+        <input
+          :value="search"
+          type="search"
+          placeholder="过滤文件树"
+          aria-label="过滤文件树"
+          @input="emit('update:search', ($event.target as HTMLInputElement).value)"
+        />
+      </div>
+      <div class="tree-list">
+        <TreeNode
+          v-for="entry in filteredDisplayTree"
+          :key="entry.path"
+          :entry="entry"
+          :expanded="expanded"
+          :selected-path="selectedPath"
+          :depth="0"
+          @toggle-expand="emit('toggle-expand', $event)"
+          @select="emit('select', $event)"
+          @create-file="emit('create-file', $event)"
+          @create-folder="emit('create-folder', $event)"
+          @context-menu="(event, target) => emit('context-menu', event, target)"
+          @rename="(path, isDir) => emit('rename', path, isDir)"
+          @delete="emit('delete', $event)"
+        />
+      </div>
+    </template>
+    <NoteSearchPanel
+      v-else
+      ref="searchPanelRef"
+      :query="searchQuery"
+      :response="searchResponse"
+      :searching="searchLoading"
+      :stale="searchStale"
+      :error="searchError"
+      :displayed-query="displayedQuery"
+      @update:query="emit('update:search-query', $event)"
+      @search="emit('search-now')"
+      @clear="emit('clear-search')"
+      @retry="emit('retry-search')"
+      @escape="emit('search-escape')"
+      @open-match="(path, match) => emit('open-search-match', path, match)"
+    />
 
     <!-- 笔记目录设置 -->
     <div class="tree-footer" @click.stop>
@@ -225,6 +288,30 @@ function isActiveWorkspace(path: string): boolean {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.sidebar-tabs {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+  padding: 0 var(--space-md) var(--space-xs);
+}
+
+.sidebar-tabs button {
+  padding: 4px 9px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--text-xs);
+}
+
+.sidebar-tabs button:hover,
+.sidebar-tabs button.active {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .tree-title {

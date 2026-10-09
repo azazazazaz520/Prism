@@ -57,6 +57,7 @@ import {
   type NoteSaveResult,
 } from '../../composables/useNoteSaveController';
 import { useNoteSidebarLayout } from '../../composables/useNoteSidebarLayout';
+import { useNoteSearch } from '../../composables/useNoteSearch';
 import {
   beginNoteSelfWrite,
   completeNoteSelfWrite,
@@ -81,6 +82,7 @@ import {
   renameTabPath,
   type NoteWorkspaceState,
 } from '../../domain/note-workspace';
+import { findNoteSearchPosition, type NoteSearchMatch } from '../../notes/note-search';
 
 const props = withDefaults(defineProps<{ active?: boolean }>(), { active: true });
 
@@ -113,6 +115,7 @@ const recentNotePaths = ref<string[]>([]);
 const documentStore = useNoteDocumentStore();
 const noteSaveController = useNoteSaveController();
 const workspaceBoardRef = ref<InstanceType<typeof NoteWorkspaceBoard> | null>(null);
+const noteTreePanelRef = ref<InstanceType<typeof NoteTreePanel> | null>(null);
 const workspaceBoardState = ref<NoteWorkspaceState>(createWorkspaceState());
 const activeNotePath = ref<string | null>(null);
 const openNoteTabs = ref<string[]>([]);
@@ -270,6 +273,42 @@ async function openPathInActivePane(path: string, initialContent?: string) {
   workspaceBoardRef.value?.openPath(path);
   await loadWorkspacePath(path, initialContent);
 }
+
+async function openNoteSearchMatch(path: string, match: NoteSearchMatch | null) {
+  const query = noteContentSearch.displayedQuery.value || noteContentSearch.query.value.trim();
+  const wasOpen = allWorkspaceTabPaths.value.includes(path);
+  workspaceBoardRef.value?.openPath(path);
+  const existingDocument = documentStore.documents.get(path);
+  if (!wasOpen || !existingDocument || existingDocument.hydratedRevision < 0) {
+    await loadWorkspacePath(path);
+  } else {
+    rememberNotePath(path);
+    expandParentDirectories(path);
+  }
+  if (!match) {
+    workspaceBoardRef.value?.scrollToLine(1);
+    return;
+  }
+
+  const document = documentStore.ensure(path);
+  const position = findNoteSearchPosition(document.content, query, match.line, match.columnUtf16);
+  if (!position) {
+    showStatus('该位置已变化，请重新搜索');
+    workspaceBoardRef.value?.focusActiveEditor();
+    return;
+  }
+
+  await nextTick();
+  await nextTick();
+  workspaceBoardRef.value?.revealSearchMatch(position);
+}
+
+async function openNoteSearchView() {
+  if (sidebarCollapsed.value) toggleSidebar();
+  await nextTick();
+  await noteTreePanelRef.value?.openSearch();
+}
+
 async function openPathInNewTab(path: string, initialContent?: string) {
   workspaceBoardRef.value?.openPathInNewTab(path);
   await loadWorkspacePath(path, initialContent);
@@ -282,6 +321,15 @@ interface ExportDocxResult {
 
 /** 笔记目录路径 */
 const notesDir = ref('');
+const noteContentSearch = useNoteSearch(notesDir, documentStore.documents, allWorkspaceTabPaths);
+const {
+  query: noteContentSearchQuery,
+  response: noteSearchResponse,
+  searching: noteSearchLoading,
+  stale: noteSearchStale,
+  error: noteSearchError,
+  displayedQuery: noteSearchDisplayedQuery,
+} = noteContentSearch;
 const recentWorkspaces = ref<string[]>([]);
 const workspaceMenuOpen = ref(false);
 const recoverySnapshots = ref<NoteRecoverySummary[]>([]);
@@ -1142,6 +1190,7 @@ async function switchNotesWorkspace(selected: string) {
 
   try {
     await invoke('set_notes_directory', { dirPath: selected });
+    noteContentSearch.resetForWorkspace();
     notesDir.value = selected;
     rememberWorkspace(selected);
     loadRecentNotePaths();
@@ -2031,6 +2080,10 @@ function closeNoteQuickSwitcher() {
   noteQuickSwitcherVisible.value = false;
 }
 
+function focusActiveNoteEditor() {
+  workspaceBoardRef.value?.focusActiveEditor();
+}
+
 function selectQuickSwitcherPath(path: string) {
   closeNoteQuickSwitcher();
   openPathInActivePane(path);
@@ -2074,7 +2127,13 @@ function handleKeyboardShortcuts(event: KeyboardEvent) {
   }
 
   const key = event.key.toLocaleLowerCase();
-  if (key === 'n') {
+  if (event.shiftKey && key === 'f') {
+    event.preventDefault();
+    event.stopPropagation();
+    void openNoteSearchView();
+  } else if (event.shiftKey) {
+    return;
+  } else if (key === 'n') {
     event.preventDefault();
     event.stopPropagation();
     void createUntitledFile();
@@ -2118,6 +2177,9 @@ function handleFileChangeEvent(event: NoteFileChangeEvent) {
   ) {
     return;
   }
+  noteContentSearch.markStale(
+    [event.path, event.oldPath, event.newPath].filter((path): path is string => Boolean(path)),
+  );
 
   switch (event.kind) {
     case 'create':
@@ -2266,6 +2328,7 @@ onUnmounted(() => {
     <div class="note-editor">
       <!-- ═══ 左侧文件树 ═══ -->
       <NoteTreePanel
+        ref="noteTreePanelRef"
         :style="{ width: effectiveTreeWidth > 0 ? `${effectiveTreeWidth}px` : '0px' }"
         :class="{ collapsed: sidebarCollapsed }"
         :tree="tree"
@@ -2275,6 +2338,12 @@ onUnmounted(() => {
         :notes-dir="notesDir"
         :recent-workspaces="recentWorkspaces"
         :workspace-menu-open="workspaceMenuOpen"
+        v-model:search-query="noteContentSearchQuery"
+        :search-response="noteSearchResponse"
+        :search-loading="noteSearchLoading"
+        :search-stale="noteSearchStale"
+        :search-error="noteSearchError"
+        :displayed-query="noteSearchDisplayedQuery"
         @toggle-expand="toggleExpand"
         @collapse-all="collapseAll"
         @new-note="createUntitledFile()"
@@ -2290,6 +2359,11 @@ onUnmounted(() => {
         @open-workspace="changeNotesDir"
         @remove-workspace="removeWorkspace"
         @toggle-sidebar="toggleSidebar"
+        @search-now="noteContentSearch.searchNow"
+        @clear-search="noteContentSearch.clear"
+        @retry-search="noteContentSearch.searchNow"
+        @search-escape="focusActiveNoteEditor"
+        @open-search-match="openNoteSearchMatch"
       />
 
       <!-- ═══ 拖动分隔条 ═══ -->

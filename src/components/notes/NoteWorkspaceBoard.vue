@@ -22,6 +22,7 @@ import {
   type WorkspaceDropZone,
 } from '../../domain/note-workspace';
 import type { NoteDocumentState } from '../../composables/useNoteDocumentStore';
+import type { NoteSearchPosition } from '../../notes/note-search';
 
 const props = withDefaults(
   defineProps<{
@@ -57,6 +58,7 @@ const draggingLeafId = ref<string | null>(null);
 const dropTarget = ref<{ leafId: string; zone: WorkspaceDropZone } | null>(null);
 const fileDragGhost = ref<{ left: number; top: number; label: string } | null>(null);
 const pendingScrollLine = ref<number | null>(null);
+const pendingSearchMatch = ref<NoteSearchPosition | null>(null);
 const draggingTabLabel = computed(() => {
   if (!draggingTabId.value) return '';
   const tab = findTabInTree(state.value.root, draggingTabId.value);
@@ -94,6 +96,7 @@ type WorkspaceLeafApi = {
   replaceSelection: (text: string) => void;
   selectAll: () => void;
   scrollToLine: (line: number) => boolean;
+  revealSearchMatch: (position: NoteSearchPosition) => boolean;
 };
 const leafRefs = new Map<string, WorkspaceLeafApi>();
 
@@ -266,6 +269,9 @@ function setLeafRef(leafId: string, instance: unknown) {
   if (leafId === state.value.activeLeafId && pendingScrollLine.value !== null) {
     if (api.scrollToLine(pendingScrollLine.value)) pendingScrollLine.value = null;
   }
+  if (leafId === state.value.activeLeafId && pendingSearchMatch.value) {
+    if (api.revealSearchMatch(pendingSearchMatch.value)) pendingSearchMatch.value = null;
+  }
 }
 
 function findLeafInTree(node: NoteWorkspaceState['root'], leafId: string): WorkspaceLeaf {
@@ -333,6 +339,15 @@ defineExpose({
     }
 
     pendingScrollLine.value = line;
+    return false;
+  },
+  revealSearchMatch: (position: NoteSearchPosition) => {
+    const leaf = leafRefs.get(state.value.activeLeafId);
+    if (leaf?.revealSearchMatch(position)) {
+      pendingSearchMatch.value = null;
+      return true;
+    }
+    pendingSearchMatch.value = position;
     return false;
   },
 });

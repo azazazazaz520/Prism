@@ -1,8 +1,8 @@
 {
-  "version": "0.5.1",
-  "release_notes": "## Changes since v0.5.0\n\n- perf: 分批建立笔记任务引用索引 (asd_fire)\n- fix: 修复笔记编辑器光标行列显示 (asd_fire)\n- chore: 同步稳定版更新清单 (github-actions[bot])",
-  "download_url": "https://github.com/azazazazaz520/Prism/releases/download/v0.5.1/Prism_0.5.1_x64-setup.exe",
-  "release_url": "https://github.com/azazazazaz520/Prism/releases/tag/v0.5.1",
-  "release_date": "2026-10-05T09:22:28.7745159Z",
-  "sha256": "ef1d6f82bb18cd39d0d5cfc354f9fdfea4d0b37d11d1cb88b5cfebbe0d2fa1c6"
+  "release_url": "https://github.com/azazazazaz520/Prism/releases/tag/v0.5.2",
+  "release_date": "2026-10-09T03:32:29.7183999Z",
+  "version": "0.5.2",
+  "release_notes": "## Changes since v0.5.1\n\n- fix: 修复笔记文件树收起后无法展开的问题 (asd_fire)\n- chore: 同步稳定版更新清单 (github-actions[bot])",
+  "sha256": "cc82e338da679a2f6c9daa62ebd4ed70b5e38b530d3fbae00f6762c9a61a8574",
+  "download_url": "https://github.com/azazazazaz520/Prism/releases/download/v0.5.2/Prism_0.5.2_x64-setup.exe"
 }

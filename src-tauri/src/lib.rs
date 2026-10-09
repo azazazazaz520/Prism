@@ -5,6 +5,7 @@
 )]
 
 use std::collections::HashMap;
+use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager, Runtime, UriSchemeResponder};
 
@@ -44,6 +45,8 @@ pub struct AppState {
     pub(crate) plugin_modules: Mutex<HashMap<String, String>>,
     /// 文件系统监听器（drop 时自动停止监听）
     pub(crate) file_watcher: Mutex<Option<file_watcher::FileWatcher>>,
+    /// 全文搜索代次，用于中断已经过期的目录扫描。
+    pub(crate) note_search_generation: Arc<AtomicU64>,
 }
 
 impl AppState {
@@ -317,6 +320,7 @@ pub fn run() {
             logger: logger.clone(),
             plugin_modules: Mutex::new(HashMap::new()),
             file_watcher: Mutex::new(None),
+            note_search_generation: Arc::new(AtomicU64::new(0)),
         })
         .manage(token_registry)
         .register_asynchronous_uri_scheme_protocol("prism-api", move |ctx, request, responder| {
@@ -388,6 +392,8 @@ pub fn run() {
             commands::pdf_to_word::pdf_to_word_download_result,
             commands::notes::list_note_tree,
             commands::notes::list_note_dir,
+            commands::notes::search_notes,
+            commands::notes::cancel_note_search,
             commands::notes::read_note,
             commands::notes::read_note_meta,
             commands::notes::get_note_mtime,

@@ -1,4 +1,5 @@
 use std::fs;
+use std::sync::atomic::Ordering;
 use tauri::{AppHandle, State};
 
 use crate::file_watcher::FileWatcher;
@@ -22,6 +23,37 @@ pub fn list_note_dir(
 ) -> Result<Vec<note_service::FileEntry>, String> {
     let base = state.with_config(store::get_notes_dir);
     note_service::read_dir_entries(&base, &path)
+}
+
+/// 在后台扫描当前笔记工作区，并返回正文命中位置与上下文片段。
+#[tauri::command]
+pub async fn search_notes(
+    request_id: u64,
+    query: String,
+    skipped_paths: Vec<String>,
+    state: State<'_, AppState>,
+) -> Result<note_service::NoteSearchResponse, String> {
+    let query = query.trim().to_string();
+    if query.is_empty() {
+        return Err("搜索关键词不能为空".into());
+    }
+
+    let base = state.with_config(store::get_notes_dir);
+    let generation = state.note_search_generation.fetch_add(1, Ordering::SeqCst) + 1;
+    let current_generation = state.note_search_generation.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        note_service::search_notes(&base, request_id, &query, &skipped_paths, || {
+            current_generation.load(Ordering::SeqCst) != generation
+        })
+    })
+    .await
+    .map_err(|error| format!("笔记搜索任务失败: {error}"))?
+}
+
+/// 使正在运行的笔记搜索失效。
+#[tauri::command]
+pub fn cancel_note_search(state: State<AppState>) {
+    state.note_search_generation.fetch_add(1, Ordering::SeqCst);
 }
 
 /// 读取笔记内容
@@ -109,6 +141,7 @@ pub fn set_notes_directory(
     }
 
     note_service::is_safe_notes_dir(&path)?;
+    state.note_search_generation.fetch_add(1, Ordering::SeqCst);
 
     // 尝试写入测试文件以验证权限
     let test_file = path.join(".todo_test_write");

@@ -4,6 +4,7 @@ import type { NoteDocumentState } from '../../composables/useNoteDocumentStore';
 import type { WorkspaceDropZone, WorkspaceLeaf } from '../../domain/note-workspace';
 import { NOTE_FILE_DRAG_EVENT, type NoteFileDragDetail } from './file-drag';
 import { getTabDropPosition } from './tab-drop-indicator';
+import type { NoteSearchPosition } from '../../notes/note-search';
 
 const MarkdownEditor = defineAsyncComponent({
   loader: () => import('./MarkdownEditor.vue'),
@@ -19,10 +20,12 @@ interface MarkdownEditorApi {
   replaceSelection: (text: string) => void;
   selectAll: () => void;
   scrollToLine: (line: number) => boolean;
+  revealSearchMatch: (line: number, columnUtf16: number, lengthUtf16: number) => boolean;
 }
 
 const editorRef = ref<MarkdownEditorApi | null>(null);
 const pendingScrollLine = ref<number | null>(null);
+const pendingSearchMatch = ref<NoteSearchPosition | null>(null);
 const suppressNextTabClick = ref(false);
 const pointerDragging = ref(false);
 const dragGhostPosition = ref({ left: 0, top: 0 });
@@ -92,6 +95,7 @@ watch(
   () => activeTab.value?.path,
   () => {
     pendingScrollLine.value = null;
+    pendingSearchMatch.value = null;
   },
 );
 
@@ -100,6 +104,23 @@ watch(
   (editor) => {
     if (!editor || pendingScrollLine.value === null) return;
     if (editor.scrollToLine(pendingScrollLine.value)) pendingScrollLine.value = null;
+  },
+  { flush: 'post' },
+);
+
+watch(
+  editorRef,
+  (editor) => {
+    if (!editor || !pendingSearchMatch.value) return;
+    if (
+      editor.revealSearchMatch(
+        pendingSearchMatch.value.line,
+        pendingSearchMatch.value.columnUtf16,
+        pendingSearchMatch.value.lengthUtf16,
+      )
+    ) {
+      pendingSearchMatch.value = null;
+    }
   },
   { flush: 'post' },
 );
@@ -385,6 +406,16 @@ defineExpose({
       return true;
     }
     pendingScrollLine.value = line;
+    return false;
+  },
+  revealSearchMatch: (position: NoteSearchPosition) => {
+    if (
+      editorRef.value?.revealSearchMatch(position.line, position.columnUtf16, position.lengthUtf16)
+    ) {
+      pendingSearchMatch.value = null;
+      return true;
+    }
+    pendingSearchMatch.value = position;
     return false;
   },
 });

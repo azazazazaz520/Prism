@@ -1,4 +1,7 @@
 use serde::{Deserialize, Serialize};
+mod search;
+
+use std::collections::HashSet;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -27,6 +30,41 @@ pub struct FileEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<FileEntry>>,
 }
+
+/// 笔记正文中的单处命中位置及其上下文片段。
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteSearchMatch {
+    pub line: usize,
+    pub column_utf16: usize,
+    pub length_utf16: usize,
+    pub excerpt: String,
+}
+
+/// 单篇笔记的全文搜索结果。
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteSearchFileResult {
+    pub path: String,
+    pub file_name_matched: bool,
+    pub match_count: usize,
+    pub matches: Vec<NoteSearchMatch>,
+    pub mtime: Option<String>,
+}
+
+/// 单次笔记全文搜索的结果及扫描统计。
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteSearchResponse {
+    pub request_id: u64,
+    pub files: Vec<NoteSearchFileResult>,
+    pub matched_file_count: usize,
+    pub scanned_file_count: usize,
+    pub failed_path_count: usize,
+    pub truncated: bool,
+}
+
+const NOTE_SEARCH_MAX_FILES: usize = 200;
 
 // ═══════════════════════════════════════════════════════════════
 //  路径安全
@@ -216,6 +254,220 @@ fn file_mtime(metadata: &fs::Metadata) -> Result<String, String> {
                 .as_nanos()
                 .to_string()
         })
+}
+
+/// 搜索工作区内的 Markdown 文件名和正文，并返回最多 200 篇匹配笔记。
+pub fn search_notes(
+    base: &Path,
+    request_id: u64,
+    query: &str,
+    skipped_paths: &[String],
+    is_cancelled: impl Fn() -> bool,
+) -> Result<NoteSearchResponse, String> {
+    let root = base
+        .canonicalize()
+        .map_err(|error| format!("无法读取笔记工作区: {error}"))?;
+    let query_lower = query.to_lowercase();
+    let pattern = search::NoteSearchPattern::new(&query_lower);
+    let skipped_paths: HashSet<String> = skipped_paths
+        .iter()
+        .map(|path| normalize_search_path(path))
+        .collect();
+    drop(fs::read_dir(&root).map_err(|error| format!("无法读取笔记工作区: {error}"))?);
+    let mut entries = walkdir::WalkDir::new(&root)
+        .min_depth(1)
+        .follow_links(false)
+        .into_iter();
+    let mut results = NoteSearchResults::default();
+    let mut scanned_file_count = 0;
+    let mut failed_path_count = 0;
+
+    while let Some(entry) = entries.next() {
+        if is_cancelled() {
+            break;
+        }
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(_) => {
+                failed_path_count += 1;
+                continue;
+            }
+        };
+        let file_type = entry.file_type();
+        if file_type.is_dir() {
+            match entry.path().canonicalize() {
+                Ok(path) if path.starts_with(&root) => {}
+                _ => {
+                    failed_path_count += 1;
+                    entries.skip_current_dir();
+                }
+            }
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy();
+        if !file_type.is_file() || !name.to_lowercase().ends_with(".md") {
+            continue;
+        }
+        let relative_path = entry
+            .path()
+            .strip_prefix(&root)
+            .unwrap()
+            .to_string_lossy()
+            .replace(std::path::MAIN_SEPARATOR, "/");
+        if skipped_paths.contains(&normalize_search_path(&relative_path)) {
+            continue;
+        }
+
+        scanned_file_count += 1;
+        let file_name_matched = name.to_lowercase().contains(&query_lower);
+        let path = match entry.path().canonicalize() {
+            Ok(path) if path.starts_with(&root) => path,
+            _ => {
+                failed_path_count += 1;
+                continue;
+            }
+        };
+        let before = match fs::metadata(&path) {
+            Ok(metadata) => metadata,
+            Err(_) => {
+                failed_path_count += 1;
+                if file_name_matched {
+                    results.push(NoteSearchFileResult {
+                        path: relative_path,
+                        file_name_matched,
+                        match_count: 0,
+                        matches: Vec::new(),
+                        mtime: None,
+                    });
+                }
+                continue;
+            }
+        };
+        let mtime = match file_mtime(&before) {
+            Ok(mtime) => Some(mtime),
+            Err(_) => {
+                failed_path_count += 1;
+                continue;
+            }
+        };
+        let searched = fs::File::open(&path)
+            .and_then(|file| search::search_note_reader(file, &pattern, &is_cancelled));
+        let (match_count, matches) = match searched {
+            Ok(matches) => matches,
+            Err(_) => {
+                if is_cancelled() {
+                    break;
+                }
+                failed_path_count += 1;
+                if file_name_matched {
+                    results.push(NoteSearchFileResult {
+                        path: relative_path,
+                        file_name_matched,
+                        match_count: 0,
+                        matches: Vec::new(),
+                        mtime,
+                    });
+                }
+                continue;
+            }
+        };
+        // 完成正文扫描和预览读取后，校验文件修改时间与长度。
+        let after = fs::metadata(&path);
+        let stable = after
+            .as_ref()
+            .ok()
+            .and_then(|metadata| file_mtime(metadata).ok())
+            == mtime
+            && after
+                .as_ref()
+                .is_ok_and(|metadata| metadata.len() == before.len());
+        if !stable {
+            failed_path_count += 1;
+            if file_name_matched {
+                results.push(NoteSearchFileResult {
+                    path: relative_path,
+                    file_name_matched,
+                    match_count: 0,
+                    matches: Vec::new(),
+                    mtime,
+                });
+            }
+            continue;
+        }
+
+        if file_name_matched || match_count > 0 {
+            results.push(NoteSearchFileResult {
+                path: relative_path,
+                file_name_matched,
+                match_count,
+                matches,
+                mtime,
+            });
+        }
+    }
+
+    let matched_file_count = results.matched_file_count;
+    let truncated = matched_file_count > NOTE_SEARCH_MAX_FILES;
+
+    Ok(NoteSearchResponse {
+        request_id,
+        files: results.files,
+        matched_file_count,
+        scanned_file_count,
+        failed_path_count,
+        truncated,
+    })
+}
+
+/// 累计全部匹配文件，并按文件名命中优先、路径排序保留前 200 篇。
+#[derive(Default)]
+struct NoteSearchResults {
+    files: Vec<NoteSearchFileResult>,
+    matched_file_count: usize,
+}
+
+impl NoteSearchResults {
+    fn push(&mut self, result: NoteSearchFileResult) {
+        self.matched_file_count += 1;
+        let index = self
+            .files
+            .binary_search_by(|existing| {
+                result
+                    .file_name_matched
+                    .cmp(&existing.file_name_matched)
+                    .then_with(|| {
+                        existing
+                            .path
+                            .to_lowercase()
+                            .cmp(&result.path.to_lowercase())
+                    })
+                    .then_with(|| existing.path.cmp(&result.path))
+            })
+            .unwrap_or_else(|index| index);
+        if index < NOTE_SEARCH_MAX_FILES {
+            self.files.insert(index, result);
+            self.files.truncate(NOTE_SEARCH_MAX_FILES);
+        }
+    }
+}
+
+fn normalize_search_path(path: &str) -> String {
+    let path = path.replace('\\', "/");
+    if cfg!(windows) {
+        path.to_lowercase()
+    } else {
+        path
+    }
+}
+
+#[cfg(test)]
+fn search_note_content(content: &str, query_lower: &str) -> (usize, Vec<NoteSearchMatch>) {
+    search::search_note_reader(
+        std::io::Cursor::new(content.as_bytes()),
+        &search::NoteSearchPattern::new(query_lower),
+        &|| false,
+    )
+    .unwrap()
 }
 
 /// 写入笔记内容（自动创建父目录）。
@@ -473,5 +725,163 @@ mod tests {
         if path.exists() {
             assert!(is_safe_notes_dir(&path).is_err());
         }
+    }
+
+    #[test]
+    fn test_search_note_content_matches_unicode_and_omits_task_markers() {
+        let content = "计划 Project PROJECT 计划 <!-- prism-task:task_1 -->\n- [ ] 任务标题 <!-- prism-task:task_2 -->\n😀命中";
+
+        let (count, matches) = search_note_content(content, "计划");
+        assert_eq!(count, 2);
+        assert_eq!(
+            matches
+                .iter()
+                .map(|matched| matched.column_utf16)
+                .collect::<Vec<_>>(),
+            vec![0, 19]
+        );
+
+        let (count, matches) = search_note_content(content, "project");
+        assert_eq!(count, 2);
+        assert_eq!(
+            matches
+                .iter()
+                .map(|matched| matched.column_utf16)
+                .collect::<Vec<_>>(),
+            vec![3, 11]
+        );
+
+        assert_eq!(search_note_content(content, "task_1").0, 0);
+        assert_eq!(search_note_content(content, "任务标题").0, 1);
+        let (_, matches) = search_note_content(content, "命中");
+        assert_eq!(matches[0].line, 3);
+        assert_eq!(matches[0].column_utf16, 2);
+        let (count, matches) = search_note_content("aaaa\r\nİİ", "aa");
+        assert_eq!(count, 3);
+        assert_eq!(matches[2].column_utf16, 2);
+        let (count, matches) = search_note_content("aaaa\r\nİİ", "i");
+        assert_eq!(count, 2);
+        assert_eq!(matches[1].line, 2);
+        assert_eq!(matches[1].column_utf16, 1);
+        assert_eq!(matches[1].length_utf16, 1);
+        assert_eq!(
+            search_note_content("<!-- ordinary needle -->", "needle").0,
+            1
+        );
+        assert_eq!(
+            search_note_content("<!-- prism-task:needle -->", "needle").0,
+            0
+        );
+    }
+
+    #[test]
+    fn test_search_notes_scans_nested_markdown_and_skips_unsaved_paths() {
+        let tmp = std::env::temp_dir().join(format!("prism-test-{}", uuid::Uuid::new_v4()));
+        let notes = tmp.join("notes");
+        fs::create_dir_all(notes.join("nested")).unwrap();
+        fs::write(notes.join("content.md"), "Needle body Needle").unwrap();
+        fs::write(notes.join("nested/Needle-title.md"), "no body match").unwrap();
+        fs::write(notes.join("nested/skip.md"), "Needle unsaved version").unwrap();
+        fs::write(notes.join("ignored.txt"), "Needle").unwrap();
+
+        let response =
+            search_notes(&notes, 7, "needle", &["nested/skip.md".into()], || false).unwrap();
+
+        assert_eq!(response.request_id, 7);
+        assert_eq!(response.scanned_file_count, 2);
+        assert_eq!(response.matched_file_count, 2);
+        assert!(!response.truncated);
+        assert_eq!(response.files[0].path, "nested/Needle-title.md");
+        assert!(response.files[0].file_name_matched);
+        assert_eq!(response.files[1].match_count, 2);
+
+        fs::remove_dir_all(&tmp).ok();
+    }
+
+    #[test]
+    fn test_search_notes_streams_large_lines_and_finds_matches_at_file_end() {
+        let tmp = std::env::temp_dir().join(format!("prism-test-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&tmp).unwrap();
+        let prefix_length = 2 * 1024 * 1024 - 2;
+        let prefix = vec![b'x'; prefix_length];
+        let marker = format!(
+            "<!-- prism-task:needle_{} -->",
+            "a".repeat(search::READ_BUFFER_BYTES)
+        );
+        let mut file = fs::File::create(tmp.join("large.md")).unwrap();
+        file.write_all(&prefix).unwrap();
+        file.write_all("😀Needle".as_bytes()).unwrap();
+        file.write_all(marker.as_bytes()).unwrap();
+        file.write_all(b"Needle\r\n").unwrap();
+        file.write_all(&prefix).unwrap();
+        file.write_all("尾😀Needle needle".as_bytes()).unwrap();
+        drop(file);
+
+        let response = search_notes(&tmp, 8, "needle", &[], || false).unwrap();
+        fs::remove_dir_all(&tmp).ok();
+
+        assert_eq!(response.scanned_file_count, 1);
+        assert_eq!(response.failed_path_count, 0);
+        assert_eq!(response.matched_file_count, 1);
+        assert!(!response.truncated);
+        let result = &response.files[0];
+        assert_eq!(result.path, "large.md");
+        assert_eq!(result.match_count, 4);
+        assert_eq!(result.matches.len(), 3);
+        assert_eq!(result.matches[0].line, 1);
+        assert_eq!(result.matches[0].column_utf16, prefix_length + 2);
+        assert_eq!(
+            result.matches[1].column_utf16,
+            prefix_length + "😀Needle".encode_utf16().count() + marker.encode_utf16().count()
+        );
+        assert_eq!(result.matches[2].line, 2);
+        assert_eq!(result.matches[2].column_utf16, prefix_length + 3);
+        assert_eq!(result.matches[2].length_utf16, 6);
+        assert!(result
+            .matches
+            .iter()
+            .all(|matched| matched.excerpt.contains("Needle")
+                && !matched.excerpt.contains("prism-task")
+                && matched.excerpt.chars().count() <= 167));
+    }
+
+    #[test]
+    fn test_search_note_reader_cancels_within_large_line() {
+        let content = vec![b'x'; search::READ_BUFFER_BYTES * 4];
+        let mut input = std::io::Cursor::new(content);
+        let checks = std::cell::Cell::new(0);
+        let result = search::search_note_reader(
+            &mut input,
+            &search::NoteSearchPattern::new("needle"),
+            &|| {
+                checks.set(checks.get() + 1);
+                checks.get() >= 2
+            },
+        );
+
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::Interrupted);
+        assert!(input.position() <= search::READ_BUFFER_BYTES as u64);
+    }
+
+    #[test]
+    fn test_search_notes_limits_displayed_files_and_counts_all_matches() {
+        let tmp = std::env::temp_dir().join(format!("prism-test-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&tmp).unwrap();
+        for index in 0..NOTE_SEARCH_MAX_FILES + 1 {
+            fs::write(tmp.join(format!("{index:03}.md")), "needle").unwrap();
+        }
+        fs::write(tmp.join("z-Needle-title.md"), "other content").unwrap();
+
+        let response = search_notes(&tmp, 9, "needle", &[], || false).unwrap();
+        fs::remove_dir_all(&tmp).ok();
+
+        assert_eq!(response.scanned_file_count, NOTE_SEARCH_MAX_FILES + 2);
+        assert_eq!(response.matched_file_count, NOTE_SEARCH_MAX_FILES + 2);
+        assert_eq!(response.failed_path_count, 0);
+        assert!(response.truncated);
+        assert_eq!(response.files.len(), NOTE_SEARCH_MAX_FILES);
+        assert_eq!(response.files[0].path, "z-Needle-title.md");
+        assert_eq!(response.files[1].path, "000.md");
+        assert_eq!(response.files.last().unwrap().path, "198.md");
     }
 }

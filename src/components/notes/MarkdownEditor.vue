@@ -57,6 +57,11 @@ const emit = defineEmits<{
 // ── 状态 ───────────────────────────────────
 
 const editorRef = ref<HTMLDivElement | null>(null);
+const pendingSearchMatch = ref<{
+  line: number;
+  columnUtf16: number;
+  lengthUtf16: number;
+} | null>(null);
 let view: EditorView | null = null;
 /** 标记位：防止 modelValue watch 触发的双向绑定写回循环。
  *  当 EditorView 内部修改文档时设 true，watch 检测到此标记会跳过回写。 */
@@ -638,6 +643,11 @@ onMounted(async () => {
     state,
     parent: editorRef.value,
   });
+  if (pendingSearchMatch.value) {
+    const pending = pendingSearchMatch.value;
+    pendingSearchMatch.value = null;
+    revealSearchMatch(pending.line, pending.columnUtf16, pending.lengthUtf16);
+  }
 
   // 监听 <html data-theme=""> 属性变化
   themeObserver.observe(document.documentElement, {
@@ -734,6 +744,26 @@ function scrollToLine(lineNumber: number): boolean {
   return true;
 }
 
+/** 滚动到正文命中位置并选中对应的 UTF-16 文本范围。 */
+function revealSearchMatch(lineNumber: number, columnUtf16: number, lengthUtf16: number): boolean {
+  if (!view) {
+    pendingSearchMatch.value = { line: lineNumber, columnUtf16, lengthUtf16 };
+    return true;
+  }
+
+  const lineNumberClamped = Math.min(Math.max(Math.trunc(lineNumber), 1), view.state.doc.lines);
+  const line = view.state.doc.line(lineNumberClamped);
+  const column = Math.min(Math.max(Math.trunc(columnUtf16), 0), line.length);
+  const from = line.from + column;
+  const to = Math.min(line.to, from + Math.max(0, Math.trunc(lengthUtf16)));
+  view.dispatch({
+    selection: { anchor: from, head: to },
+    effects: EditorView.scrollIntoView(from, { y: 'start', yMargin: 24 }),
+  });
+  view.focus();
+  return true;
+}
+
 defineExpose({
   insertText,
   wrapSelection,
@@ -743,6 +773,7 @@ defineExpose({
   selectAll,
   prependToLine,
   scrollToLine,
+  revealSearchMatch,
 });
 </script>
 

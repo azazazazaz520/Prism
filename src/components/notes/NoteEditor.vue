@@ -276,10 +276,9 @@ async function openPathInActivePane(path: string, initialContent?: string) {
 
 async function openNoteSearchMatch(path: string, match: NoteSearchMatch | null) {
   const query = noteContentSearch.displayedQuery.value || noteContentSearch.query.value.trim();
-  const wasOpen = allWorkspaceTabPaths.value.includes(path);
   workspaceBoardRef.value?.openPath(path);
   const existingDocument = documentStore.documents.get(path);
-  if (!wasOpen || !existingDocument || existingDocument.hydratedRevision < 0) {
+  if (!existingDocument || existingDocument.hydratedRevision < 0) {
     await loadWorkspacePath(path);
   } else {
     rememberNotePath(path);
@@ -321,7 +320,7 @@ interface ExportDocxResult {
 
 /** 笔记目录路径 */
 const notesDir = ref('');
-const noteContentSearch = useNoteSearch(notesDir, documentStore.documents, allWorkspaceTabPaths);
+const noteContentSearch = useNoteSearch(notesDir, documentStore.documents);
 const {
   query: noteContentSearchQuery,
   response: noteSearchResponse,

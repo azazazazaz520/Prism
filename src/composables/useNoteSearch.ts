@@ -1,4 +1,4 @@
-import { onUnmounted, ref, watch, type ComputedRef, type Ref } from 'vue';
+import { onUnmounted, ref, watch, type Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { NoteDocumentState } from './useNoteDocumentStore';
 import {
@@ -17,7 +17,6 @@ interface UnsavedDocumentSnapshot {
 export function useNoteSearch(
   workspacePath: Ref<string>,
   documents: Map<string, NoteDocumentState>,
-  openPaths: ComputedRef<string[]>,
 ) {
   const query = ref('');
   const response = ref<NoteSearchResponse | null>(null);
@@ -32,9 +31,8 @@ export function useNoteSearch(
   let disposed = false;
 
   function getUnsavedDocuments(): UnsavedDocumentSnapshot[] {
-    return [...new Set(openPaths.value)].flatMap((path) => {
-      const document = documents.get(path);
-      if (!document || (!document.dirty && !document.conflict)) return [];
+    return [...documents].flatMap(([path, document]) => {
+      if (!document.dirty && !document.conflict) return [];
       return [{ path, content: document.content, mtime: document.mtime }];
     });
   }
@@ -212,9 +210,8 @@ export function useNoteSearch(
   );
   watch(
     () =>
-      [...new Set(openPaths.value)].flatMap((path) => {
-        const document = documents.get(path);
-        if (!document || (!document.dirty && !document.conflict)) return [];
+      [...documents].flatMap(([path, document]) => {
+        if (!document.dirty && !document.conflict) return [];
         return [{ path, revision: document.revision, conflict: Boolean(document.conflict) }];
       }),
     (next, previous) => {

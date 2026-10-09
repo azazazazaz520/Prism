@@ -175,7 +175,6 @@ defineExpose({ openSearch });
         <input
           :value="search"
           type="search"
-          placeholder="过滤文件树"
           aria-label="过滤文件树"
           @input="emit('update:search', ($event.target as HTMLInputElement).value)"
         />

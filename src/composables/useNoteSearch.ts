@@ -192,22 +192,8 @@ export function useNoteSearch(
     if (affected) stale.value = true;
   }
 
-  function resetForWorkspace() {
-    clearTimer();
-    invalidate();
-    query.value = '';
-    displayedQuery.value = '';
-    response.value = null;
-    stale.value = false;
-    error.value = null;
-    lastUnsavedDocuments.clear();
-  }
-
   watch(query, scheduleSearch);
-  watch(
-    () => normalizeWorkspacePath(workspacePath.value),
-    () => resetForWorkspace(),
-  );
+  watch(() => normalizeWorkspacePath(workspacePath.value), clear);
   watch(
     () =>
       [...documents].flatMap(([path, document]) => {
@@ -246,7 +232,7 @@ export function useNoteSearch(
     searchNow,
     clear,
     markStale,
-    resetForWorkspace,
+    resetForWorkspace: clear,
   };
 }
 

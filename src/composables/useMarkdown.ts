@@ -11,7 +11,7 @@ import DOMPurify from 'dompurify';
 
 /** 安全渲染 Markdown 文本为净化后的 HTML */
 export function renderMarkdown(text: string, options?: { breaks?: boolean }): string {
-  const raw = marked.parse(text, options) as string;
+  const raw = marked.parse(text, { gfm: true, ...options }) as string;
   return DOMPurify.sanitize(raw, {
     ALLOWED_TAGS: [
       'h1',

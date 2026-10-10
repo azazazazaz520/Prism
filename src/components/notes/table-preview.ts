@@ -1,15 +1,8 @@
 import { EditorState, RangeSetBuilder, Text } from '@codemirror/state';
-import { markdownLanguage } from '@codemirror/lang-markdown';
 import { Decoration, type DecorationSet, EditorView, WidgetType } from '@codemirror/view';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-
-export interface TableLine {
-  number: number;
-  text: string;
-  from: number;
-  to: number;
-}
+import { parseMarkdownDocument } from '../../notes/markdown-syntax';
 
 export type TableAlignment = 'left' | 'center' | 'right' | null;
 
@@ -21,89 +14,143 @@ export interface MarkdownTableBlock {
   header: string[];
   rows: string[][];
   alignments: TableAlignment[];
+  headerCells: TableCellSource[];
+  rowCells: TableCellSource[][];
+  linePrefixes: string[];
+  lineEnding: '\n' | '\r\n';
 }
 
-function tableCellRanges(text: string) {
-  const cells: { from: number; to: number; text: string }[] = [];
-  let from = 0;
-  let escaped = false;
-  for (let index = 0; index < text.length; index += 1) {
-    if (text[index] === '|' && !escaped) {
-      cells.push({ from, to: index, text: text.slice(from, index).trim() });
-      from = index + 1;
-    }
-    escaped = !escaped && text[index] === '\\';
-  }
-  cells.push({ from, to: text.length, text: text.slice(from).trim() });
-  if (cells.length > 1 && cells[0].text === '') cells.shift();
-  if (cells.length > 1 && cells[cells.length - 1].text === '') cells.pop();
-  return cells;
+export interface TableCellSource {
+  from: number;
+  to: number;
+  text: string;
 }
 
-/** 拆分表格单元格，保留内容中的竖线转义。 */
-export function splitTableRow(text: string): string[] {
-  return tableCellRanges(text).map((cell) => cell.text);
+function splitAlignmentRow(text: string): string[] {
+  return text
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map((cell) => cell.trim());
 }
 
-/** 判断是否是 GFM 表格分隔行，例如 | --- | :---: | ---: | */
-export function isTableDelimiterRow(text: string): boolean {
-  const cells = splitTableRow(text);
-  return cells.length >= 1 && cells.every((cell) => /^:?-{1,}:?$/.test(cell));
-}
-
-/** 判断是否是普通的表格数据行。 */
-export function isTableDataRow(text: string): boolean {
-  return text.includes('|') && splitTableRow(text).length >= 2;
-}
-
-/** 从 Markdown 语法树提取文档顶层表格及其源码范围。 */
-export function findTableBlocks(lines: TableLine[]): MarkdownTableBlock[] {
-  if (lines.length === 0) return [];
-  const doc = Text.of(lines.map((line) => line.text));
-  const tree = markdownLanguage.parser.parse(doc.toString());
+/** 从 Markdown 语法树提取表格结构、单元格范围与容器缩进。 */
+export function findTableBlocks(source: string): MarkdownTableBlock[] {
+  if (!source) return [];
+  const doc = Text.of(source.split('\n'));
+  const { tree, toSourceOffset } = parseMarkdownDocument(source);
   const blocks: MarkdownTableBlock[] = [];
-  for (let node = tree.topNode.firstChild; node; node = node.nextSibling) {
-    if (node.name !== 'Table') continue;
-    const startIndex = doc.lineAt(node.from).number - 1;
-    const endIndex = doc.lineAt(node.to).number - 1;
-    const headerLine = lines[startIndex];
-    const header = splitTableRow(headerLine.text);
-    const delimiter = lines[startIndex + 1];
-    const delimiterCells = splitTableRow(delimiter.text);
-    const alignments: TableAlignment[] = delimiterCells.map((cell) => {
-      if (cell.startsWith(':') && cell.endsWith(':')) return 'center';
-      if (cell.endsWith(':')) return 'right';
-      if (cell.startsWith(':')) return 'left';
-      return null;
-    });
-
-    const rows: string[][] = [];
-    for (let bodyIndex = startIndex + 2; bodyIndex <= endIndex; bodyIndex += 1) {
-      const row = splitTableRow(lines[bodyIndex].text);
-      while (row.length < header.length) row.push('');
-      rows.push(row);
+  const cellsFor = (row: typeof tree.topNode, expectedCount?: number) => {
+    const delimiters: number[] = [];
+    for (let child = row.firstChild; child; child = child.nextSibling) {
+      if (child.name === 'TableDelimiter') delimiters.push(toSourceOffset(child.from));
     }
-    blocks.push({
-      startLine: headerLine.number,
-      endLine: lines[endIndex].number,
-      from: headerLine.from,
-      to: lines[endIndex].to,
-      header,
-      rows,
-      alignments,
-    });
-  }
-
+    const rowFrom = toSourceOffset(row.from);
+    const rowTo = toSourceOffset(row.to);
+    const line = doc.lineAt(rowFrom);
+    const firstDelimiter = delimiters[0];
+    const lastDelimiter = delimiters[delimiters.length - 1];
+    const leadingPipe = firstDelimiter === rowFrom;
+    const trailingPipe =
+      lastDelimiter !== undefined && source.slice(lastDelimiter + 1, line.to).trim() === '';
+    const count = Math.max(0, delimiters.length - Number(leadingPipe) - Number(trailingPipe) + 1);
+    const width = Math.max(count, expectedCount ?? 0);
+    const cells: TableCellSource[] = [];
+    for (let index = 0; index < width; index += 1) {
+      const leftDelimiterIndex = index + Number(leadingPipe) - 1;
+      const rightDelimiterIndex = index + Number(leadingPipe);
+      const from =
+        leftDelimiterIndex < 0
+          ? rowFrom
+          : leftDelimiterIndex < delimiters.length
+            ? delimiters[leftDelimiterIndex] + 1
+            : rowTo;
+      const to = rightDelimiterIndex < delimiters.length ? delimiters[rightDelimiterIndex] : rowTo;
+      let contentFrom = from;
+      let contentTo = to;
+      while (contentFrom < contentTo && /\s/.test(source[contentFrom])) contentFrom += 1;
+      while (contentTo > contentFrom && /\s/.test(source[contentTo - 1])) contentTo -= 1;
+      cells.push({ from: contentFrom, to: contentTo, text: source.slice(contentFrom, contentTo) });
+    }
+    return cells;
+  };
+  const visit = (parent: typeof tree.topNode) => {
+    for (let node = parent.firstChild; node; node = node.nextSibling) {
+      if (node.name === 'Table') {
+        const children = [];
+        for (let child = node.firstChild; child; child = child.nextSibling) children.push(child);
+        const headerNode = children.find((child) => child.name === 'TableHeader');
+        if (headerNode) {
+          const headerCells = cellsFor(headerNode);
+          const headerFrom = toSourceOffset(headerNode.from);
+          const headerLine = doc.lineAt(headerFrom);
+          const delimiterLine = doc.line(headerLine.number + 1);
+          const delimiterNode = children.find((child) => child.name === 'TableDelimiter');
+          const delimiterText = delimiterNode
+            ? source.slice(toSourceOffset(delimiterNode.from), toSourceOffset(delimiterNode.to))
+            : delimiterLine.text;
+          const delimiterCells = splitAlignmentRow(delimiterText.slice(delimiterText.indexOf('|')));
+          const alignments: TableAlignment[] = delimiterCells.map((cell) => {
+            if (cell.startsWith(':') && cell.endsWith(':')) return 'center';
+            if (cell.endsWith(':')) return 'right';
+            if (cell.startsWith(':')) return 'left';
+            return null;
+          });
+          const rowCells = children
+            .filter((child) => child.name === 'TableRow')
+            .map((row) => cellsFor(row, headerCells.length));
+          const rows = rowCells.map((cells) => {
+            const values = cells.slice(0, headerCells.length).map((cell) => cell.text);
+            while (values.length < headerCells.length) values.push('');
+            return values;
+          });
+          const endLine = doc.lineAt(toSourceOffset(node.to));
+          const prefixOffsets = new Map<number, number>([[headerLine.number, headerFrom]]);
+          if (delimiterNode)
+            prefixOffsets.set(delimiterLine.number, toSourceOffset(delimiterNode.from));
+          for (const row of children.filter((child) => child.name === 'TableRow')) {
+            const rowFrom = toSourceOffset(row.from);
+            prefixOffsets.set(doc.lineAt(rowFrom).number, rowFrom);
+          }
+          const linePrefixes = [];
+          for (let lineNumber = headerLine.number; lineNumber <= endLine.number; lineNumber += 1) {
+            const line = doc.line(lineNumber);
+            const prefixOffset = prefixOffsets.get(lineNumber);
+            linePrefixes.push(
+              prefixOffset === undefined ? '' : source.slice(line.from, prefixOffset),
+            );
+          }
+          blocks.push({
+            startLine: headerLine.number,
+            endLine: endLine.number,
+            from: doc.line(headerLine.number).from,
+            to: endLine.to,
+            header: headerCells.map((cell) => cell.text),
+            rows,
+            alignments: alignments.slice(0, headerCells.length),
+            headerCells,
+            rowCells,
+            linePrefixes,
+            lineEnding: source.includes('\r\n') ? '\r\n' : '\n',
+          });
+        }
+      }
+      visit(node);
+    }
+  };
+  visit(tree.topNode);
   return blocks;
 }
 
-function tableLinesFromDoc(doc: EditorState['doc']): TableLine[] {
-  const result: TableLine[] = [];
-  for (let lineNumber = 1; lineNumber <= doc.lines; lineNumber += 1) {
-    const line = doc.line(lineNumber);
-    result.push({ number: line.number, text: line.text, from: line.from, to: line.to });
-  }
-  return result;
+const tableBlocksByDocument = new WeakMap<EditorState['doc'], MarkdownTableBlock[]>();
+
+function tableBlocksForState(state: EditorState): MarkdownTableBlock[] {
+  const cached = tableBlocksByDocument.get(state.doc);
+  if (cached) return cached;
+  const blocks = findTableBlocks(state.doc.toString());
+  tableBlocksByDocument.set(state.doc, blocks);
+  return blocks;
 }
 
 export interface TableCursorContext {
@@ -116,8 +163,7 @@ export function getTableContext(
   state: EditorState,
   cursorPosition: number,
 ): TableCursorContext | null {
-  const lines = tableLinesFromDoc(state.doc);
-  const blocks = findTableBlocks(lines);
+  const blocks = tableBlocksForState(state);
   const block = blocks.find(
     (candidate) => cursorPosition >= candidate.from && cursorPosition <= candidate.to,
   );
@@ -131,10 +177,10 @@ export function getTableContext(
   } else if (lineNumber > block.startLine + 1) {
     rowIndex = lineNumber - block.startLine - 1;
   }
+  if (rowIndex < 0) return null;
 
-  const cells = tableCellRanges(line.text);
-  const offset = cursorPosition - line.from;
-  const index = cells.findIndex((cell) => offset <= cell.to);
+  const cells = rowIndex === 0 ? block.headerCells : (block.rowCells[rowIndex - 1] ?? []);
+  const index = cells.findIndex((cell) => cursorPosition <= cell.to);
   const columnIndex = Math.min(index < 0 ? cells.length - 1 : index, block.header.length - 1);
 
   return { block, rowIndex, columnIndex };
@@ -147,11 +193,9 @@ function cellAnchor(
   columnIndex: number,
 ): number | null {
   if (rowIndex < 0) return null;
-  const lineNumber = rowIndex === 0 ? block.startLine : block.startLine + 1 + rowIndex;
-  if (lineNumber > block.endLine) return null;
-  const line = state.doc.line(lineNumber);
-  const cell = tableCellRanges(line.text)[columnIndex];
-  return cell ? line.from + cell.from : null;
+  const cell =
+    rowIndex === 0 ? block.headerCells[columnIndex] : block.rowCells[rowIndex - 1]?.[columnIndex];
+  return cell?.from ?? null;
 }
 
 export function moveToNextCell(view: EditorView): boolean {
@@ -243,8 +287,7 @@ function tableBlockAfterChange(
   view: EditorView,
   originalStartLine: number,
 ): MarkdownTableBlock | null {
-  const lines = tableLinesFromDoc(view.state.doc);
-  const blocks = findTableBlocks(lines);
+  const blocks = tableBlocksForState(view.state);
   return blocks.find((block) => block.startLine === originalStartLine) ?? blocks[0] ?? null;
 }
 
@@ -261,18 +304,8 @@ function moveToNewRow(view: EditorView, block: MarkdownTableBlock): boolean {
 }
 
 /** 构建表格块级替换装饰，必须通过 EditorView.decorations 直接提供，不能放在 ViewPlugin 中。 */
-export function buildTableDecorations(
-  state: EditorState,
-  cursorPosition: number | null = null,
-): DecorationSet {
-  const doc = state.doc;
-  const lines: TableLine[] = [];
-  for (let lineNumber = 1; lineNumber <= doc.lines; lineNumber += 1) {
-    const line = doc.line(lineNumber);
-    lines.push({ number: line.number, text: line.text, from: line.from, to: line.to });
-  }
-
-  const blocks = findTableBlocks(lines);
+export function buildTableDecorations(state: EditorState): DecorationSet {
+  const blocks = tableBlocksForState(state);
   const builder = new RangeSetBuilder<Decoration>();
   for (const block of blocks) {
     builder.add(
@@ -289,7 +322,10 @@ export function buildTableDecorations(
 
 /** 安全渲染单元格里的行内 Markdown（粗体、代码、链接等）。 */
 export function renderTableCell(markdown: string): string {
-  const raw = marked.parseInline(markdown.replace(/\\\|/g, '|'), { breaks: true }) as string;
+  const raw = marked.parseInline(markdown.replace(/\\\|/g, '|'), {
+    gfm: true,
+    breaks: true,
+  }) as string;
   return DOMPurify.sanitize(raw, {
     ALLOWED_TAGS: ['code', 'em', 'strong', 'del', 'a', 'br'],
     ALLOWED_ATTR: ['href', 'title', 'target', 'rel'],
@@ -301,14 +337,17 @@ function buildMarkdownTable(
   header: string[],
   rows: string[][],
   alignments: TableAlignment[],
+  prefixes: string[],
+  lineEnding: '\n' | '\r\n',
 ): string {
   const normalizeCellText = (text: string) => {
-    let escaped = false;
+    const value = text.replace(/\r\n?|\n/g, ' ').replace(/\u00a0/g, ' ');
     let result = '';
-    for (const character of text.replace(/\r\n?|\n/g, ' ').replace(/\u00a0/g, ' ')) {
-      if (character === '|' && !escaped) result += '\\';
+    let backslashes = 0;
+    for (const character of value) {
+      if (character === '|' && backslashes % 2 === 0) result += '\\';
       result += character;
-      escaped = !escaped && character === '\\';
+      backslashes = character === '\\' ? backslashes + 1 : 0;
     }
     return result;
   };
@@ -321,7 +360,10 @@ function buildMarkdownTable(
   const headerRow = `| ${header.map(normalizeCellText).join(' | ')} |`;
   const delimiterRow = `| ${alignments.map(alignMarker).join(' | ')} |`;
   const bodyRows = rows.map((row) => `| ${row.map(normalizeCellText).join(' | ')} |`);
-  return [headerRow, delimiterRow, ...bodyRows].join('\n');
+  const lines = [headerRow, delimiterRow, ...bodyRows];
+  return lines
+    .map((line, index) => `${prefixes[Math.min(index, prefixes.length - 1)] ?? ''}${line}`)
+    .join(lineEnding);
 }
 
 function dispatchTableChange(
@@ -329,7 +371,13 @@ function dispatchTableChange(
   block: MarkdownTableBlock,
   next: { header: string[]; rows: string[][]; alignments: TableAlignment[] },
 ) {
-  const insert = buildMarkdownTable(next.header, next.rows, next.alignments);
+  const insert = buildMarkdownTable(
+    next.header,
+    next.rows,
+    next.alignments,
+    block.linePrefixes,
+    block.lineEnding,
+  );
   view.dispatch({
     changes: { from: block.from, to: block.to, insert },
   });
@@ -529,12 +577,33 @@ export function updateTableCellText(
   columnIndex: number,
   text: string,
 ) {
-  const header = [...block.header];
-  const rows = block.rows.map((row) => [...row]);
-  const target = rowIndex === 0 ? header : rows[rowIndex - 1];
-  if (!target || columnIndex < 0 || columnIndex >= target.length) return;
-  target[columnIndex] = text;
-  dispatchTableChange(view, block, { header, rows, alignments: block.alignments });
+  const target =
+    rowIndex === 0 ? block.headerCells[columnIndex] : block.rowCells[rowIndex - 1]?.[columnIndex];
+  if (!target) return;
+  const value = text.replace(/\r\n?|\n/g, ' ').replace(/\u00a0/g, ' ');
+  let escaped = '';
+  let backslashes = 0;
+  for (const character of value) {
+    if (character === '|' && backslashes % 2 === 0) escaped += '\\';
+    escaped += character;
+    backslashes = character === '\\' ? backslashes + 1 : 0;
+  }
+  const line = view.state.doc.lineAt(target.from);
+  const cells = rowIndex === 0 ? block.headerCells : (block.rowCells[rowIndex - 1] ?? []);
+  const sourceCellCount = cells.filter((cell) => cell.from !== line.to).length;
+  const isMissingFinalCell = columnIndex >= sourceCellCount;
+  if (isMissingFinalCell) {
+    const additionalCells = Array(columnIndex - sourceCellCount + 1).fill('');
+    additionalCells[additionalCells.length - 1] = escaped;
+    const hasTrailingPipe = line.text.trimEnd().endsWith('|');
+    const insert = hasTrailingPipe
+      ? ` ${additionalCells.join(' | ')} |`
+      : ` | ${additionalCells.join(' | ')}`;
+    view.dispatch({ changes: { from: line.to, insert } });
+  } else {
+    view.dispatch({ changes: { from: target.from, to: target.to, insert: escaped } });
+  }
+  view.focus();
 }
 
 /** 渲染 Markdown 表格的 CodeMirror Widget。 */
@@ -547,6 +616,9 @@ export class MarkdownTableWidget extends WidgetType {
     return (
       this.block.startLine === other.block.startLine &&
       this.block.endLine === other.block.endLine &&
+      this.block.from === other.block.from &&
+      this.block.to === other.block.to &&
+      JSON.stringify(this.block.linePrefixes) === JSON.stringify(other.block.linePrefixes) &&
       JSON.stringify(this.block.header) === JSON.stringify(other.block.header) &&
       JSON.stringify(this.block.rows) === JSON.stringify(other.block.rows) &&
       JSON.stringify(this.block.alignments) === JSON.stringify(other.block.alignments)
@@ -586,6 +658,7 @@ export class MarkdownTableWidget extends WidgetType {
       cell.contentEditable = 'true';
       cell.setAttribute('contenteditable', 'true');
       cell.spellcheck = false;
+      cell.textContent = initialText;
 
       let committed = false;
       let hasInput = false;

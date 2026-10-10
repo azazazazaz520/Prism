@@ -1,4 +1,5 @@
 import type { Task } from '../types';
+import { parseMarkdownDocument } from './markdown-syntax';
 
 /** 笔记中某个正式任务的引用位置。 */
 export interface TaskReference {
@@ -28,6 +29,24 @@ const TASK_REFERENCE_PATTERN =
  */
 export function parseTaskReferences(markdown: string, notePath: string): TaskReference[] {
   const references: TaskReference[] = [];
+  const { tree, toSourceOffset } = parseMarkdownDocument(markdown);
+  const taskRanges: { from: number; to: number; comments: { from: number; to: number }[] }[] = [];
+  const visit = (node: typeof tree.topNode) => {
+    if (node.name === 'Task') {
+      const comments: { from: number; to: number }[] = [];
+      const findComments = (taskNode: typeof tree.topNode) => {
+        for (let child = taskNode.firstChild; child; child = child.nextSibling) {
+          if (child.name === 'Comment')
+            comments.push({ from: toSourceOffset(child.from), to: toSourceOffset(child.to) });
+          findComments(child);
+        }
+      };
+      findComments(node);
+      taskRanges.push({ from: toSourceOffset(node.from), to: toSourceOffset(node.to), comments });
+    }
+    for (let child = node.firstChild; child; child = child.nextSibling) visit(child);
+  };
+  visit(tree.topNode);
   const lines = markdown.split(/\r?\n/);
   let offset = 0;
 
@@ -39,7 +58,22 @@ export function parseTaskReferences(markdown: string, notePath: string): TaskRef
           : 1
         : 0;
     const match = TASK_REFERENCE_PATTERN.exec(line);
-    if (!match) {
+    const markerOffset = line.indexOf('[', match?.[1].length ?? 0);
+    const metadataOffset = line.indexOf('<!--');
+    const metadataEnd = line.indexOf('-->', metadataOffset) + 3;
+    const taskPosition = offset + Math.max(markerOffset, metadataOffset);
+    if (
+      !match ||
+      !taskRanges.some(
+        (range) =>
+          taskPosition >= range.from &&
+          taskPosition <= range.to &&
+          range.comments.some(
+            (comment) =>
+              offset + metadataOffset >= comment.from && offset + metadataEnd <= comment.to,
+          ),
+      )
+    ) {
       offset += line.length + lineEndingLength;
       return;
     }
@@ -109,10 +143,12 @@ export function updateTaskReferences(
   task: Pick<Task, 'id' | 'title' | 'completed'>,
 ): string {
   const newline = markdown.includes('\r\n') ? '\r\n' : '\n';
-  return markdown
-    .split(/\r?\n/)
-    .map((line) => updateTaskReferenceLine(line, task))
-    .join(newline);
+  const lines = markdown.split(/\r?\n/);
+  const references = parseTaskReferences(markdown, '');
+  for (const reference of references.filter((item) => item.taskId === task.id).reverse()) {
+    lines[reference.line - 1] = updateTaskReferenceLine(lines[reference.line - 1], task);
+  }
+  return lines.join(newline);
 }
 
 /** 从当前笔记移除某个任务引用，但不删除正式任务。 */

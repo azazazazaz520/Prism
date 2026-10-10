@@ -47,6 +47,19 @@ describe('note-editor utilities', () => {
     ]);
   });
 
+  it('目录识别 Setext 标题并保留 CRLF 行号', () => {
+    expect(parseNoteOutline('标题\r\n=====\r\n\r\n## 末尾 ##')).toEqual([
+      { level: 1, title: '标题', line: 1 },
+      { level: 2, title: '末尾', line: 4 },
+    ]);
+  });
+
+  it('未满足长度的围栏行不会关闭代码块', () => {
+    expect(parseNoteOutline('```\n``` invalid\n# 忽略\n```\n# 显示')).toEqual([
+      { level: 1, title: '显示', line: 5 },
+    ]);
+  });
+
   it('提供笔记文本统计和标签移动规则', () => {
     expect(countNoteWords('你好 Prism')).toBe(3);
     expect(moveTabInList(['a', 'b', 'c'], 0, 3)).toEqual(['b', 'c', 'a']);

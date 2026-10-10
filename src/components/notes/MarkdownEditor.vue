@@ -20,18 +20,17 @@ import {
   dropCursor,
 } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
-import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
-import { bracketMatching } from '@codemirror/language';
+import { bracketMatching, ensureSyntaxTree, syntaxTree } from '@codemirror/language';
 import { oneDarkTheme } from '@codemirror/theme-one-dark';
 import { replaceEditorDocument } from './editor-document-sync';
+import { createMarkdownSupport } from '../../notes/markdown-syntax';
+import { createSyntaxTreeViewPlugin } from '../../notes/syntax-tree-view-plugin';
+import { parseTaskReferences } from '../../notes/task-references';
 import {
   buildTableDecorations,
-  findTableBlocks,
-  isTableDelimiterRow,
   moveToNextCell,
   moveToNextRow,
   moveToPreviousCell,
-  type TableLine,
 } from './table-preview';
 
 // ── Props & Emits ──────────────────────────
@@ -175,12 +174,6 @@ const tableNavigationKeymap = keymap.of([
   },
 ]);
 
-const taskReferenceLine =
-  /^(\s*[-*+]\s+)\[([ xX])\](?=\s+.*<!--\s*prism-task:[A-Za-z0-9_-]+\s*-->)/;
-const thematicBreakLine = /^\s{0,3}(?:(?:\*\s*){3,}|(?:-\s*){3,}|(?:_\s*){3,})$/;
-const codeFenceLine = /^\s{0,3}(`{3,}|~{3,})(.*)$/;
-const blockquotePrefix = /^(\s{0,3}(?:>\s?)+)/;
-
 class TaskCheckboxWidget extends WidgetType {
   constructor(
     private readonly checked: boolean,
@@ -261,11 +254,11 @@ const taskCheckboxPlugin = ViewPlugin.fromClass(
 
     build(view: EditorView) {
       const builder = new RangeSetBuilder<Decoration>();
-      for (let lineNumber = 1; lineNumber <= view.state.doc.lines; lineNumber += 1) {
-        const line = view.state.doc.line(lineNumber);
-        const match = taskReferenceLine.exec(line.text);
+      for (const reference of parseTaskReferences(view.state.doc.toString(), '')) {
+        const line = view.state.doc.line(reference.line);
+        const match = /\[([ xX])\]/.exec(line.text);
         if (!match) continue;
-        const checkboxFrom = line.from + match[1].length;
+        const checkboxFrom = line.from + match.index;
         builder.add(
           checkboxFrom,
           checkboxFrom + 3,
@@ -280,7 +273,7 @@ const taskCheckboxPlugin = ViewPlugin.fromClass(
   { decorations: (value) => value.decorations },
 );
 
-interface InlineDecoration {
+interface PreviewRange {
   from: number;
   to: number;
   className: string;
@@ -288,276 +281,218 @@ interface InlineDecoration {
   tokenTo: number;
 }
 
-function collectInlineDecorations(text: string, offset: number): InlineDecoration[] {
-  const decorations: InlineDecoration[] = [];
+function collectInlineDecorations(
+  state: EditorState,
+  tree: ReturnType<typeof syntaxTree>,
+): PreviewRange[] {
+  const ranges: PreviewRange[] = [];
   const add = (from: number, to: number, className: string, tokenFrom: number, tokenTo: number) => {
-    if (to > from) {
-      decorations.push({
-        from: offset + from,
-        to: offset + to,
-        className,
-        tokenFrom: offset + tokenFrom,
-        tokenTo: offset + tokenTo,
-      });
+    if (to > from) ranges.push({ from, to, className, tokenFrom, tokenTo });
+  };
+  const visit = (parent: ReturnType<typeof syntaxTree>['topNode']) => {
+    for (let node = parent.firstChild; node; node = node.nextSibling) {
+      const children = [];
+      for (let child = node.firstChild; child; child = child.nextSibling) children.push(child);
+      const marks = children.filter((child) =>
+        ['EmphasisMark', 'StrikethroughMark', 'CodeMark', 'LinkMark'].includes(child.name),
+      );
+      const tokenFrom = marks[0]?.from ?? node.from;
+      const tokenTo = marks[marks.length - 1]?.to ?? node.to;
+      const bodyFrom = marks[0]?.to ?? node.from;
+      const bodyTo = marks.length > 1 ? marks[1].from : (marks[marks.length - 1]?.from ?? node.to);
+      const className = {
+        StrongEmphasis: 'cm-md-bold',
+        Emphasis: 'cm-md-italic',
+        Strikethrough: 'cm-md-strike',
+        InlineCode: 'cm-md-code',
+        Link: 'cm-md-link',
+        Image: 'cm-md-link',
+      }[node.name];
+      if (className && node.name !== 'Image' && bodyTo > bodyFrom)
+        add(bodyFrom, bodyTo, className, node.from, node.to);
+      if (node.name === 'Link' || node.name === 'Image') {
+        for (const child of children) {
+          if (child.name === 'URL' || child.name === 'LinkTitle')
+            add(child.from, child.to, 'cm-md-syntax', node.from, node.to);
+        }
+      }
+      if (className) {
+        for (const mark of marks) add(mark.from, mark.to, 'cm-md-syntax', node.from, node.to);
+      }
+      if (node.name === 'Image' && marks.length > 1) {
+        add(marks[0].to, marks[1].from, 'cm-md-link', node.from, node.to);
+      }
+      if (node.name === 'Task') {
+        const findMetadata = (taskNode: ReturnType<typeof syntaxTree>['topNode']) => {
+          for (let child = taskNode.firstChild; child; child = child.nextSibling) {
+            if (
+              child.name === 'Comment' &&
+              /<!--\s*prism-task:[A-Za-z0-9_-]+\s*-->/.test(
+                state.doc.sliceString(child.from, child.to),
+              )
+            ) {
+              add(child.from, child.to, 'cm-task-meta', node.from, node.to);
+            }
+            findMetadata(child);
+          }
+        };
+        findMetadata(node);
+      }
+      visit(node);
     }
   };
-
-  for (const match of text.matchAll(/\[([^\]\n]+)\]\(([^)\n]+)\)/g)) {
-    const start = match.index ?? 0;
-    const labelStart = start + 1;
-    const labelEnd = labelStart + match[1].length;
-    const tokenEnd = start + match[0].length;
-    add(start, labelStart, 'cm-md-syntax', start, tokenEnd);
-    add(labelStart, labelEnd, 'cm-md-link', start, tokenEnd);
-    add(labelEnd, tokenEnd, 'cm-md-syntax', start, tokenEnd);
-  }
-
-  for (const match of text.matchAll(/(\*\*|__)(.+?)\1/g)) {
-    const start = match.index ?? 0;
-    const bodyStart = start + match[1].length;
-    const bodyEnd = bodyStart + match[2].length;
-    const tokenEnd = start + match[0].length;
-    add(start, bodyStart, 'cm-md-syntax', start, tokenEnd);
-    add(bodyStart, bodyEnd, 'cm-md-bold', start, tokenEnd);
-    add(bodyEnd, tokenEnd, 'cm-md-syntax', start, tokenEnd);
-  }
-
-  for (const match of text.matchAll(/~~(.+?)~~/g)) {
-    const start = match.index ?? 0;
-    const bodyStart = start + 2;
-    const bodyEnd = bodyStart + match[1].length;
-    const tokenEnd = start + match[0].length;
-    add(start, bodyStart, 'cm-md-syntax', start, tokenEnd);
-    add(bodyStart, bodyEnd, 'cm-md-strike', start, tokenEnd);
-    add(bodyEnd, tokenEnd, 'cm-md-syntax', start, tokenEnd);
-  }
-
-  for (const match of text.matchAll(/`([^`\n]+)`/g)) {
-    const start = match.index ?? 0;
-    const bodyStart = start + 1;
-    const bodyEnd = bodyStart + match[1].length;
-    const tokenEnd = start + match[0].length;
-    add(start, bodyStart, 'cm-md-syntax', start, tokenEnd);
-    add(bodyStart, bodyEnd, 'cm-md-code', start, tokenEnd);
-    add(bodyEnd, tokenEnd, 'cm-md-syntax', start, tokenEnd);
-  }
-
-  for (const match of text.matchAll(/(?<![*_])([*_])([^*_\n]+?)\1(?![*_])/g)) {
-    const start = match.index ?? 0;
-    const bodyStart = start + 1;
-    const bodyEnd = bodyStart + match[2].length;
-    const tokenEnd = start + match[0].length;
-    add(start, bodyStart, 'cm-md-syntax', start, tokenEnd);
-    add(bodyStart, bodyEnd, 'cm-md-italic', start, tokenEnd);
-    add(bodyEnd, tokenEnd, 'cm-md-syntax', start, tokenEnd);
-  }
-
-  return decorations;
+  visit(tree.topNode);
+  return ranges;
 }
 
-const livePreviewPlugin = ViewPlugin.fromClass(
-  class {
-    decorations;
-    activeLine = 1;
-
-    constructor(view: EditorView) {
-      this.activeLine = view.state.doc.lineAt(view.state.selection.main.head).number;
-      this.decorations = this.build(view);
-    }
-
-    update(update: { view: EditorView; docChanged: boolean; selectionSet: boolean }) {
-      const nextLine = update.view.state.doc.lineAt(update.view.state.selection.main.head).number;
-      if (update.docChanged || (update.selectionSet && nextLine !== this.activeLine)) {
-        this.activeLine = nextLine;
-        this.decorations = this.build(update.view);
+function buildLivePreview(view: EditorView) {
+  const builder = new RangeSetBuilder<Decoration>();
+  const pending: { from: number; to: number; decoration: Decoration }[] = [];
+  const doc = view.state.doc;
+  const selections = view.state.selection.ranges;
+  const cursorInside = (from: number, to: number) =>
+    selections.some((range) => range.from <= to && range.to >= from);
+  const visible = (from: number, to: number) =>
+    view.visibleRanges.some((range) => range.from <= to && range.to >= from) ||
+    selections.some((range) => range.from <= to && range.to >= from);
+  const parseThrough = view.visibleRanges.reduce((end, range) => Math.max(end, range.to), 0);
+  const tree = ensureSyntaxTree(view.state, parseThrough, 20) ?? syntaxTree(view.state);
+  const ranges: PreviewRange[] = [];
+  const blockNodes: {
+    node: ReturnType<typeof syntaxTree>['topNode'];
+    name: string;
+    from: number;
+    to: number;
+  }[] = [];
+  const visit = (parent: ReturnType<typeof syntaxTree>['topNode']) => {
+    for (let node = parent.firstChild; node; node = node.nextSibling) {
+      if (
+        /^(?:FencedCode|CodeBlock|ATXHeading[1-6]|SetextHeading[1-2]|HorizontalRule|Blockquote)$/.test(
+          node.name,
+        )
+      ) {
+        blockNodes.push({ node, name: node.name, from: node.from, to: node.to });
       }
+      visit(node);
     }
-
-    build(view: EditorView) {
-      const builder = new RangeSetBuilder<Decoration>();
-      const activeLine = view.state.doc.lineAt(view.state.selection.main.head).number;
-      const cursorPosition = view.state.selection.main.head;
-      const cursorInside = (from: number, to: number) =>
-        cursorPosition >= from && cursorPosition <= to;
-      const doc = view.state.doc;
-      const tableLines: TableLine[] = [];
-      for (let lineNumber = 1; lineNumber <= doc.lines; lineNumber += 1) {
-        const line = doc.line(lineNumber);
-        tableLines.push({
-          number: line.number,
-          text: line.text,
+  };
+  visit(tree.topNode);
+  for (const block of blockNodes) {
+    if (!visible(block.from, block.to)) continue;
+    const startLine = doc.lineAt(block.from);
+    const endLine = doc.lineAt(block.to);
+    if (block.name === 'FencedCode' || block.name === 'CodeBlock') {
+      const codeNode = block.node;
+      if (codeNode) {
+        const codeChildren = [];
+        for (let child = codeNode.firstChild; child; child = child.nextSibling)
+          codeChildren.push(child);
+        for (const child of codeChildren) {
+          if (child.name === 'CodeMark' || child.name === 'CodeInfo') {
+            ranges.push({
+              from: child.from,
+              to: child.to,
+              className: 'cm-live-code-fence-syntax',
+              tokenFrom: block.from,
+              tokenTo: block.to,
+            });
+          } else if (child.name === 'CodeText') {
+            ranges.push({
+              from: child.from,
+              to: child.to,
+              className: 'cm-live-code-content',
+              tokenFrom: block.from,
+              tokenTo: block.to,
+            });
+          }
+        }
+      }
+      for (let number = startLine.number; number <= endLine.number; number += 1) {
+        const line = doc.line(number);
+        const isFenceLine =
+          block.name === 'FencedCode' && (number === startLine.number || number === endLine.number);
+        pending.push({
           from: line.from,
-          to: line.to,
+          to: line.from,
+          decoration: Decoration.line({
+            class: isFenceLine
+              ? `cm-live-code-block cm-live-code-fence-line ${number === startLine.number ? 'cm-live-code-fence-top' : 'cm-live-code-fence-bottom'}`
+              : 'cm-live-code-block cm-live-code-content-line',
+          }),
         });
       }
-      const tableBlocks = findTableBlocks(tableLines);
-      let tableSkipUntil = 0;
-      const editableCodeLines = new Set<number>();
-      let scanFence: { character: string; length: number; start: number } | null = null;
-      for (let lineNumber = 1; lineNumber <= view.state.doc.lines; lineNumber += 1) {
-        const line = view.state.doc.line(lineNumber);
-        const fenceMatch = codeFenceLine.exec(line.text);
-        if (!fenceMatch) continue;
-
-        const isClosingFence = Boolean(
-          scanFence &&
-          fenceMatch[1][0] === scanFence.character &&
-          fenceMatch[1].length >= scanFence.length,
-        );
-        if (!scanFence) {
-          scanFence = {
-            character: fenceMatch[1][0],
-            length: fenceMatch[1].length,
-            start: lineNumber,
-          };
-        } else if (isClosingFence) {
-          if (activeLine >= scanFence.start && activeLine <= lineNumber) {
-            for (
-              let editableLine = scanFence.start;
-              editableLine <= lineNumber;
-              editableLine += 1
-            ) {
-              editableCodeLines.add(editableLine);
-            }
-          }
-          scanFence = null;
-        }
-      }
-      if (scanFence && activeLine >= scanFence.start) {
-        for (
-          let editableLine = scanFence.start;
-          editableLine <= view.state.doc.lines;
-          editableLine += 1
-        ) {
-          editableCodeLines.add(editableLine);
-        }
-      }
-
-      let codeFence: { character: string; length: number } | null = null;
-      for (let lineNumber = 1; lineNumber <= view.state.doc.lines; lineNumber += 1) {
-        const line = view.state.doc.line(lineNumber);
-        if (lineNumber <= tableSkipUntil) continue;
-        const editingCodeBlock = editableCodeLines.has(lineNumber);
-
-        const fenceMatch = codeFenceLine.exec(line.text);
-        const isClosingFence: boolean = Boolean(
-          codeFence &&
-          fenceMatch &&
-          fenceMatch[1][0] === codeFence.character &&
-          fenceMatch[1].length >= codeFence.length,
-        );
-        if (fenceMatch && (!codeFence || isClosingFence)) {
-          const fenceClasses = [
-            'cm-live-code-block',
-            'cm-live-code-fence-line',
-            isClosingFence ? 'cm-live-code-fence-bottom' : 'cm-live-code-fence-top',
-          ].join(' ');
-          builder.add(line.from, line.from, Decoration.line({ class: fenceClasses }));
-          if (!editingCodeBlock) {
-            builder.add(
-              line.from,
-              line.to,
-              Decoration.mark({ class: 'cm-live-code-fence-syntax' }),
-            );
-          }
-
-          codeFence = isClosingFence
-            ? null
-            : { character: fenceMatch[1][0], length: fenceMatch[1].length };
-          continue;
-        }
-
-        if (codeFence) {
-          const contentClasses = ['cm-live-code-block', 'cm-live-code-content-line'].join(' ');
-          builder.add(line.from, line.from, Decoration.line({ class: contentClasses }));
-          builder.add(line.from, line.to, Decoration.mark({ class: 'cm-live-code-content' }));
-          continue;
-        }
-
-        const tableBlock = tableBlocks.find(
-          (block) => lineNumber >= block.startLine && lineNumber <= block.endLine,
-        );
-        if (tableBlock) {
-          if (
-            !cursorInside(tableBlock.from, tableBlock.to) &&
-            lineNumber === tableBlock.startLine
-          ) {
-            tableSkipUntil = tableBlock.endLine;
-            continue;
-          }
-          if (cursorInside(tableBlock.from, tableBlock.to)) {
-            builder.add(line.from, line.from, Decoration.line({ class: 'cm-live-table-line' }));
-            if (isTableDelimiterRow(line.text) && !cursorInside(line.from, line.to)) {
-              builder.add(line.from, line.to, Decoration.mark({ class: 'cm-md-syntax' }));
-            }
-          }
-        }
-
-        const heading = /^(#{1,6})\s+/.exec(line.text);
-        if (heading) {
-          builder.add(
-            line.from,
-            line.from,
-            Decoration.line({ class: `cm-live-heading cm-live-heading-${heading[1].length}` }),
-          );
-          if (!cursorInside(line.from, line.to)) {
-            builder.add(
-              line.from,
-              line.from + heading[1].length,
-              Decoration.mark({ class: 'cm-md-syntax' }),
-            );
-          }
-        }
-
-        if (thematicBreakLine.test(line.text) && !cursorInside(line.from, line.to)) {
-          builder.add(line.from, line.from, Decoration.line({ class: 'cm-live-divider' }));
-          builder.add(line.from, line.to, Decoration.mark({ class: 'cm-live-divider-syntax' }));
-        }
-
-        const quote = blockquotePrefix.exec(line.text);
-        if (quote) {
-          builder.add(line.from, line.from, Decoration.line({ class: 'cm-live-blockquote' }));
-          if (!cursorInside(line.from, line.from + quote[1].length)) {
-            builder.add(
-              line.from,
-              line.from + quote[1].length,
-              Decoration.mark({ class: 'cm-md-syntax' }),
-            );
-          }
-        }
-
-        const inlineDecorations = collectInlineDecorations(line.text, line.from)
-          .filter((decoration) => !cursorInside(decoration.tokenFrom, decoration.tokenTo))
-          .sort((a, b) => a.from - b.from || b.to - a.to);
-        let lastTo = -1;
-        for (const decoration of inlineDecorations) {
-          if (decoration.from < lastTo) continue;
-          builder.add(
-            decoration.from,
-            decoration.to,
-            Decoration.mark({ class: decoration.className }),
-          );
-          lastTo = decoration.to;
-        }
-
-        const taskMetaStart = line.text.indexOf('<' + '!-- prism-task:');
-        if (
-          taskMetaStart >= 0 &&
-          line.text.endsWith('-->') &&
-          !cursorInside(line.from + taskMetaStart, line.to)
-        ) {
-          builder.add(
-            line.from + taskMetaStart,
-            line.to,
-            Decoration.mark({ class: 'cm-task-meta' }),
-          );
-        }
-      }
-      return builder.finish();
+      continue;
     }
-  },
-  { decorations: (value) => value.decorations },
-);
+    if (/^(?:ATXHeading|SetextHeading)/.test(block.name)) {
+      const level = Number(block.name.match(/[1-6]$/)?.[0] ?? 1);
+      pending.push({
+        from: startLine.from,
+        to: startLine.from,
+        decoration: Decoration.line({
+          class: `cm-live-heading cm-live-heading-${level}`,
+        }),
+      });
+      for (let part = block.node.firstChild; part; part = part.nextSibling) {
+        if (part.name === 'HeaderMark')
+          ranges.push({
+            from: part.from,
+            to: part.to,
+            className: 'cm-md-syntax',
+            tokenFrom: block.from,
+            tokenTo: block.to,
+          });
+      }
+    } else if (block.name === 'HorizontalRule') {
+      pending.push({
+        from: startLine.from,
+        to: startLine.from,
+        decoration: Decoration.line({ class: 'cm-live-divider' }),
+      });
+      ranges.push({
+        from: block.from,
+        to: block.to,
+        className: 'cm-live-divider-syntax',
+        tokenFrom: block.from,
+        tokenTo: block.to,
+      });
+    } else if (block.name === 'Blockquote') {
+      for (let number = startLine.number; number <= endLine.number; number += 1) {
+        const line = doc.line(number);
+        pending.push({
+          from: line.from,
+          to: line.from,
+          decoration: Decoration.line({ class: 'cm-live-blockquote' }),
+        });
+      }
+      for (let child = block.node.firstChild; child; child = child.nextSibling) {
+        if (child.name === 'QuoteMark')
+          ranges.push({
+            from: child.from,
+            to: child.to,
+            className: 'cm-md-syntax',
+            tokenFrom: block.from,
+            tokenTo: block.to,
+          });
+      }
+    }
+  }
+  ranges.push(...collectInlineDecorations(view.state, tree));
+  for (const range of ranges.sort((a, b) => a.from - b.from || a.to - b.to)) {
+    if (!visible(range.from, range.to) || cursorInside(range.tokenFrom, range.tokenTo)) continue;
+    pending.push({
+      from: range.from,
+      to: range.to,
+      decoration: Decoration.mark({ class: range.className }),
+    });
+  }
+  pending.sort(
+    (a, b) => a.from - b.from || a.decoration.startSide - b.decoration.startSide || a.to - b.to,
+  );
+  for (const range of pending) builder.add(range.from, range.to, range.decoration);
+  return builder.finish();
+}
+
+const livePreviewPlugin = createSyntaxTreeViewPlugin(buildLivePreview);
 
 // ── 构建扩展 ───────────────────────────────
 
@@ -567,14 +502,12 @@ function buildExtensions(codeLanguages: readonly LanguageDescription[] = []) {
     // 使用浏览器原生文字选区，避免 Live Preview 的块级装饰把选区扩展成整块背景。
     dropCursor(),
     bracketMatching(),
-    markdown({ codeLanguages, base: markdownLanguage }),
+    createMarkdownSupport(codeLanguages),
     tableNavigationKeymap,
     keymap.of([...defaultKeymap, ...historyKeymap]),
     taskCheckboxPlugin,
     livePreviewPlugin,
-    EditorView.decorations.compute(['doc', 'selection'], (state) =>
-      buildTableDecorations(state, state.selection.main.head),
-    ),
+    EditorView.decorations.compute(['doc', 'selection'], (state) => buildTableDecorations(state)),
     saveKeymap,
     themeComp.of(isDark() ? oneDarkTheme : []),
     customTheme,

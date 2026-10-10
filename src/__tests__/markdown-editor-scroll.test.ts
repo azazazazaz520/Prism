@@ -24,6 +24,15 @@ const markdownWithTable = [
   '表格后的正文',
 ].join('\n');
 
+const markdownWithInline = 'prefix **bold *italic* end** `**code**` tail';
+const markdownWithLinks = '[label](https://example.com "tip") ![alt](image.png) tail';
+
+function previewText(parent: HTMLElement): string {
+  const content = parent.querySelector('.cm-line')!.cloneNode(true) as HTMLElement;
+  content.querySelectorAll('.cm-md-syntax, .cm-task-meta').forEach((node) => node.remove());
+  return (content.textContent ?? '').replace(/\s+/g, ' ').trim();
+}
+
 async function waitForEditor(parent: HTMLElement): Promise<EditorView> {
   const deadline = Date.now() + 5_000;
   while (Date.now() < deadline) {
@@ -82,7 +91,7 @@ describe('Markdown 编辑器滚动稳定性', () => {
 
     const previewClasses = layoutClasses();
     expect(previewClasses).toHaveLength(5);
-    expect(parent.querySelectorAll('.cm-live-code-fence-syntax')).toHaveLength(2);
+    expect(parent.querySelectorAll('.cm-live-code-fence-syntax')).toHaveLength(3);
 
     const compilePosition = view.state.doc.toString().indexOf('npm run compile');
     view.dispatch({ selection: { anchor: compilePosition } });
@@ -103,5 +112,49 @@ describe('Markdown 编辑器滚动稳定性', () => {
 
     expect(shell).toBeTruthy();
     expect(table).toBeTruthy();
+  });
+
+  it('同一行移动光标时按语法节点更新嵌套强调预览', async () => {
+    parent = document.createElement('div');
+    document.body.appendChild(parent);
+    app = createApp(MarkdownEditor, { modelValue: markdownWithInline });
+    app.mount(parent);
+
+    const view = await waitForEditor(parent);
+    expect(parent.querySelectorAll('.cm-md-bold')).not.toHaveLength(0);
+    expect(parent.querySelectorAll('.cm-md-italic')).not.toHaveLength(0);
+    expect(parent.querySelectorAll('.cm-md-code')).not.toHaveLength(0);
+    expect(previewText(parent)).toBe('prefix bold italic end **code** tail');
+
+    const boldPosition = markdownWithInline.indexOf('bold');
+    view.dispatch({ selection: { anchor: boldPosition } });
+    expect(previewText(parent)).toBe('prefix **bold italic end** **code** tail');
+    expect(parent.querySelector('.cm-md-bold')).toBeNull();
+
+    view.dispatch({ selection: { anchor: markdownWithInline.indexOf('italic') } });
+    expect(previewText(parent)).toBe(markdownWithInline.replace('`**code**`', '**code**'));
+
+    view.dispatch({ selection: { anchor: markdownWithInline.length - 2 } });
+    expect(previewText(parent)).toBe('prefix bold italic end **code** tail');
+    expect(parent.querySelectorAll('.cm-md-bold')).not.toHaveLength(0);
+  });
+
+  it('链接标题与图片地址在预览态隐藏，进入语法范围时恢复源码', async () => {
+    parent = document.createElement('div');
+    document.body.appendChild(parent);
+    app = createApp(MarkdownEditor, { modelValue: markdownWithLinks });
+    app.mount(parent);
+
+    const view = await waitForEditor(parent);
+    view.dispatch({ selection: { anchor: markdownWithLinks.length } });
+    expect(previewText(parent)).toBe('label alt tail');
+
+    view.dispatch({ selection: { anchor: markdownWithLinks.indexOf('https://') + 2 } });
+    expect(previewText(parent)).toBe('[label](https://example.com "tip") alt tail');
+
+    view.dispatch({ selection: { anchor: markdownWithLinks.indexOf('image.png') + 2 } });
+    expect(previewText(parent)).toBe('label ![alt](image.png) tail');
+    view.dispatch({ selection: { anchor: markdownWithLinks.length } });
+    expect(previewText(parent)).toBe('label alt tail');
   });
 });

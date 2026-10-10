@@ -1,4 +1,5 @@
 import type { FileEntry } from '../types';
+import { findMarkdownHeadings } from '../notes/markdown-syntax';
 
 export interface NoteOutlineItem {
   level: number;
@@ -29,35 +30,13 @@ export function countNoteWords(text: string): number {
   return chineseChars + englishWords;
 }
 
-/** 解析 Markdown 各级标题，忽略围栏代码块中的内容。 */
+/** 解析 Markdown 各级标题并保留对应源码行号。 */
 export function parseNoteOutline(markdown: string): NoteOutlineItem[] {
-  const codeFenceRe = /^\s{0,3}(`{3,}|~{3,})/;
-  const result: NoteOutlineItem[] = [];
-  let inCodeFence = false;
-  let fenceChar = '';
-  let fenceLength = 0;
-
-  for (const [lineIndex, line] of markdown.split(/\r?\n/).entries()) {
-    const fence = codeFenceRe.exec(line);
-    if (fence) {
-      if (!inCodeFence) {
-        inCodeFence = true;
-        fenceChar = fence[1][0];
-        fenceLength = fence[1].length;
-      } else if (fence[1][0] === fenceChar && fence[1].length >= fenceLength) {
-        inCodeFence = false;
-      }
-      continue;
-    }
-    if (inCodeFence) continue;
-
-    const match = /^(#{1,6})\s+(.+?)\s*$/.exec(line);
-    if (match) {
-      result.push({ level: match[1].length, title: match[2], line: lineIndex + 1 });
-    }
-  }
-
-  return result;
+  return findMarkdownHeadings(markdown).map((heading) => ({
+    level: heading.level,
+    title: heading.title,
+    line: markdown.slice(0, heading.from).split(/\r\n|\r|\n/).length,
+  }));
 }
 
 /** 将标签从原位置移动到目标位置，并返回新的标签顺序。 */

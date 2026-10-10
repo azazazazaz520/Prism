@@ -20,7 +20,7 @@ import {
   dropCursor,
 } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
-import { markdown } from '@codemirror/lang-markdown';
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { bracketMatching } from '@codemirror/language';
 import { oneDarkTheme } from '@codemirror/theme-one-dark';
 import { replaceEditorDocument } from './editor-document-sync';
@@ -567,7 +567,7 @@ function buildExtensions(codeLanguages: readonly LanguageDescription[] = []) {
     // 使用浏览器原生文字选区，避免 Live Preview 的块级装饰把选区扩展成整块背景。
     dropCursor(),
     bracketMatching(),
-    markdown({ codeLanguages }),
+    markdown({ codeLanguages, base: markdownLanguage }),
     tableNavigationKeymap,
     keymap.of([...defaultKeymap, ...historyKeymap]),
     taskCheckboxPlugin,
@@ -919,14 +919,13 @@ defineExpose({
   padding: 0.9em 0;
   box-sizing: border-box;
   font-size: 0.92em;
+  overflow-x: auto;
 }
 
 .codemirror-wrapper :deep(.cm-md-table) {
-  display: block;
   width: 100%;
   max-width: 100%;
   margin: 0;
-  overflow-x: auto;
   border-collapse: collapse;
   font-size: inherit;
   line-height: 1.6;

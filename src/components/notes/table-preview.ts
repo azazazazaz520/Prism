@@ -1,4 +1,5 @@
-import { EditorState, RangeSetBuilder } from '@codemirror/state';
+import { EditorState, RangeSetBuilder, Text } from '@codemirror/state';
+import { markdownLanguage } from '@codemirror/lang-markdown';
 import { Decoration, type DecorationSet, EditorView, WidgetType } from '@codemirror/view';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -22,18 +23,32 @@ export interface MarkdownTableBlock {
   alignments: TableAlignment[];
 }
 
-/** 将 Markdown 表格行拆成单元格数组。 */
+function tableCellRanges(text: string) {
+  const cells: { from: number; to: number; text: string }[] = [];
+  let from = 0;
+  let escaped = false;
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] === '|' && !escaped) {
+      cells.push({ from, to: index, text: text.slice(from, index).trim() });
+      from = index + 1;
+    }
+    escaped = !escaped && text[index] === '\\';
+  }
+  cells.push({ from, to: text.length, text: text.slice(from).trim() });
+  if (cells.length > 1 && cells[0].text === '') cells.shift();
+  if (cells.length > 1 && cells[cells.length - 1].text === '') cells.pop();
+  return cells;
+}
+
+/** 拆分表格单元格，保留内容中的竖线转义。 */
 export function splitTableRow(text: string): string[] {
-  const trimmed = text.trim();
-  const body = trimmed.startsWith('|') ? trimmed.slice(1) : trimmed;
-  const withoutTail = body.endsWith('|') ? body.slice(0, -1) : body;
-  return withoutTail.split('|').map((cell) => cell.trim());
+  return tableCellRanges(text).map((cell) => cell.text);
 }
 
 /** 判断是否是 GFM 表格分隔行，例如 | --- | :---: | ---: | */
 export function isTableDelimiterRow(text: string): boolean {
   const cells = splitTableRow(text);
-  return cells.length >= 2 && cells.every((cell) => /^:?-{1,}:?$/.test(cell));
+  return cells.length >= 1 && cells.every((cell) => /^:?-{1,}:?$/.test(cell));
 }
 
 /** 判断是否是普通的表格数据行。 */
@@ -41,25 +56,19 @@ export function isTableDataRow(text: string): boolean {
   return text.includes('|') && splitTableRow(text).length >= 2;
 }
 
-/** 从 CodeMirror 行列表中扫描所有 Markdown 表格块。 */
+/** 从 Markdown 语法树提取文档顶层表格及其源码范围。 */
 export function findTableBlocks(lines: TableLine[]): MarkdownTableBlock[] {
+  if (lines.length === 0) return [];
+  const doc = Text.of(lines.map((line) => line.text));
+  const tree = markdownLanguage.parser.parse(doc.toString());
   const blocks: MarkdownTableBlock[] = [];
-  let index = 0;
-
-  while (index < lines.length) {
-    const delimiter = lines[index];
-    if (!isTableDelimiterRow(delimiter.text)) {
-      index += 1;
-      continue;
-    }
-
-    const headerLine = index > 0 ? lines[index - 1] : null;
-    const header = headerLine ? splitTableRow(headerLine.text) : [];
-    if (!headerLine || header.length < 2) {
-      index += 1;
-      continue;
-    }
-
+  for (let node = tree.topNode.firstChild; node; node = node.nextSibling) {
+    if (node.name !== 'Table') continue;
+    const startIndex = doc.lineAt(node.from).number - 1;
+    const endIndex = doc.lineAt(node.to).number - 1;
+    const headerLine = lines[startIndex];
+    const header = splitTableRow(headerLine.text);
+    const delimiter = lines[startIndex + 1];
     const delimiterCells = splitTableRow(delimiter.text);
     const alignments: TableAlignment[] = delimiterCells.map((cell) => {
       if (cell.startsWith(':') && cell.endsWith(':')) return 'center';
@@ -69,17 +78,11 @@ export function findTableBlocks(lines: TableLine[]): MarkdownTableBlock[] {
     });
 
     const rows: string[][] = [];
-    let bodyIndex = index + 1;
-    while (
-      bodyIndex < lines.length &&
-      isTableDataRow(lines[bodyIndex].text) &&
-      !isTableDelimiterRow(lines[bodyIndex].text)
-    ) {
-      rows.push(splitTableRow(lines[bodyIndex].text));
-      bodyIndex += 1;
+    for (let bodyIndex = startIndex + 2; bodyIndex <= endIndex; bodyIndex += 1) {
+      const row = splitTableRow(lines[bodyIndex].text);
+      while (row.length < header.length) row.push('');
+      rows.push(row);
     }
-
-    const endIndex = bodyIndex - 1;
     blocks.push({
       startLine: headerLine.number,
       endLine: lines[endIndex].number,
@@ -89,8 +92,6 @@ export function findTableBlocks(lines: TableLine[]): MarkdownTableBlock[] {
       rows,
       alignments,
     });
-
-    index = bodyIndex;
   }
 
   return blocks;
@@ -131,9 +132,10 @@ export function getTableContext(
     rowIndex = lineNumber - block.startLine - 1;
   }
 
-  const before = line.text.slice(0, Math.max(0, cursorPosition - line.from));
-  const pipeCount = (before.match(/\|/g) ?? []).length;
-  const columnIndex = Math.max(0, pipeCount - 1);
+  const cells = tableCellRanges(line.text);
+  const offset = cursorPosition - line.from;
+  const index = cells.findIndex((cell) => offset <= cell.to);
+  const columnIndex = Math.min(index < 0 ? cells.length - 1 : index, block.header.length - 1);
 
   return { block, rowIndex, columnIndex };
 }
@@ -148,20 +150,8 @@ function cellAnchor(
   const lineNumber = rowIndex === 0 ? block.startLine : block.startLine + 1 + rowIndex;
   if (lineNumber > block.endLine) return null;
   const line = state.doc.line(lineNumber);
-  const pipeIndexes: number[] = [];
-  for (let index = 0; index < line.text.length; index += 1) {
-    if (line.text[index] === '|') pipeIndexes.push(index);
-  }
-  const startsWithPipe = line.text.startsWith('|');
-  let start = 0;
-  if (columnIndex > 0) {
-    const separator = startsWithPipe ? pipeIndexes[columnIndex] : pipeIndexes[columnIndex - 1];
-    if (separator === undefined) return null;
-    start = separator + 1;
-  } else {
-    start = startsWithPipe ? 1 : 0;
-  }
-  return line.from + Math.min(start, line.length);
+  const cell = tableCellRanges(line.text)[columnIndex];
+  return cell ? line.from + cell.from : null;
 }
 
 export function moveToNextCell(view: EditorView): boolean {
@@ -299,14 +289,12 @@ export function buildTableDecorations(
 
 /** 安全渲染单元格里的行内 Markdown（粗体、代码、链接等）。 */
 export function renderTableCell(markdown: string): string {
-  const raw = marked.parse(markdown, { breaks: true }) as string;
-  const clean = DOMPurify.sanitize(raw, {
+  const raw = marked.parseInline(markdown.replace(/\\\|/g, '|'), { breaks: true }) as string;
+  return DOMPurify.sanitize(raw, {
     ALLOWED_TAGS: ['code', 'em', 'strong', 'del', 'a', 'br'],
     ALLOWED_ATTR: ['href', 'title', 'target', 'rel'],
     ALLOW_DATA_ATTR: false,
   });
-  const paragraph = /^<p>([\s\S]*)<\/p>\s*$/.exec(clean);
-  return paragraph ? paragraph[1] : clean;
 }
 
 function buildMarkdownTable(
@@ -314,8 +302,16 @@ function buildMarkdownTable(
   rows: string[][],
   alignments: TableAlignment[],
 ): string {
-  const normalizeCellText = (text: string) =>
-    text.replace(/\r\n?|\n/g, ' ').replace(/\u00a0/g, ' ');
+  const normalizeCellText = (text: string) => {
+    let escaped = false;
+    let result = '';
+    for (const character of text.replace(/\r\n?|\n/g, ' ').replace(/\u00a0/g, ' ')) {
+      if (character === '|' && !escaped) result += '\\';
+      result += character;
+      escaped = !escaped && character === '\\';
+    }
+    return result;
+  };
   const alignMarker = (alignment: TableAlignment) => {
     if (alignment === 'left') return ':---';
     if (alignment === 'center') return ':---:';
@@ -355,7 +351,11 @@ export function deleteTableRow(view: EditorView, block: MarkdownTableBlock, rowI
 
 export function addTableColumn(view: EditorView, block: MarkdownTableBlock) {
   const header = [...block.header, ''];
-  const rows = block.rows.map((row) => [...row, '']);
+  const rows = block.rows.map((row) => {
+    const next = [...row];
+    next.splice(block.header.length, 0, '');
+    return next;
+  });
   const alignments = [...block.alignments, null];
   dispatchTableChange(view, block, { header, rows, alignments });
 }
@@ -853,8 +853,8 @@ export class MarkdownTableWidget extends WidgetType {
     const tbody = document.createElement('tbody');
     this.block.rows.forEach((row, rowIndex) => {
       const tr = document.createElement('tr');
-      row.forEach((cellText, column) => {
-        tr.appendChild(createBodyCell(cellText, rowIndex + 1, column));
+      this.block.header.forEach((_, column) => {
+        tr.appendChild(createBodyCell(row[column] ?? '', rowIndex + 1, column));
       });
 
       tbody.appendChild(tr);

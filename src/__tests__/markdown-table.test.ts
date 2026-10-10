@@ -8,10 +8,14 @@ import {
   moveTableRow,
   sortTableRows,
   findTableBlocks,
+  getTableContext,
   insertTableRowBelow,
   isTableDataRow,
   isTableDelimiterRow,
   splitTableRow,
+  moveToNextCell,
+  moveToPreviousCell,
+  renderTableCell,
   updateTableCellText,
   type TableLine,
 } from '../components/notes/table-preview';
@@ -20,12 +24,12 @@ import { EditorView } from '@codemirror/view';
 import { buildTableDecorations } from '../components/notes/table-preview';
 
 function lines(text: string): TableLine[] {
-  return text.split('\n').map((lineText, index) => ({
-    number: index + 1,
-    text: lineText,
-    from: 0,
-    to: lineText.length,
-  }));
+  let from = 0;
+  return text.split('\n').map((lineText, index) => {
+    const line = { number: index + 1, text: lineText, from, to: from + lineText.length };
+    from = line.to + 1;
+    return line;
+  });
 }
 
 describe('Markdown 表格解析', () => {
@@ -76,6 +80,111 @@ describe('Markdown 表格解析', () => {
   it('不会把没有分隔行的文本当成表格', () => {
     const doc = lines(['| A | B |', '| 1 | 2 |'].join('\n'));
     expect(findTableBlocks(doc)).toHaveLength(0);
+  });
+
+  it('表头与分隔行列数不一致时保留源码', () => {
+    const doc = '| 用例 | 预期 |\n| --- | --- | --- | --- | --- |\n| 内容 | 结果 |';
+    expect(findTableBlocks(lines(doc))).toHaveLength(0);
+    const state = EditorState.create({ doc });
+    expect(buildTableDecorations(state).size).toBe(0);
+    expect(getTableContext(state, doc.indexOf('内容'))).toBeNull();
+  });
+
+  it.each(['```markdown', '~~~markdown', '    '])('代码块中的表格保持代码显示：%s', (fence) => {
+    const table = '| A | B |\n| --- | --- |\n| 1 | 2 |';
+    const doc =
+      fence === '    '
+        ? table
+            .split('\n')
+            .map((line) => fence + line)
+            .join('\n')
+        : `${fence}\n${table}\n${fence.slice(0, 3)}`;
+    expect(findTableBlocks(lines(doc))).toHaveLength(0);
+    expect(buildTableDecorations(EditorState.create({ doc })).size).toBe(0);
+  });
+
+  it('识别单列表格，并在后续标题之前结束', () => {
+    const blocks = findTableBlocks(lines('| A |\n| --- |\n| 1 |\n# 标题 | 内容'));
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].header).toEqual(['A']);
+    expect(blocks[0].rows).toEqual([['1']]);
+    expect(blocks[0].endLine).toBe(3);
+  });
+
+  it('根据连续反斜线的奇偶性区分转义竖线与列分隔符', () => {
+    expect(splitTableRow(String.raw`| x\|y | z |`)).toEqual([String.raw`x\|y`, 'z']);
+    expect(splitTableRow(String.raw`| x\\| y |`)).toEqual([String.raw`x\\`, 'y']);
+    expect(splitTableRow(String.raw`| x\\\|y | z |`)).toEqual([String.raw`x\\\|y`, 'z']);
+    expect(splitTableRow(String.raw`A | x\|`)).toEqual(['A', String.raw`x\|`]);
+    expect(renderTableCell('\\| **x\\|y** `A\\|B`')).toContain('<code>A|B</code>');
+    expect(renderTableCell(String.raw`x\|y`)).toBe('x|y');
+  });
+
+  it('表格各行按表头列数渲染，保留多余单元格的源码', () => {
+    const parent = document.createElement('div');
+    const doc = '| A | B |\n| --- | --- |\n| x |\n| y | z | 保留 |';
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc,
+        extensions: [
+          EditorView.decorations.compute(['doc'], (state) => buildTableDecorations(state)),
+        ],
+      }),
+    });
+    try {
+      const rows = [...parent.querySelectorAll('tr')];
+      expect(rows.map((row) => row.children.length)).toEqual([2, 2, 2]);
+      expect(rows[1].children[1].textContent?.trim()).toBe('');
+      expect(parent.textContent).not.toContain('保留');
+      const block = getTableContext(view.state, doc.indexOf('x'))!.block;
+      updateTableCellText(view, block, 1, 1, '补全');
+      expect(view.state.doc.toString()).toContain('| x | 补全 |');
+      expect(view.state.doc.toString()).toContain('| y | z | 保留 |');
+    } finally {
+      view.destroy();
+    }
+  });
+
+  it.each([true, false])('转义竖线所在单元格的导航正确，外侧竖线：%s', (outer) => {
+    const wrap = (row: string) => (outer ? `| ${row} |` : row);
+    const doc = [wrap('A | B'), wrap('--- | ---'), wrap(String.raw`x\|y | z`)].join('\n');
+    const parent = document.createElement('div');
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({ doc, selection: { anchor: doc.indexOf('y') } }),
+    });
+    try {
+      expect(getTableContext(view.state, view.state.selection.main.head)?.columnIndex).toBe(0);
+      expect(moveToNextCell(view)).toBe(true);
+      expect(getTableContext(view.state, view.state.selection.main.head)?.columnIndex).toBe(1);
+      expect(view.state.selection.main.head).toBe(doc.indexOf('z') - 1);
+      expect(moveToPreviousCell(view)).toBe(true);
+      expect(getTableContext(view.state, view.state.selection.main.head)?.columnIndex).toBe(0);
+    } finally {
+      view.destroy();
+    }
+  });
+
+  it('输入竖线并执行结构操作后保持单元格内容与列数', () => {
+    const parent = document.createElement('div');
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({ doc: '| A | B |\n| --- | --- |\n| x | z |' }),
+    });
+    try {
+      let block = getTableContext(view.state, view.state.doc.toString().indexOf('x'))!.block;
+      updateTableCellText(view, block, 1, 0, '`x|y`');
+      expect(view.state.doc.toString()).toContain('| `x\\|y` | z |');
+      block = getTableContext(view.state, view.state.doc.toString().indexOf('x'))!.block;
+      expect(block.rows[0]).toEqual(['`x\\|y`', 'z']);
+      addTableColumn(view, block);
+      block = getTableContext(view.state, view.state.doc.toString().indexOf('x'))!.block;
+      expect(block.header).toHaveLength(3);
+      expect(block.rows[0]).toEqual(['`x\\|y`', 'z', '']);
+    } finally {
+      view.destroy();
+    }
   });
 
   it('块级表格装饰可通过 EditorView.decorations 使用', () => {

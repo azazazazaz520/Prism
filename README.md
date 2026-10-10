@@ -32,7 +32,7 @@
 
 ### 开发者工具箱
 
-内置六个实用小工具，即开即用：
+内置数个小工具，后续会拓展更多的工具：
 
 - JSON 格式化与验证
 - 正则表达式测试（支持 AI 生成）
@@ -40,6 +40,7 @@
 - Unix 时间戳转换
 - UUID v4 生成
 - HEX/RGB/HSL 颜色转换
+- PDF 转 Word
 
 ### 跨设备同步
 
@@ -93,7 +94,7 @@ sudo apt install -y \
 
 ### 同步功能（可选）
 
-如需使用跨设备同步，需配置 Supabase 环境变量：
+开发时如需使用跨设备同步，需配置 Supabase 环境变量：
 
 ```bash
 VITE_SUPABASE_URL=https://your-project.supabase.co

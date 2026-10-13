@@ -13,6 +13,11 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
 
+struct WatchTarget {
+    app: AppHandle,
+    label: String,
+}
+
 const FILE_CHANGE_EVENT: &str = "notes://file-changed";
 const EVENT_POLL_INTERVAL: Duration = Duration::from_millis(500);
 const RENAME_PAIR_TIMEOUT: Duration = Duration::from_secs(2);
@@ -21,6 +26,7 @@ const RENAME_PAIR_TIMEOUT: Duration = Duration::from_secs(2);
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileChangeEvent {
+    pub workspace_path: String,
     /// "create" | "modify" | "remove" | "rename"
     pub kind: String,
     /// 相对于笔记目录的文件路径。
@@ -54,7 +60,15 @@ impl FileWatcher {
     ///
     /// 监听器在独立线程中运行，负责监测 `notes_dir` 下所有 `.md` 文件的
     /// 创建、内容修改和删除事件，并通过 Tauri 事件发送到前端。
-    pub fn start(app_handle: AppHandle, notes_dir: PathBuf) -> Result<Self, String> {
+    pub fn start(
+        app_handle: AppHandle,
+        notes_dir: PathBuf,
+        window_label: String,
+    ) -> Result<Self, String> {
+        let app_handle = WatchTarget {
+            app: app_handle,
+            label: window_label,
+        };
         let (shutdown_tx, shutdown_rx) = mpsc::channel();
         let (event_tx, event_rx) = mpsc::channel::<Result<Event, notify::Error>>();
 
@@ -96,7 +110,7 @@ fn create_watcher(
 }
 
 fn run_event_loop(
-    app_handle: AppHandle,
+    app_handle: WatchTarget,
     notes_dir: PathBuf,
     watcher: RecommendedWatcher,
     event_rx: mpsc::Receiver<Result<Event, notify::Error>>,
@@ -106,6 +120,9 @@ fn run_event_loop(
     let _watcher = watcher;
     let mut pending_rename: Option<PendingRename> = None;
     loop {
+        if shutdown_rx.try_recv().is_ok() {
+            break;
+        }
         match event_rx.recv_timeout(EVENT_POLL_INTERVAL) {
             Ok(Ok(event)) => {
                 handle_file_event(&app_handle, &notes_dir, &event, &mut pending_rename)
@@ -119,7 +136,7 @@ fn run_event_loop(
 }
 
 fn handle_file_event(
-    app_handle: &AppHandle,
+    app_handle: &WatchTarget,
     notes_dir: &Path,
     event: &Event,
     pending_rename: &mut Option<PendingRename>,
@@ -181,13 +198,14 @@ fn handle_file_event(
     }
 }
 
-fn emit_change(app_handle: &AppHandle, notes_dir: &Path, kind: &str, path: String) {
+fn emit_change(app_handle: &WatchTarget, notes_dir: &Path, kind: &str, path: String) {
     let (mtime, content_digest) = if kind == "remove" {
         (None, None)
     } else {
         file_version(&notes_dir.join(&path))
     };
     let change = FileChangeEvent {
+        workspace_path: notes_dir.to_string_lossy().into_owned(),
         kind: kind.to_string(),
         path,
         old_path: None,
@@ -195,14 +213,18 @@ fn emit_change(app_handle: &AppHandle, notes_dir: &Path, kind: &str, path: Strin
         mtime,
         content_digest,
     };
-    if let Err(error) = app_handle.emit(FILE_CHANGE_EVENT, change) {
+    if let Err(error) = app_handle
+        .app
+        .emit_to(app_handle.label.as_str(), FILE_CHANGE_EVENT, change)
+    {
         eprintln!("[prism] 文件监听事件发送失败: {error}");
     }
 }
 
-fn emit_rename(app_handle: &AppHandle, notes_dir: &Path, old_path: String, new_path: String) {
+fn emit_rename(app_handle: &WatchTarget, notes_dir: &Path, old_path: String, new_path: String) {
     let (mtime, content_digest) = file_version(&notes_dir.join(&new_path));
     let change = FileChangeEvent {
+        workspace_path: notes_dir.to_string_lossy().into_owned(),
         kind: "rename".to_string(),
         path: new_path.clone(),
         old_path: Some(old_path),
@@ -210,7 +232,10 @@ fn emit_rename(app_handle: &AppHandle, notes_dir: &Path, old_path: String, new_p
         mtime,
         content_digest,
     };
-    if let Err(error) = app_handle.emit(FILE_CHANGE_EVENT, change) {
+    if let Err(error) = app_handle
+        .app
+        .emit_to(app_handle.label.as_str(), FILE_CHANGE_EVENT, change)
+    {
         eprintln!("[prism] 文件重命名事件发送失败: {error}");
     }
 }

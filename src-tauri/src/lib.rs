@@ -5,9 +5,8 @@
 )]
 
 use std::collections::HashMap;
-use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex};
-use tauri::{Emitter, Manager, Runtime, UriSchemeResponder};
+use tauri::{Manager, Runtime, UriSchemeResponder};
 
 pub(crate) mod ai;
 pub(crate) mod logging;
@@ -23,9 +22,9 @@ pub(crate) mod task_service;
 
 mod commands;
 mod file_watcher;
-mod instance_lock;
 mod reminder;
 mod shortcuts;
+mod workspace_windows;
 
 // ═══════════════════════════════════════════════════════════════
 //  应用全局状态
@@ -43,10 +42,6 @@ pub struct AppState {
     pub(crate) logger: Arc<logging::LogWriter>,
     /// 插件模块源码临时存储，key = token，激活后立即消费
     pub(crate) plugin_modules: Mutex<HashMap<String, String>>,
-    /// 文件系统监听器（drop 时自动停止监听）
-    pub(crate) file_watcher: Mutex<Option<file_watcher::FileWatcher>>,
-    /// 全文搜索代次，用于中断已经过期的目录扫描。
-    pub(crate) note_search_generation: Arc<AtomicU64>,
 }
 
 impl AppState {
@@ -253,8 +248,7 @@ fn javascript_response(status: u16, body: String) -> tauri::http::Response<Vec<u
 //  应用入口
 // ═══════════════════════════════════════════════════════════════
 
-/// 统一入口：单实例检查 → 初始化存储 → 注册命令 → 启动事件循环
-pub fn run() {
+fn initialize_app_state(app: &tauri::AppHandle) {
     let logger = match logging::LogWriter::new(persistence::get_logs_dir()) {
         Ok(writer) => Arc::new(writer),
         Err(error) => {
@@ -288,40 +282,35 @@ pub fn run() {
         );
     }));
 
-    let lock_path = instance_lock::acquire();
-    if lock_path.is_none() {
-        std::process::exit(0);
-    }
-    let lock_path = lock_path.unwrap();
-
     let (data, config) = store::initialize(&logger);
     let sync = store::load_sync(&logger);
-    let running = Arc::new(std::sync::atomic::AtomicBool::new(true));
+    app.manage(AppState {
+        data: Mutex::new(data),
+        config: Mutex::new(config),
+        sync: Mutex::new(sync),
+        logger,
+        plugin_modules: Mutex::new(HashMap::new()),
+    });
+}
 
+/// 在单一应用进程中初始化共享状态，并交接新工作区窗口请求。
+pub fn run() {
     // 插件一次性 token 注册表（3s TTL）
     let token_registry = std::sync::Arc::new(plugin_protocol::TokenRegistry::new());
     let token_registry_clone = token_registry.clone();
 
     tauri::Builder::default()
+        .manage(workspace_windows::WorkspaceWindows::default())
         // 单实例插件必须先注册，Windows/Linux 深链接会通过命令行参数转发到现有实例。
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
-            if let Some(url) = argv.iter().find(|arg| arg.starts_with("prism://")) {
-                let _ = app.emit("prism://oauth-callback", url.clone());
+            if !argv.iter().any(|arg| arg.starts_with("prism:")) {
+                workspace_windows::request_new_workspace(app);
             }
         }))
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .manage(AppState {
-            data: Mutex::new(data),
-            config: Mutex::new(config),
-            sync: Mutex::new(sync),
-            logger: logger.clone(),
-            plugin_modules: Mutex::new(HashMap::new()),
-            file_watcher: Mutex::new(None),
-            note_search_generation: Arc::new(AtomicU64::new(0)),
-        })
         .manage(token_registry)
         .register_asynchronous_uri_scheme_protocol("prism-api", move |ctx, request, responder| {
             let registry = token_registry_clone.clone();
@@ -439,39 +428,16 @@ pub fn run() {
             // 版本更新检查
             commands::update::check_update,
         ])
-        .setup(move |app| {
-            let handle = app.handle().clone();
-            let running_flag = running.clone();
-            let lock = lock_path.clone();
-
-            // 主窗口关闭 → 停止提醒线程 → 清理实例锁 → 退出进程
-            if let Some(main_window) = app.get_webview_window("main") {
-                main_window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { .. } = event {
-                        running_flag.store(false, std::sync::atomic::Ordering::SeqCst);
-                        instance_lock::release(&lock);
-                        handle.exit(0);
-                        std::process::exit(0);
-                    }
-                });
-            }
+        .setup(|app| {
+            initialize_app_state(app.handle());
+            let directory = app.state::<AppState>().with_config(store::get_notes_dir);
+            let workspaces = app.state::<workspace_windows::WorkspaceWindows>();
+            workspaces.initialize_main(app.handle(), directory);
 
             shortcuts::register_all(app.handle());
 
-            // 启动文件系统监听（笔记目录的实时增删改检测）
-            {
-                let state = app.state::<AppState>();
-                let notes_dir = state.with_config(store::get_notes_dir);
-                match file_watcher::FileWatcher::start(app.handle().clone(), notes_dir) {
-                    Ok(watcher) => *state.file_watcher.lock().unwrap() = Some(watcher),
-                    Err(error) => {
-                        eprintln!("[prism] 文件监听不可用，应用将继续启动: {error}");
-                    }
-                }
-            }
-
             let backend = Arc::new(reminder::TauriBackend::new(app.handle().clone()));
-            reminder::start(backend, running);
+            reminder::start(backend, workspaces.running.clone());
 
             Ok(())
         })

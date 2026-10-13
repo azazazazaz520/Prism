@@ -14,6 +14,7 @@ import { invokeWithDiagnostics as invoke } from '../../diagnostics/invoke-logged
 import { diagnosticsLogger } from '../../diagnostics/invoke-logged';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { FileEntry, FileTreeContextTarget, Task } from '../../types';
 import {
   countDescendantEntries,
@@ -777,6 +778,7 @@ function showNoteConflictPrompt(path: string) {
 
 /** 检查当前文件是否被外部修改，若变化则自动加载最新版本 */
 type NoteFileChangeEvent = {
+  workspacePath?: string;
   kind: string;
   path: string;
   oldPath?: string;
@@ -2167,6 +2169,11 @@ let fileTreeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** 处理文件系统监听事件 */
 function handleFileChangeEvent(event: NoteFileChangeEvent) {
+  if (
+    event.workspacePath &&
+    normalizeWorkspacePath(event.workspacePath) !== normalizeWorkspacePath(notesDir.value)
+  )
+    return;
   const version = { mtime: event.mtime, contentDigest: event.contentDigest };
   if (shouldIgnoreNoteSelfWriteEvent(event.path, event.kind, version)) return;
   if (
@@ -2279,8 +2286,10 @@ onMounted(async () => {
   document.addEventListener('click', handleDocumentClick);
 
   // 监听 Rust 后端的文件系统变更事件
-  const unlisten = await listen<NoteFileChangeEvent>('notes://file-changed', (event) =>
-    handleFileChangeEvent(event.payload),
+  const unlisten = await listen<NoteFileChangeEvent>(
+    'notes://file-changed',
+    (event) => handleFileChangeEvent(event.payload),
+    { target: getCurrentWindow().label },
   );
   unlistenFileWatcher = () => unlisten();
 });

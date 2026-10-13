@@ -6,12 +6,16 @@ import { searchNoteContent } from '../notes/note-search';
 
 const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
+  listen: vi.fn().mockResolvedValue(vi.fn()),
   revealSearchMatch: vi.fn(() => true),
   store: null as ReturnType<typeof useNoteDocumentStore> | null,
 }));
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: mocks.invoke }));
-vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn().mockResolvedValue(vi.fn()) }));
+vi.mock('@tauri-apps/api/event', () => ({ listen: mocks.listen }));
+vi.mock('@tauri-apps/api/window', () => ({
+  getCurrentWindow: () => ({ label: 'workspace-search' }),
+}));
 vi.mock('../diagnostics/invoke-logged', () => ({
   invokeWithDiagnostics: mocks.invoke,
   diagnosticsLogger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
@@ -80,6 +84,7 @@ describe('搜索结果打开与保留文档', () => {
     vi.useFakeTimers();
     localStorage.clear();
     mocks.invoke.mockReset();
+    mocks.listen.mockClear();
     mocks.revealSearchMatch.mockClear();
     mocks.invoke.mockImplementation(async (command: string, args?: Record<string, unknown>) => {
       if (command === 'get_notes_directory') return 'D:/notes';
@@ -124,6 +129,14 @@ describe('搜索结果打开与保留文档', () => {
       click('.note-search-match');
       await flushUpdates();
       expect(mocks.store!.ensure(path).content).toBe(diskContent);
+      expect(mocks.listen).toHaveBeenCalledWith('notes://file-changed', expect.any(Function), {
+        target: 'workspace-search',
+      });
+      const onFileChange = mocks.listen.mock.calls[0][1];
+      onFileChange({ payload: { workspacePath: 'D:/other', kind: 'remove', path } });
+      await flushUpdates();
+      expect(mocks.store!.ensure(path).content).toBe(diskContent);
+      expect(host.querySelector('.workspace-tab-close')).not.toBeNull();
 
       click('.workspace-tab-close');
       await flushUpdates();

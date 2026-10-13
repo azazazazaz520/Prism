@@ -165,7 +165,7 @@ prism/
 │   │   ├── prompt.rs                 # Prompt 模板管理（8 个内置模板）
 │   │   ├── reminder.rs               # 到期提醒线程
 │   │   ├── shortcuts.rs              # 全局快捷键
-│   │   ├── instance_lock.rs          # 单实例锁
+│   │   ├── workspace_windows.rs      # 工作区窗口与独立笔记目录
 │   │   ├── file_watcher.rs           # 笔记文件监听
 │   │   ├── plugin_protocol.rs        # 插件自定义协议
 │   │   ├── logging.rs                # 结构化日志系统

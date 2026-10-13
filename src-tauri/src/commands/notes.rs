@@ -1,27 +1,31 @@
 use std::fs;
 use std::sync::atomic::Ordering;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State, WebviewWindow};
 
 use crate::file_watcher::FileWatcher;
 use crate::note_recovery;
 use crate::note_service;
-use crate::store;
+use crate::workspace_windows::WorkspaceWindows;
 use crate::AppState;
 
 /// 列出 notes/ 目录的完整文件树
 #[tauri::command]
-pub fn list_note_tree(state: State<AppState>) -> Vec<note_service::FileEntry> {
-    let base = state.with_config(store::get_notes_dir);
-    note_service::read_dir_recursive(&base, "")
+pub fn list_note_tree(
+    window: WebviewWindow,
+    workspaces: State<WorkspaceWindows>,
+) -> Result<Vec<note_service::FileEntry>, String> {
+    let base = workspaces.directory(window.label())?;
+    Ok(note_service::read_dir_recursive(&base, ""))
 }
 
 /// 列出笔记目录的直接子项，子目录在前端展开时按需读取。
 #[tauri::command]
 pub fn list_note_dir(
     path: String,
-    state: State<AppState>,
+    window: WebviewWindow,
+    workspaces: State<WorkspaceWindows>,
 ) -> Result<Vec<note_service::FileEntry>, String> {
-    let base = state.with_config(store::get_notes_dir);
+    let base = workspaces.directory(window.label())?;
     note_service::read_dir_entries(&base, &path)
 }
 
@@ -31,16 +35,17 @@ pub async fn search_notes(
     request_id: u64,
     query: String,
     skipped_paths: Vec<String>,
-    state: State<'_, AppState>,
+    window: WebviewWindow,
+    workspaces: State<'_, WorkspaceWindows>,
 ) -> Result<note_service::NoteSearchResponse, String> {
     let query = query.trim().to_string();
     if query.is_empty() {
         return Err("搜索关键词不能为空".into());
     }
 
-    let base = state.with_config(store::get_notes_dir);
-    let generation = state.note_search_generation.fetch_add(1, Ordering::SeqCst) + 1;
-    let current_generation = state.note_search_generation.clone();
+    let base = workspaces.directory(window.label())?;
+    let current_generation = workspaces.search_generation(window.label())?;
+    let generation = current_generation.fetch_add(1, Ordering::SeqCst) + 1;
     tauri::async_runtime::spawn_blocking(move || {
         note_service::search_notes(&base, request_id, &query, &skipped_paths, || {
             current_generation.load(Ordering::SeqCst) != generation
@@ -52,14 +57,24 @@ pub async fn search_notes(
 
 /// 使正在运行的笔记搜索失效。
 #[tauri::command]
-pub fn cancel_note_search(state: State<AppState>) {
-    state.note_search_generation.fetch_add(1, Ordering::SeqCst);
+pub fn cancel_note_search(
+    window: WebviewWindow,
+    workspaces: State<WorkspaceWindows>,
+) -> Result<(), String> {
+    workspaces
+        .search_generation(window.label())?
+        .fetch_add(1, Ordering::SeqCst);
+    Ok(())
 }
 
 /// 读取笔记内容
 #[tauri::command]
-pub fn read_note(path: String, state: State<AppState>) -> Result<String, String> {
-    let base = state.with_config(store::get_notes_dir);
+pub fn read_note(
+    path: String,
+    window: WebviewWindow,
+    workspaces: State<WorkspaceWindows>,
+) -> Result<String, String> {
+    let base = workspaces.directory(window.label())?;
     note_service::read_note_content(&base, &path)
 }
 
@@ -67,16 +82,21 @@ pub fn read_note(path: String, state: State<AppState>) -> Result<String, String>
 #[tauri::command]
 pub fn read_note_meta(
     path: String,
-    state: State<AppState>,
+    window: WebviewWindow,
+    workspaces: State<WorkspaceWindows>,
 ) -> Result<note_service::NoteMeta, String> {
-    let base = state.with_config(store::get_notes_dir);
+    let base = workspaces.directory(window.label())?;
     note_service::read_note_meta(&base, &path)
 }
 
 /// 获取笔记文件修改时间（不读取内容，用于快速校验）
 #[tauri::command]
-pub fn get_note_mtime(path: String, state: State<AppState>) -> Result<String, String> {
-    let base = state.with_config(store::get_notes_dir);
+pub fn get_note_mtime(
+    path: String,
+    window: WebviewWindow,
+    workspaces: State<WorkspaceWindows>,
+) -> Result<String, String> {
+    let base = workspaces.directory(window.label())?;
     note_service::get_note_mtime(&base, &path)
 }
 
@@ -88,23 +108,32 @@ pub fn write_note(
     path: String,
     content: String,
     expected_mtime: Option<String>,
-    state: State<AppState>,
+    window: WebviewWindow,
+    workspaces: State<WorkspaceWindows>,
 ) -> Result<String, String> {
-    let base = state.with_config(store::get_notes_dir);
+    let base = workspaces.directory(window.label())?;
     note_service::write_note_content(&base, &path, &content, expected_mtime)
 }
 
 /// 创建文件夹
 #[tauri::command]
-pub fn create_note_dir(path: String, state: State<AppState>) -> Result<(), String> {
-    let base = state.with_config(store::get_notes_dir);
+pub fn create_note_dir(
+    path: String,
+    window: WebviewWindow,
+    workspaces: State<WorkspaceWindows>,
+) -> Result<(), String> {
+    let base = workspaces.directory(window.label())?;
     note_service::create_note_dir_at(&base, &path)
 }
 
 /// 删除文件或文件夹（移入系统回收站）
 #[tauri::command]
-pub fn delete_note_entry(path: String, state: State<AppState>) -> Result<(), String> {
-    let base = state.with_config(store::get_notes_dir);
+pub fn delete_note_entry(
+    path: String,
+    window: WebviewWindow,
+    workspaces: State<WorkspaceWindows>,
+) -> Result<(), String> {
+    let base = workspaces.directory(window.label())?;
     note_service::delete_note_entry_at(&base, &path)
 }
 
@@ -113,51 +142,48 @@ pub fn delete_note_entry(path: String, state: State<AppState>) -> Result<(), Str
 pub fn rename_note_entry(
     path: String,
     new_name: String,
-    state: State<AppState>,
+    window: WebviewWindow,
+    workspaces: State<WorkspaceWindows>,
 ) -> Result<(), String> {
-    let base = state.with_config(store::get_notes_dir);
+    let base = workspaces.directory(window.label())?;
     note_service::rename_note_entry_at(&base, &path, &new_name)
 }
 
 /// 获取当前笔记目录路径
 #[tauri::command]
-pub fn get_notes_directory(state: State<AppState>) -> String {
-    state.with_config(|config| store::get_notes_dir(config).to_string_lossy().to_string())
+pub fn get_notes_directory(
+    window: WebviewWindow,
+    workspaces: State<WorkspaceWindows>,
+) -> Result<String, String> {
+    Ok(workspaces
+        .directory(window.label())?
+        .to_string_lossy()
+        .into_owned())
 }
 
-/// 设置自定义笔记目录
+/// 切换当前窗口的笔记目录，主窗口同时更新下次启动的默认目录。
 #[tauri::command]
 pub fn set_notes_directory(
     dir_path: String,
     app_handle: AppHandle,
+    window: WebviewWindow,
+    workspaces: State<WorkspaceWindows>,
     state: State<AppState>,
 ) -> Result<(), String> {
+    workspaces.directory(window.label())?;
     let path = std::path::PathBuf::from(&dir_path);
-    if !path.exists() {
-        return Err(format!("路径不存在: {}", dir_path));
-    }
     if !path.is_dir() {
-        return Err("路径不是目录".into());
+        return Err("所选路径不是文件夹".into());
     }
-
     note_service::is_safe_notes_dir(&path)?;
-    state.note_search_generation.fetch_add(1, Ordering::SeqCst);
-
-    // 尝试写入测试文件以验证权限
-    let test_file = path.join(".todo_test_write");
-    if let Err(e) = fs::write(&test_file, "") {
-        return Err(format!("无法写入目录: {}", e));
+    fs::read_dir(&path).map_err(|error| format!("无法读取目录：{error}"))?;
+    let watcher = FileWatcher::start(app_handle, path.clone(), window.label().to_string())?;
+    if window.label() == "main" {
+        state.with_config_mut(|config| {
+            config.notes_dir = Some(path.clone());
+        })?;
     }
-    fs::remove_file(&test_file).ok();
-
-    // 先准备新监听器；配置持久化失败时，旧配置和旧监听器仍然保持有效。
-    let watcher = FileWatcher::start(app_handle, path.clone())?;
-
-    state.with_config_mut(|config| {
-        config.notes_dir = Some(path);
-    })?;
-
-    *state.file_watcher.lock().unwrap() = Some(watcher);
+    workspaces.replace(window.label(), path, watcher);
     Ok(())
 }
 
@@ -170,9 +196,11 @@ pub fn save_note_recovery(
     document_mtime: Option<String>,
     reason: String,
     error_message: Option<String>,
-    state: State<AppState>,
+    window: WebviewWindow,
 ) -> Result<note_recovery::NoteRecoverySummary, String> {
-    let workspace_path = state.with_config(store::get_notes_dir);
+    let workspace_path = window
+        .state::<WorkspaceWindows>()
+        .directory(window.label())?;
     note_recovery::save(
         &workspace_path,
         note_path,
@@ -206,8 +234,9 @@ pub fn delete_note_recovery(id: String) -> Result<(), String> {
 #[tauri::command]
 pub fn restore_note_recovery(
     id: String,
-    state: State<AppState>,
+    window: WebviewWindow,
+    workspaces: State<WorkspaceWindows>,
 ) -> Result<note_recovery::NoteRecoveryRestoreResult, String> {
-    let workspace_path = state.with_config(store::get_notes_dir);
+    let workspace_path = workspaces.directory(window.label())?;
     note_recovery::restore(&id, &workspace_path)
 }

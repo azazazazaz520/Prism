@@ -21,9 +21,8 @@ pub fn show_floating_window(app: tauri::AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
-    let main_win = app
-        .get_webview_window("main")
-        .ok_or("main window not found")?;
+    let main_win =
+        crate::workspace_windows::application_window(&app).ok_or("没有可用的工作区窗口")?;
     if let Some(float_win) = app.get_webview_window("floating") {
         float_win.hide().map_err(|e| e.to_string())?;
     }

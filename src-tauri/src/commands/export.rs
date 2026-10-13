@@ -4,13 +4,12 @@ use std::process::Stdio;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Manager, State, WebviewWindow};
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 use tokio::time::{timeout, Duration};
 
 use crate::note_service;
-use crate::store;
 use crate::AppState;
 
 const PANDOC_TIMEOUT: Duration = Duration::from_secs(60);
@@ -38,10 +37,13 @@ pub struct ExportDocxResult {
 #[tauri::command]
 pub async fn export_note_to_docx(
     options: ExportDocxOptions,
+    window: WebviewWindow,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<ExportDocxResult, String> {
-    let notes_dir = state.with_config(store::get_notes_dir);
+    let notes_dir = app
+        .state::<crate::workspace_windows::WorkspaceWindows>()
+        .directory(window.label())?;
     let configured_pandoc = state.with_config(|config| config.pandoc_path.clone());
     let configured_reference = state.with_config(|config| config.pandoc_reference_doc.clone());
     let reference_doc = options

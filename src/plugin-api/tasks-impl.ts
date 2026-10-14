@@ -32,12 +32,12 @@ export function createTasksAPI(pluginId: string, permissions: string[]) {
             pluginId,
             args: {
               title,
-              due_date: opts?.dueDate,
+              dueDate: opts?.dueDate,
               tags: opts?.tags,
               important: opts?.important,
               pinned: opts?.pinned,
-              is_daily: opts?.isDaily,
-              parent_id: opts?.parentId,
+              isDaily: opts?.isDaily,
+              parentId: opts?.parentId,
             },
           })
       : undefined,
@@ -50,18 +50,19 @@ export function createTasksAPI(pluginId: string, permissions: string[]) {
             args: {
               id,
               title: args.title,
-              due_date: args.dueDate ?? null,
-              tags: args.tags ?? [],
-              important: args.important ?? false,
-              pinned: args.pinned ?? false,
-              is_daily: args.isDaily ?? false,
+              dueDate: args.dueDate,
+              tags: args.tags,
+              important: args.important,
+              pinned: args.pinned,
+              isDaily: args.isDaily,
             },
           })
       : undefined,
 
     /** 切换任务完成状态 */
     toggle: canWrite
-      ? (id: string) => invoke<Task>('plugin_tasks_toggle', { pluginId, id })
+      ? (id: string, completed?: boolean) =>
+          invoke<Task>('plugin_tasks_toggle', { pluginId, id, completed })
       : undefined,
 
     /** 软删除任务 */
@@ -102,7 +103,7 @@ export interface CreateTaskOpts {
 }
 
 export interface TaskUpdateArgs {
-  title: string;
+  title?: string;
   dueDate?: string | null;
   tags?: string[];
   important?: boolean;

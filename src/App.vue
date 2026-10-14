@@ -50,7 +50,6 @@ const {
   loadError,
   loadAll,
   refreshTasks,
-  pushTask,
   pullAndMerge,
   addTask,
   applyImportedTasks,
@@ -142,12 +141,6 @@ function refreshCurrentDate() {
 }
 const _handleForceSync = async () => {
   await refreshTasks();
-  // 推送插件创建/修改的任务到 Supabase
-  for (const t of tasks.value) {
-    if (t.profile_id) {
-      pushTask(t).catch(() => {});
-    }
-  }
 };
 
 // ── 全局右键菜单 ──────────────────────────

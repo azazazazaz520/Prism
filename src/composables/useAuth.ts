@@ -13,6 +13,7 @@ const isLoading = ref(false);
 const error = ref<string | null>(null);
 let authPromise: Promise<void> | null = null;
 let onlineListenerRegistered = false;
+let authListenerRegistered = false;
 
 /** 获取共享的 Supabase 客户端（懒初始化） */
 export function getSupabaseClient(): SupabaseClient {
@@ -80,6 +81,14 @@ export function useAuth() {
     try {
       const client = getSupabaseClient();
 
+      if (!authListenerRegistered) {
+        client.auth.onAuthStateChange((_event, newSession) => {
+          session.value = newSession;
+          user.value = newSession?.user ?? null;
+        });
+        authListenerRegistered = true;
+      }
+
       if (!onlineListenerRegistered) {
         window.addEventListener('online', () => {
           if (!session.value && !isLoading.value) {
@@ -107,12 +116,6 @@ export function useAuth() {
 
       session.value = data.session;
       user.value = data.session?.user ?? null;
-
-      // 监听后续状态变化（token 刷新、登出等）
-      client.auth.onAuthStateChange((_event, newSession) => {
-        session.value = newSession;
-        user.value = newSession?.user ?? null;
-      });
     } catch (e) {
       const message = e instanceof Error ? e.message : '匿名登录失败';
       error.value = message;

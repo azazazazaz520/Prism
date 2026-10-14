@@ -28,7 +28,7 @@ pub struct WindowsUpdateManifest {
 
 /// 任务条目，支持软删除、标签、每日重复、父子拆解。
 /// updated_at 用于跨设备 LWW 合并，is_deleted 保留用于同步传播。
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Task {
     pub id: String,
     pub title: String,
@@ -59,7 +59,7 @@ pub struct Task {
 }
 
 /// 每日任务完成记录，按 (task_id, date) 追踪每日重复任务的完成状态。
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct DailyCompletion {
     pub task_id: String,
     pub date: String,
@@ -96,12 +96,20 @@ pub struct Vendor {
 // ═══════════════════════════════════════════════════════════════
 
 /// 结构化任务数据（存储于 data.json）
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct DataStore {
     pub version: u32,
     pub tasks: Vec<Task>,
     #[serde(default)]
     pub daily_completions: Vec<DailyCompletion>,
+    #[serde(default)]
+    pub revision: u64,
+    #[serde(default)]
+    pub outbox: Vec<crate::outbox::OutboxItem>,
+    #[serde(default)]
+    pub outbox_sequence: u64,
+    #[serde(default)]
+    pub legacy_queue_imported: bool,
 }
 
 /// 同步状态（存储于 sync.json，独立于用户偏好配置）
@@ -180,6 +188,10 @@ pub fn default_data_store() -> DataStore {
         version: 1,
         tasks: vec![],
         daily_completions: vec![],
+        revision: 0,
+        outbox: vec![],
+        outbox_sequence: 0,
+        legacy_queue_imported: false,
     }
 }
 

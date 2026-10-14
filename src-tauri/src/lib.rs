@@ -6,13 +6,14 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use tauri::{Manager, Runtime, UriSchemeResponder};
+use tauri::{Emitter, Manager, Runtime, UriSchemeResponder};
 
 pub(crate) mod ai;
 pub(crate) mod logging;
 pub(crate) mod models;
 pub(crate) mod note_recovery;
 pub(crate) mod note_service;
+pub(crate) mod outbox;
 pub(crate) mod pdf_to_word_service;
 pub(crate) mod persistence;
 pub(crate) mod plugin_protocol;
@@ -24,6 +25,7 @@ mod commands;
 mod file_watcher;
 mod reminder;
 mod shortcuts;
+mod startup;
 mod workspace_windows;
 
 // ═══════════════════════════════════════════════════════════════
@@ -42,6 +44,8 @@ pub struct AppState {
     pub(crate) logger: Arc<logging::LogWriter>,
     /// 插件模块源码临时存储，key = token，激活后立即消费
     pub(crate) plugin_modules: Mutex<HashMap<String, String>>,
+    pub(crate) consumer: outbox::SharedConsumer,
+    app: tauri::AppHandle,
 }
 
 impl AppState {
@@ -56,25 +60,87 @@ impl AppState {
         f(&data)
     }
 
-    /// 写锁快捷方式：锁定 DataStore → 执行修改 → 保存 → 返回结果
+    /// 将业务修改与同步意图共同保存，提交后通知所有窗口。
     pub fn write_data<F, R>(&self, f: F) -> Result<R, String>
     where
         F: FnOnce(&mut store::DataStore) -> R,
     {
-        let mut data = self.data.lock().unwrap();
-        let result = f(&mut data);
-        store::save_data(&data)?;
-        Ok(result)
+        self.write_data_candidate(|data| Ok(f(data)))
     }
 
-    /// 通过候选数据修改任务存储，持久化成功后才替换内存状态。
-    /// 批量导入使用该入口，避免保存失败后内存保留未落盘任务。
+    /// 校验并修改候选数据，持久化成功后提交共享状态。
     pub fn write_data_candidate<F, R>(&self, f: F) -> Result<R, String>
     where
         F: FnOnce(&mut store::DataStore) -> Result<R, String>,
     {
-        let mut data = self.data.lock().unwrap();
-        commit_data_candidate(&mut data, f, store::save_data)
+        let profile = self.with_sync(|sync| sync.profile_id.clone());
+        let consumer = self.consumer.lock().unwrap();
+        self.commit_data(true, |candidate| {
+            let before = candidate.clone();
+            let result = f(candidate)?;
+            for item in candidate.outbox.iter_mut().skip(before.outbox.len()) {
+                if item.operation.data["profile_id"].is_null() {
+                    item.operation.data["profile_id"] =
+                        serde_json::to_value(&profile).expect("同步归属序列化");
+                }
+            }
+            outbox::enqueue_changes(
+                &before,
+                candidate,
+                profile.as_deref(),
+                consumer.in_flight_id(),
+            );
+            Ok(result)
+        })
+    }
+
+    pub(crate) fn write_remote_data<F, R>(&self, f: F) -> Result<R, String>
+    where
+        F: FnOnce(&mut store::DataStore) -> Result<R, String>,
+    {
+        self.commit_data(false, f)
+    }
+
+    pub(crate) fn saved_task(&self, task: store::Task) -> store::Task {
+        self.read_data(|data| {
+            data.tasks
+                .iter()
+                .find(|item| item.id == task.id)
+                .cloned()
+                .unwrap_or(task)
+        })
+    }
+
+    fn commit_data<F, R>(&self, local: bool, f: F) -> Result<R, String>
+    where
+        F: FnOnce(&mut store::DataStore) -> Result<R, String>,
+    {
+        let (result, revision, changed) = {
+            let mut data = self.data.lock().unwrap();
+            if local && !data.legacy_queue_imported {
+                return Err("旧队列转换尚未完成".into());
+            }
+            let previous_revision = data.revision;
+            let result = commit_data_candidate(
+                &mut data,
+                |candidate| {
+                    let before = candidate.clone();
+                    let result = f(candidate)?;
+                    if *candidate != before {
+                        candidate.revision += 1;
+                    }
+                    Ok(result)
+                },
+                store::save_data,
+            )?;
+            (result, data.revision, data.revision != previous_revision)
+        };
+        if changed {
+            if let Err(error) = self.app.emit(outbox::DATA_CHANGED, revision) {
+                eprintln!("[prism] 任务变更通知失败：{error}");
+            }
+        }
+        Ok(result)
     }
 
     // ── ConfigStore 读写（新增） ──
@@ -131,6 +197,9 @@ where
 {
     let mut candidate = data.clone();
     let result = f(&mut candidate)?;
+    if candidate == *data {
+        return Ok(result);
+    }
     save(&candidate)?;
     *data = candidate;
     Ok(result)
@@ -290,6 +359,8 @@ fn initialize_app_state(app: &tauri::AppHandle) {
         sync: Mutex::new(sync),
         logger,
         plugin_modules: Mutex::new(HashMap::new()),
+        consumer: Mutex::new(outbox::Consumer::default()),
+        app: app.clone(),
     });
 }
 
@@ -312,6 +383,13 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(token_registry)
+        .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::Destroyed) {
+                if let Some(state) = window.try_state::<AppState>() {
+                    state.consumer.lock().unwrap().window_closed(window.label());
+                }
+            }
+        })
         .register_asynchronous_uri_scheme_protocol("prism-api", move |ctx, request, responder| {
             let registry = token_registry_clone.clone();
             let app_handle = ctx.app_handle().clone();
@@ -324,6 +402,11 @@ pub fn run() {
             commands::logging::append_log_batch,
             // 任务命令 (commands::tasks)
             commands::tasks::get_tasks,
+            commands::tasks::get_task_snapshot,
+            commands::outbox::import_legacy_queue,
+            commands::outbox::claim_outbox,
+            commands::outbox::finish_outbox,
+            commands::outbox::link_unpaired_tasks,
             commands::tasks::get_all_tasks_including_deleted,
             commands::tasks::add_tasks_batch,
             commands::tasks::add_task,
@@ -429,10 +512,14 @@ pub fn run() {
             commands::update::check_update,
         ])
         .setup(|app| {
-            initialize_app_state(app.handle());
-            let directory = app.state::<AppState>().with_config(store::get_notes_dir);
+            startup::create_initial_windows(app, |app| {
+                initialize_app_state(app.handle());
+                let directory = app.state::<AppState>().with_config(store::get_notes_dir);
+                app.state::<workspace_windows::WorkspaceWindows>()
+                    .prepare_main(app.handle(), directory);
+            })?;
             let workspaces = app.state::<workspace_windows::WorkspaceWindows>();
-            workspaces.initialize_main(app.handle(), directory);
+            workspaces.finish_startup(app.handle());
 
             shortcuts::register_all(app.handle());
 
@@ -448,7 +535,7 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::commit_data_candidate;
-    use crate::store;
+    use crate::{outbox, store, task_service};
 
     #[test]
     fn candidate_write_keeps_memory_unchanged_when_save_fails() {
@@ -484,5 +571,37 @@ mod tests {
         .expect("保存成功后应提交候选状态");
 
         assert_eq!(data.version, 2);
+    }
+
+    #[test]
+    fn failed_common_commit_preserves_business_data_outbox_and_migration_marker() {
+        let mut data = store::default_data_store();
+        let error = commit_data_candidate(
+            &mut data,
+            |candidate| {
+                outbox::import_legacy(candidate, vec![])?;
+                let before = candidate.clone();
+                task_service::add(
+                    candidate,
+                    task_service::AddTaskInput {
+                        title: "待保存任务".into(),
+                        due_date: None,
+                        tags: None,
+                        important: None,
+                        pinned: None,
+                        is_daily: None,
+                        parent_id: None,
+                    },
+                );
+                outbox::enqueue_changes(&before, candidate, None, None);
+                Ok(())
+            },
+            |_| Err("保存失败".into()),
+        )
+        .unwrap_err();
+        assert_eq!(error, "保存失败");
+        assert!(data.tasks.is_empty());
+        assert!(data.outbox.is_empty());
+        assert!(!data.legacy_queue_imported);
     }
 }

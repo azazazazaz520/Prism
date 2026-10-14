@@ -1,101 +1,114 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  flushOfflineQueueItems,
-  normalizeOfflineQueueItem,
-  type OfflineQueueItem,
-} from '../composables/useSync';
+  ensureOutboxReady,
+  deliverNext,
+  normalizeOperation,
+  type QueueOperation,
+} from '../composables/useOutbox';
+const mocks = vi.hoisted(() => ({ invoke: vi.fn() }));
+vi.mock('../diagnostics/invoke-logged', () => ({
+  invokeWithDiagnostics: mocks.invoke,
+  diagnosticsLogger: { warn: vi.fn() },
+}));
 
-function queueItem(type: OfflineQueueItem['type'], id: string): OfflineQueueItem {
-  return { type, table: type === 'delete' ? 'daily_completions' : 'tasks', data: { id } };
-}
+const operation: QueueOperation = {
+  type: 'delete',
+  table: 'daily_completions',
+  data: { task_id: 'task-1', date: '2026-10-13', profile_id: null },
+};
+const delivery = { token: 'claim-1', item: { ...operation, id: 'operation-1', sequence: 1 } };
 
-describe('桌面端离线队列刷新', () => {
-  it('恢复 Profile 后补齐启动竞态产生的空 profile_id', () => {
-    const item: OfflineQueueItem = {
-      type: 'upsert',
-      table: 'tasks',
-      data: { id: 'task-1', profile_id: null, user_id: 'expired-user' },
-    };
+beforeEach(() => {
+  mocks.invoke.mockReset();
+  localStorage.clear();
+});
 
-    expect(normalizeOfflineQueueItem(item, 'profile-1', 'current-user')).toEqual({
-      ...item,
-      data: { id: 'task-1', profile_id: 'profile-1', user_id: 'current-user' },
+describe('共享发件箱', () => {
+  it('恢复身份时补齐空归属，并保留已有 Profile', () => {
+    expect(normalizeOperation(operation, 'profile-1', 'uid').data.profile_id).toBe('profile-1');
+    expect(
+      normalizeOperation({ ...operation, data: { profile_id: 'old' } }, 'new', 'uid').data
+        .profile_id,
+    ).toBe('old');
+  });
+
+  it('保存导入结果前中断时保留原始键，重试后完成一次性转换', async () => {
+    localStorage.setItem('prism_offline_queue', JSON.stringify([operation]));
+    let saved = false;
+    mocks.invoke.mockImplementation(async (command: string) => {
+      if (command === 'get_task_snapshot') return { legacyQueueImported: saved };
+      if (command === 'import_legacy_queue' && !saved) throw new Error('disk failed');
+    });
+    await expect(ensureOutboxReady()).rejects.toThrow('disk failed');
+    expect(localStorage.getItem('prism_offline_queue')).not.toBeNull();
+    saved = true;
+    await ensureOutboxReady();
+    expect(localStorage.getItem('prism_offline_queue')).toBeNull();
+  });
+
+  it('一次性导入保存完整删除操作，成功后清理旧键', async () => {
+    vi.resetModules();
+    const { ensureOutboxReady: convert } = await import('../composables/useOutbox');
+    localStorage.setItem('prism_offline_queue', JSON.stringify([operation]));
+    mocks.invoke
+      .mockResolvedValueOnce({ legacyQueueImported: false })
+      .mockResolvedValueOnce(undefined);
+    await Promise.all([convert(), convert()]);
+    expect(mocks.invoke).toHaveBeenCalledWith('import_legacy_queue', { operations: [operation] });
+    expect(
+      mocks.invoke.mock.calls.filter(([command]) => command === 'import_legacy_queue'),
+    ).toHaveLength(1);
+    expect(localStorage.getItem('prism_offline_queue')).toBeNull();
+  });
+
+  it('已保存完成标记时跳过残留键解析及重复导入', async () => {
+    vi.resetModules();
+    const { ensureOutboxReady: convert } = await import('../composables/useOutbox');
+    localStorage.setItem('prism_offline_queue', 'invalid-json');
+    mocks.invoke.mockResolvedValueOnce({ legacyQueueImported: true });
+    await convert();
+    expect(mocks.invoke).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem('prism_offline_queue')).toBeNull();
+  });
+
+  it('只有发送成功后才确认对应操作 ID', async () => {
+    mocks.invoke.mockResolvedValueOnce(delivery).mockResolvedValueOnce(undefined);
+    const execute = vi.fn().mockResolvedValue({});
+    expect(await deliverNext(execute)).toBe(true);
+    expect(mocks.invoke).toHaveBeenLastCalledWith('finish_outbox', {
+      id: 'operation-1',
+      token: 'claim-1',
+      success: true,
     });
   });
 
-  it('不覆盖已有任务的 Profile 归属', () => {
-    const item: OfflineQueueItem = {
-      type: 'upsert',
-      table: 'tasks',
-      data: { id: 'task-1', profile_id: 'profile-old', user_id: 'expired-user' },
-    };
-
-    expect(normalizeOfflineQueueItem(item, 'profile-new', 'current-user').data).toEqual({
-      id: 'task-1',
-      profile_id: 'profile-old',
-      user_id: 'current-user',
-    });
-  });
-
-  it('Supabase 返回 error 时保留对应队列项', async () => {
-    const failed = queueItem('upsert', 'task-2');
-    const execute = vi.fn(async (item: OfflineQueueItem) =>
-      item.data.id === failed.data.id ? { error: new Error('RLS rejected') } : {},
+  it('Supabase 返回 error 时释放领取且保留持久队列项', async () => {
+    mocks.invoke.mockResolvedValueOnce(delivery).mockResolvedValueOnce(undefined);
+    await expect(deliverNext(async () => ({ error: new Error('RLS rejected') }))).rejects.toThrow(
+      'RLS rejected',
     );
-
-    const remaining = await flushOfflineQueueItems(
-      [queueItem('upsert', 'task-1'), failed],
-      execute,
-    );
-
-    expect(execute).toHaveBeenCalledTimes(2);
-    expect(remaining).toEqual([failed]);
+    expect(mocks.invoke).toHaveBeenLastCalledWith('finish_outbox', {
+      id: 'operation-1',
+      token: 'claim-1',
+      success: false,
+    });
   });
 
-  it('适配器抛出异常时保留对应队列项', async () => {
-    const failed = queueItem('delete', 'daily-2');
-    const remaining = await flushOfflineQueueItems(
-      [queueItem('delete', 'daily-1'), failed],
-      async (item) => {
-        if (item.data.id === failed.data.id) throw new Error('network failed');
-        return {};
-      },
-    );
-
-    expect(remaining).toEqual([failed]);
+  it('网络抛出异常时保留当前项，下一次可以重试', async () => {
+    mocks.invoke.mockResolvedValueOnce(delivery).mockResolvedValueOnce(undefined);
+    await expect(
+      deliverNext(async () => {
+        throw new Error('network');
+      }),
+    ).rejects.toThrow('network');
+    mocks.invoke.mockResolvedValueOnce(delivery).mockResolvedValueOnce(undefined);
+    expect(await deliverNext(async () => ({}))).toBe(true);
   });
 
-  it('部分成功时只返回失败项并保持原始顺序', async () => {
-    const items = [
-      queueItem('upsert', 'task-1'),
-      queueItem('delete', 'daily-1'),
-      queueItem('upsert', 'task-2'),
-    ];
-
-    const remaining = await flushOfflineQueueItems(items, async (item) => {
-      if (item.data.id !== 'daily-1') return { error: new Error('temporary failure') };
-      return {};
-    });
-
-    expect(remaining).toEqual([items[0], items[2]]);
-  });
-
-  it('失败项在下一次重试成功后可以被消费', async () => {
-    const item = queueItem('upsert', 'task-retry');
-    let attempts = 0;
-
-    const firstAttempt = await flushOfflineQueueItems([item], async () => {
-      attempts += 1;
-      return { error: new Error('temporary failure') };
-    });
-    expect(firstAttempt).toEqual([item]);
-
-    const secondAttempt = await flushOfflineQueueItems(firstAttempt, async () => {
-      attempts += 1;
-      return {};
-    });
-
-    expect(attempts).toBe(2);
-    expect(secondAttempt).toEqual([]);
+  it('已有其他窗口领取时不发送请求', async () => {
+    mocks.invoke.mockResolvedValueOnce(null);
+    const execute = vi.fn();
+    expect(await deliverNext(execute)).toBe(false);
+    expect(execute).not.toHaveBeenCalled();
   });
 });

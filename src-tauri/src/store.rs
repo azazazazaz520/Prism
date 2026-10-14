@@ -98,6 +98,7 @@ mod tests {
                 date: "2026-01-02".to_string(),
                 profile_id: None,
             }],
+            ..default_data_store()
         };
         let json = serde_json::to_string(&store).unwrap();
         let parsed: DataStore = serde_json::from_str(&json).unwrap();

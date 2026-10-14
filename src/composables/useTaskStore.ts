@@ -1,6 +1,8 @@
-import { ref, computed, watch, type Ref } from 'vue';
+import { ref, computed, watch } from 'vue';
+import { listen } from '@tauri-apps/api/event';
+import { ensureOutboxReady, outboxCount } from './useOutbox';
 import { invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
-import type { Task, DailyCompletion } from '../types';
+import type { Task, DailyCompletion, TaskMetaPatch } from '../types';
 import { useAuth } from './useAuth';
 import { useSync } from './useSync';
 import { useSyncCode } from './useSyncCode';
@@ -11,8 +13,6 @@ import {
   countOverdue,
   countPending,
   getTodayStr,
-  mergeLWW,
-  mergeTasksLWW,
   matchesTaskQuery,
 } from './useFilterEngine';
 import { withTimeout } from './syncUtils';
@@ -59,7 +59,16 @@ const allTags = ref<string[]>([]);
 
 /** 今日已完成任务 ID 列表（全局单例） */
 const dailyCompletedIds = ref<string[]>([]);
-const pendingResetTasks = ref<Task[]>([]);
+interface TaskSnapshot {
+  revision: number;
+  tasks: Task[];
+  dailyCompletions: DailyCompletion[];
+  outboxCount: number;
+}
+let appliedRevision = -1;
+let snapshotListener: Promise<void> | null = null;
+let snapshotRead: Promise<void> | null = null;
+let snapshotRequested = false;
 
 interface UndoSnapshot {
   tasks: Task[];
@@ -77,14 +86,10 @@ let syncPromise: Promise<void> | null = null;
 let realtimeInitialized = false;
 let realtimeProfileId: string | null = null;
 
-/** 为 sync pull 操作添加超时，离线时快速失败而非等待 HTTP 超时 */
 /** 任务看板 composable：组合 TaskRepo + FilterEngine + Sync，只做编排 */
 export function useTaskStore() {
   const { isLoggedIn, initAuth } = useAuth();
   const {
-    pushTask,
-    pushDailyCompletion,
-    pushDeleteDailyCompletion,
     pullTasks,
     pullDailyCompletions,
     subscribeToChanges,
@@ -93,51 +98,11 @@ export function useTaskStore() {
     lastSyncAt,
     offlineQueueCount,
     getProfileId,
-    hasPendingDailyCompletion,
-    flushOfflineQueue,
+    flushOutbox,
   } = useSync();
   const syncCode = useSyncCode();
 
   // ── 副作用（同步任务由模块级状态统一去重） ──────────────
-
-  // ── 同步回调 ──────────────────────────────
-
-  function onTaskChanged(task: Task) {
-    if (isLoggedIn.value) {
-      pushTask(task).catch((e) =>
-        diagnosticsLogger.warn('sync', 'sync.background_push_task_failed', '后台推送任务失败', {
-          task_id: task.id,
-          error: e instanceof Error ? e.message : String(e),
-        }),
-      );
-    }
-  }
-
-  function onDailyChanged(dc: DailyCompletion) {
-    if (isLoggedIn.value) {
-      pushDailyCompletion(dc).catch((e) =>
-        diagnosticsLogger.warn(
-          'sync',
-          'sync.background_push_daily_completion_failed',
-          '后台推送每日完成记录失败',
-          { task_id: dc.task_id, date: dc.date, error: e instanceof Error ? e.message : String(e) },
-        ),
-      );
-    }
-  }
-
-  function onDailyDeleted(taskId: string, date: string) {
-    if (isLoggedIn.value) {
-      pushDeleteDailyCompletion(taskId, date).catch((e) =>
-        diagnosticsLogger.warn(
-          'sync',
-          'sync.background_delete_daily_completion_failed',
-          '后台删除每日完成记录失败',
-          { task_id: taskId, date, error: e instanceof Error ? e.message : String(e) },
-        ),
-      );
-    }
-  }
 
   // ── 通用 CRUD 错误包裹（一个闭包替代 8 个重复函数） ──
 
@@ -152,7 +117,7 @@ export function useTaskStore() {
         diagnosticsLogger.error('task', 'task.operation_failed', `任务操作失败：${label}`, e, {
           operation: label,
         });
-        await loadAll();
+        await refreshLocalSnapshot();
       }
     };
   }
@@ -188,15 +153,8 @@ export function useTaskStore() {
     undoSnapshot.value = null;
     undoTimer = null;
 
-    const restored: Task[] = [];
-    for (const task of snapshot.tasks) {
-      await invoke('restore_task', { id: task.id });
-      const restoredTask = { ...task, is_deleted: false, updated_at: new Date().toISOString() };
-      restored.push(restoredTask);
-      onTaskChanged(restoredTask);
-    }
-    tasks.value = [...tasks.value, ...restored];
-    syncAllTags();
+    for (const task of snapshot.tasks) await invoke('restore_task', { id: task.id });
+    await refreshLocalSnapshot();
   }
 
   // ── 计算属性（委托给 FilterEngine） ────────────
@@ -213,206 +171,87 @@ export function useTaskStore() {
 
   // ── 数据加载与同步（编排） ──────────────────────
 
-  async function loadAllLegacy() {
-    isLoading.value = true;
-    try {
-      if (!syncInitialized) {
-        syncInitialized = true;
-        try {
-          await initAuth();
-        } catch (e) {
-          diagnosticsLogger.warn('sync', 'sync.auth_init_failed', '同步认证初始化失败', {
-            error: e instanceof Error ? e.message : String(e),
-          });
-        }
-      }
-
-      // 跨天重置每日任务的 completed 状态（今日无记录则清零）
-      // 返回被修改的任务，需同步到 Supabase 确保多设备一致
-      const changedTasks = await invoke<Task[]>('reset_daily_tasks', {
-        today: getTodayStr(),
-      });
-      if (isLoggedIn.value && changedTasks.length > 0) {
-        for (const t of changedTasks) {
-          pushTask(t).catch((e) =>
-            diagnosticsLogger.warn('sync', 'sync.reset_daily_push_failed', '每日任务重置推送失败', {
-              task_id: t.id,
-              error: e instanceof Error ? e.message : String(e),
-            }),
-          );
-        }
-      }
-
-      const localTasks = await invoke<Task[]>('get_tasks');
-      await refreshDailyCompletions();
-
-      let merged = localTasks.filter((t) => !t.is_deleted);
-
-      if (isLoggedIn.value) {
-        try {
-          const profileRestored = await syncCode.restoreProfile();
-          if (profileRestored) {
-            syncCode
-              .mergeLocalToProfile(getProfileId()!)
-              .catch((e) =>
-                diagnosticsLogger.warn(
-                  'sync',
-                  'sync.merge_local_to_profile_failed',
-                  '合并本地任务到远端 profile 失败',
-                  { error: e instanceof Error ? e.message : String(e) },
-                ),
-              );
-          }
-        } catch (e) {
-          diagnosticsLogger.warn('sync', 'sync.restore_profile_failed', '恢复同步 profile 失败', {
-            error: e instanceof Error ? e.message : String(e),
-          });
-        }
-
-        if (navigator.onLine) {
-          try {
-            const [remoteTasks, remoteDCs] = await Promise.all([
-              withTimeout(pullTasks(true)),
-              withTimeout(pullDailyCompletions()),
-            ]);
-            if (remoteTasks && remoteTasks.length > 0) {
-              merged = mergeLWW(merged, remoteTasks);
-              invoke('sync_local_tasks', { remoteTasks }).catch((e) =>
-                diagnosticsLogger.warn(
-                  'sync',
-                  'sync.persist_remote_tasks_failed',
-                  '保存远端任务失败',
-                  {
-                    task_count: remoteTasks.length,
-                    error: e instanceof Error ? e.message : String(e),
-                  },
-                ),
-              );
-            }
-            await mergeDailyCompletions(remoteDCs);
-          } catch (e) {
-            diagnosticsLogger.warn('sync', 'sync.load_all_pull_failed', '加载远端同步数据失败', {
-              error: e instanceof Error ? e.message : String(e),
-            });
-          }
-        }
-      }
-
-      tasks.value = merged;
-      syncAllTags(merged);
-    } finally {
-      isLoading.value = false;
-    }
+  function applySnapshot(snapshot: TaskSnapshot) {
+    if (snapshot.revision < appliedRevision) return;
+    appliedRevision = snapshot.revision;
+    outboxCount.value = snapshot.outboxCount;
+    tasks.value = snapshot.tasks;
+    dailyCompletedIds.value = snapshot.tasks
+      .filter((task) => task.is_daily && task.completed)
+      .map((task) => task.id);
+    syncAllTags(snapshot.tasks);
+    isLocalReady.value = true;
   }
 
-  async function refreshTasksLegacy(silent = false) {
-    if (!silent) isLoading.value = true;
-    try {
-      // 跨天重置每日任务的 completed 状态
-      const changedTasks = await invoke<Task[]>('reset_daily_tasks', {
-        today: getTodayStr(),
-      });
-      if (isLoggedIn.value && changedTasks.length > 0) {
-        for (const t of changedTasks) {
-          pushTask(t).catch((e) =>
-            diagnosticsLogger.warn('sync', 'sync.reset_daily_push_failed', '每日任务重置推送失败', {
-              task_id: t.id,
-              error: e instanceof Error ? e.message : String(e),
-            }),
-          );
-        }
+  function refreshLocalSnapshot(): Promise<void> {
+    snapshotRequested = true;
+    if (snapshotRead) return snapshotRead;
+    snapshotRead = (async () => {
+      while (snapshotRequested) {
+        snapshotRequested = false;
+        applySnapshot(await invoke<TaskSnapshot>('get_task_snapshot'));
       }
+    })().finally(() => {
+      snapshotRead = null;
+    });
+    return snapshotRead;
+  }
 
-      const localTasks = await invoke<Task[]>('get_tasks');
-      await refreshDailyCompletions();
-
-      let merged = localTasks.filter((t) => !t.is_deleted);
-
-      if (isLoggedIn.value && navigator.onLine) {
-        try {
-          const [remoteTasks, remoteDCs] = await Promise.all([
-            withTimeout(pullTasks(true)),
-            withTimeout(pullDailyCompletions()),
-          ]);
-          if (remoteTasks && remoteTasks.length > 0) {
-            merged = mergeLWW(merged, remoteTasks);
-            invoke('sync_local_tasks', { remoteTasks }).catch((e) =>
-              diagnosticsLogger.warn(
-                'sync',
-                'sync.persist_remote_tasks_failed',
-                '保存远端任务失败',
-                {
-                  task_count: remoteTasks.length,
-                  error: e instanceof Error ? e.message : String(e),
-                },
-              ),
-            );
-          }
-          await mergeDailyCompletions(remoteDCs);
-        } catch (e) {
-          diagnosticsLogger.warn('sync', 'sync.refresh_tasks_pull_failed', '刷新远端同步数据失败', {
-            error: e instanceof Error ? e.message : String(e),
-          });
-        }
-      }
-
-      tasks.value = merged;
-      syncAllTags(merged);
-    } finally {
-      if (!silent) isLoading.value = false;
+  async function initializeSnapshots() {
+    if (!snapshotListener) {
+      snapshotListener = listen<number>('tasks://data-changed', (event) => {
+        if (event.payload <= appliedRevision) return;
+        void refreshLocalSnapshot().catch((error) =>
+          diagnosticsLogger.error('task', 'task.snapshot_failed', '读取共享任务状态失败', error),
+        );
+      })
+        .then((unlisten) => {
+          window.addEventListener('beforeunload', unlisten, { once: true });
+        })
+        .catch((error) => {
+          snapshotListener = null;
+          throw error;
+        });
     }
+    await snapshotListener;
   }
 
   async function loadLocalTasks(force = false): Promise<void> {
     if (isLocalReady.value && !force) return;
-
     isLoading.value = true;
     loadError.value = null;
     try {
-      pendingResetTasks.value = await invoke<Task[]>('reset_daily_tasks', {
-        today: getTodayStr(),
-      });
-      const localTasks = await invoke<Task[]>('get_tasks');
-      await refreshDailyCompletions();
-      const visibleTasks = localTasks.filter((task) => !task.is_deleted);
-      tasks.value = visibleTasks;
-      syncAllTags(visibleTasks);
-      isLocalReady.value = true;
-    } catch (e) {
-      loadError.value = e instanceof Error ? e.message : String(e);
-      diagnosticsLogger.error('task', 'task.load_failed', '加载本地任务失败', e);
+      await ensureOutboxReady();
+      await initializeSnapshots();
+      await invoke('reset_daily_tasks', { today: getTodayStr() });
+      await refreshLocalSnapshot();
+    } catch (error) {
+      loadError.value = String(error);
+      diagnosticsLogger.error('task', 'task.load_failed', '加载本地任务失败', error);
     } finally {
       isLoading.value = false;
     }
   }
 
   async function applyRemoteTasks(remoteTasks: Task[]): Promise<void> {
-    if (remoteTasks.length === 0) return;
-
-    const result = mergeTasksLWW(tasks.value, remoteTasks);
-    if (!result.changed) return;
-
-    tasks.value = result.tasks;
-    syncAllTags(result.tasks);
-    try {
-      await invoke('sync_local_tasks', { remoteTasks });
-    } catch (e) {
-      diagnosticsLogger.warn('sync', 'sync.persist_remote_tasks_failed', '保存远端任务失败', {
-        task_count: remoteTasks.length,
-        error: e instanceof Error ? e.message : String(e),
-      });
-    }
+    if (!remoteTasks.length) return;
+    await invoke('sync_local_tasks', { remoteTasks });
+    await refreshLocalSnapshot();
   }
 
   async function pullRemoteAndMerge(forceFull = false): Promise<void> {
     if (!isLoggedIn.value || !navigator.onLine) return;
-
+    const snapshot = await invoke<TaskSnapshot>('get_task_snapshot');
     const [remoteTasks, remoteDCs] = await Promise.all([
       withTimeout(pullTasks(forceFull)),
       withTimeout(pullDailyCompletions()),
     ]);
+    const applied = await mergeDailyCompletions(remoteDCs, snapshot.revision);
     await applyRemoteTasks(remoteTasks);
-    await mergeDailyCompletions(remoteDCs);
+    if (!applied) {
+      const current = await invoke<TaskSnapshot>('get_task_snapshot');
+      await mergeDailyCompletions(await withTimeout(pullDailyCompletions()), current.revision);
+    }
   }
 
   function runBackgroundSync(options: {
@@ -433,34 +272,14 @@ export function useTaskStore() {
         if (!isLoggedIn.value) return;
 
         const profileReady = options.restoreProfile ? await syncCode.restoreProfile() : true;
-        const resetTasks = profileReady ? pendingResetTasks.value : [];
-        if (resetTasks.length > 0) {
-          pendingResetTasks.value = [];
-          await Promise.all(
-            resetTasks.map((task) =>
-              pushTask(task).catch((e) =>
-                diagnosticsLogger.warn(
-                  'sync',
-                  'sync.reset_daily_push_failed',
-                  '每日任务重置推送失败',
-                  {
-                    task_id: task.id,
-                    error: e instanceof Error ? e.message : String(e),
-                  },
-                ),
-              ),
-            ),
-          );
-        }
         if (options.restoreProfile && profileReady) {
           await syncCode.mergeLocalToProfile(getProfileId()!);
         }
-        // 没有同步 Profile 时也要保留原有的 user_id 队列语义；有 Profile
-        // 时则在 Profile 恢复之后再重放，避免启动竞态载荷污染共享任务。
-        if (navigator.onLine) await flushOfflineQueue();
+        // 已配对操作在 Profile 恢复后发送，未配对操作使用当前认证用户归属。
+        if (navigator.onLine) await flushOutbox();
 
         await initSync();
-        await pullRemoteAndMerge(options.forceFullPull || resetTasks.length > 0);
+        await pullRemoteAndMerge(options.forceFullPull);
       } catch (e) {
         syncError.value = e instanceof Error ? e.message : '后台同步失败';
         diagnosticsLogger.error('sync', 'sync.background_failed', '后台同步失败', e);
@@ -485,7 +304,7 @@ export function useTaskStore() {
 
   async function loadAll() {
     await loadLocalTasks();
-    void startBackgroundSync();
+    if (isLocalReady.value) void startBackgroundSync();
   }
 
   async function refreshTasks(silent = false) {
@@ -503,11 +322,12 @@ export function useTaskStore() {
   }
 
   async function pullAndMerge() {
+    await refreshLocalSnapshot();
     if (!isLoggedIn.value || !navigator.onLine) return;
 
     const syncConfig = await syncCode.getSyncConfig();
     // 配置存在但当前 Profile 丢失时，才重新进入恢复流程；正常轮询不重复调用配对接口。
-    if (syncConfig.sync_code && !getProfileId()) {
+    if (syncConfig.sync_code && getProfileId() !== syncConfig.profile_id) {
       await startBackgroundSync();
       return;
     }
@@ -532,42 +352,27 @@ export function useTaskStore() {
 
     const channel = await subscribeToChanges(
       (remoteTask) => {
-        const current = tasks.value.find((task) => task.id === remoteTask.id);
-        if (current && new Date(remoteTask.updated_at) < new Date(current.updated_at)) return;
-
-        void applyRemoteTasks([remoteTask]).then(() => {
-          if (remoteTask.is_daily && !remoteTask.completed) {
-            dailyCompletedIds.value = dailyCompletedIds.value.filter(
-              (tid) => tid !== remoteTask.id,
-            );
-            invoke('delete_daily_completion', { taskId: remoteTask.id, date: getTodayStr() });
-          }
-          if (remoteTask.is_daily && remoteTask.completed) {
-            if (!dailyCompletedIds.value.includes(remoteTask.id)) {
-              dailyCompletedIds.value = [...dailyCompletedIds.value, remoteTask.id];
-            }
-          }
-        });
+        void applyRemoteTasks([remoteTask]).catch((error) =>
+          diagnosticsLogger.error('sync', 'sync.realtime_task_failed', '保存远端任务失败', error),
+        );
       },
-      (dc, eventType) => {
-        if (eventType === 'DELETE') {
-          if (dc.task_id && dc.date) {
-            invoke('delete_daily_completion', { taskId: dc.task_id, date: dc.date });
-          }
-          if (dc.date === getTodayStr()) {
-            dailyCompletedIds.value = dailyCompletedIds.value.filter((tid) => tid !== dc.task_id);
-          }
-        } else {
-          invoke('sync_remote_daily_completions', {
-            remoteCompletions: [{ task_id: dc.task_id, date: dc.date, profile_id: dc.profile_id }],
-          });
-          if (dc.date === getTodayStr() && !dailyCompletedIds.value.includes(dc.task_id)) {
-            const task = tasks.value.find((t) => t.id === dc.task_id);
-            if (!task || task.completed) {
-              dailyCompletedIds.value = [...dailyCompletedIds.value, dc.task_id];
-            }
-          }
-        }
+      (completion, eventType) => {
+        const command =
+          eventType === 'DELETE' ? 'delete_daily_completion' : 'sync_remote_daily_completions';
+        const args =
+          eventType === 'DELETE'
+            ? { taskId: completion.task_id, date: completion.date }
+            : { remoteCompletions: [completion] };
+        void invoke(command, args)
+          .then(refreshLocalSnapshot)
+          .catch((error) =>
+            diagnosticsLogger.error(
+              'sync',
+              'sync.realtime_daily_failed',
+              '保存远端完成记录失败',
+              error,
+            ),
+          );
       },
     );
     realtimeInitialized = channel !== null;
@@ -575,53 +380,15 @@ export function useTaskStore() {
     return realtimeInitialized;
   }
 
-  async function refreshDailyCompletions() {
-    dailyCompletedIds.value = await invoke<string[]>('get_daily_completions', {
-      date: getTodayStr(),
+  async function mergeDailyCompletions(remoteDCs: DailyCompletion[], revision: number) {
+    const applied = await invoke<boolean>('sync_remote_daily_completions', {
+      remoteCompletions: remoteDCs,
+      replaceSnapshot: true,
+      profileId: getProfileId(),
+      snapshotRevision: revision,
     });
-  }
-
-  async function cleanStaleDailyCompletions(remoteDCs: DailyCompletion[]) {
-    const localDCs = await invoke<DailyCompletion[]>('get_all_daily_completions');
-    const remoteKeys = new Set(remoteDCs.map((dc) => `${dc.task_id}\u0000${dc.date}`));
-    const profileId = getProfileId();
-
-    for (const local of localDCs) {
-      // 未关联 Profile 的本地记录可能仍在离线队列中；其他 Profile 的记录也不能被当前 Profile 清理。
-      if (local.profile_id !== profileId || hasPendingDailyCompletion(local.task_id, local.date)) {
-        continue;
-      }
-
-      const key = `${local.task_id}\u0000${local.date}`;
-      if (!remoteKeys.has(key)) {
-        await invoke('delete_daily_completion', {
-          taskId: local.task_id,
-          date: local.date,
-        });
-      }
-    }
-  }
-
-  async function mergeDailyCompletions(remoteDCs: DailyCompletion[]) {
-    try {
-      await cleanStaleDailyCompletions(remoteDCs);
-      await invoke('sync_remote_daily_completions', {
-        remoteCompletions: remoteDCs.map((dc) => ({
-          task_id: dc.task_id,
-          date: dc.date,
-          profile_id: dc.profile_id,
-        })),
-      });
-      await refreshDailyCompletions();
-    } catch (e) {
-      diagnosticsLogger.warn(
-        'sync',
-        'sync.merge_daily_completions_failed',
-        '合并每日完成记录失败',
-        { error: e instanceof Error ? e.message : String(e) },
-      );
-      throw e;
-    }
+    await refreshLocalSnapshot();
+    return applied;
   }
 
   // ── CRUD（带 wrap 包裹 + 内联 TaskRepo 逻辑） ──
@@ -639,173 +406,61 @@ export function useTaskStore() {
       const task = await invoke<Task>('add_task', {
         args: { title, dueDate, tags, important, pinned, isDaily, parentId },
       });
-      tasks.value = [...tasks.value, task];
-      if (tags.length > 0) {
-        syncAllTags();
-      }
-      onTaskChanged(task);
+      await refreshLocalSnapshot();
       return task;
     },
     'addTask',
   );
 
-  /**
-   * 接收独立导入窗口返回的后端任务快照，立即更新主窗口并复用普通任务同步路径。
-   * 事件可能重复送达，因此按任务 ID 去重。
-   */
-  function applyImportedTasks(importedTasks: Task[]) {
-    const additions = selectNewImportedTasks(tasks.value, importedTasks);
-    if (additions.length === 0) return;
-
-    tasks.value = [...tasks.value, ...additions];
-    syncAllTags(tasks.value);
-    additions.forEach(onTaskChanged);
-    diagnosticsLogger.info('task', 'task.import_applied', '导入任务已更新到主窗口', {
-      task_count: additions.length,
-    });
+  /** 导入已经由后端保存，通过共享快照更新当前窗口。 */
+  function applyImportedTasks(_importedTasks: Task[]) {
+    void refreshLocalSnapshot().catch((error) =>
+      diagnosticsLogger.error('task', 'task.import_refresh_failed', '刷新导入任务失败', error),
+    );
   }
 
-  const toggleTask = wrap(async (id: string) => {
-    const canonical = await invoke<Task>('toggle_task', { id });
-    tasks.value = tasks.value.map((t) => (t.id === id ? canonical : t));
-    onTaskChanged(canonical);
+  const toggleTask = wrap(async (id: string, completed?: boolean) => {
+    const task = tasks.value.find((item) => item.id === id);
+    if (!task) return;
+    await invoke('toggle_task', { id, completed: completed ?? !task.completed });
+    await refreshLocalSnapshot();
   }, 'toggleTask');
 
-  const toggleDailyTask = wrap(async (id: string, date: string) => {
-    const wasCompleted = dailyCompletedIds.value.includes(id);
-    await invoke('toggle_daily_task', { id, date });
-    await refreshDailyCompletions();
-
-    const task = tasks.value.find((t) => t.id === id);
-    if (task) {
-      const newlyCompleted = !wasCompleted;
-      tasks.value = tasks.value.map((t) =>
-        t.id === id
-          ? {
-              ...t,
-              completed: newlyCompleted,
-              completed_at: newlyCompleted ? new Date().toISOString() : null,
-              updated_at: new Date().toISOString(),
-            }
-          : t,
-      );
-      const updated = tasks.value.find((t) => t.id === id);
-      if (updated) onTaskChanged(updated);
-    }
-
-    if (wasCompleted) {
-      onDailyDeleted(id, date);
-    } else {
-      // 推送 daily_completion 到 Supabase，防止 cleanStaleDailyCompletions 误删
-      onDailyChanged({ task_id: id, date });
-    }
+  const toggleDailyTask = wrap(async (id: string, date: string, completed?: boolean) => {
+    await invoke('toggle_daily_task', {
+      id,
+      date,
+      completed: completed ?? !dailyCompletedIds.value.includes(id),
+    });
+    await refreshLocalSnapshot();
   }, 'toggleDailyTask');
 
   const updateTask = wrap(async (id: string, title: string) => {
-    if (!tasks.value.find((t) => t.id === id)) return;
-    const task = tasks.value.find((t) => t.id === id)!;
-    await invoke('update_task', {
-      args: {
-        id,
-        title,
-        dueDate: task.due_date,
-        tags: task.tags,
-        important: task.important,
-        pinned: task.pinned,
-        isDaily: task.is_daily,
-      },
-    });
-    tasks.value = tasks.value.map((t) =>
-      t.id === id ? { ...t, title, updated_at: new Date().toISOString() } : t,
-    );
-    const updated = tasks.value.find((t) => t.id === id);
-    if (updated) onTaskChanged(updated);
+    await invoke('update_task', { args: { id, title } });
+    await refreshLocalSnapshot();
   }, 'updateTask');
 
-  const updateTaskMeta = wrap(
-    async (
-      id: string,
-      tags: string[],
-      important: boolean,
-      pinned: boolean,
-      isDaily: boolean,
-      dueDate?: string | null,
-    ) => {
-      if (!tasks.value.find((t) => t.id === id)) return;
-      const task = tasks.value.find((t) => t.id === id)!;
-      await invoke('update_task', {
-        args: {
-          id,
-          title: task.title,
-          dueDate: dueDate !== undefined ? dueDate : task.due_date,
-          tags,
-          important,
-          pinned,
-          isDaily,
-        },
-      });
-      const patch: Partial<Task> = {
-        tags,
-        important,
-        pinned,
-        is_daily: isDaily,
-        updated_at: new Date().toISOString(),
-      };
-      if (dueDate !== undefined) {
-        (patch as any).due_date = dueDate;
-      }
-      tasks.value = tasks.value.map((t) => (t.id === id ? { ...t, ...patch } : t));
-      syncAllTags();
-      const updated = tasks.value.find((t) => t.id === id);
-      if (updated) onTaskChanged(updated);
-    },
-    'updateTaskMeta',
-  );
+  const updateTaskMeta = wrap(async (id: string, patch: TaskMetaPatch) => {
+    await invoke('update_task', { args: { id, ...patch } });
+    await refreshLocalSnapshot();
+  }, 'updateTaskMeta');
 
   const deleteTask = wrap(async (id: string) => {
+    const deleted = tasks.value
+      .filter((task) => task.id === id || task.parent_id === id)
+      .map((task) => ({ ...task }));
     await invoke('delete_task', { id });
-    const now = new Date().toISOString();
-    // 标记父任务 + 子任务为已删除
-    const deletedIds = new Set<string>();
-    const deletedTasks: Task[] = [];
-    tasks.value = tasks.value.map((t) => {
-      if (t.id === id || t.parent_id === id) {
-        deletedIds.add(t.id);
-        deletedTasks.push({ ...t });
-        return { ...t, is_deleted: true, updated_at: now };
-      }
-      return t;
-    });
-    for (const tid of deletedIds) {
-      const t = tasks.value.find((x) => x.id === tid);
-      if (t) onTaskChanged(t);
-    }
-    tasks.value = tasks.value.filter((t) => !deletedIds.has(t.id));
-    syncAllTags();
-    registerUndo(deletedTasks, deletedTasks.length > 1 ? '任务及其子任务已删除' : '任务已删除');
+    await refreshLocalSnapshot();
+    registerUndo(deleted, '任务已删除');
   }, 'deleteTask');
 
   const clearCompleted = wrap(async () => {
-    // 跳过每日任务（is_daily），每日任务每天自动重置，不应被清除
-    const clearedIds = tasks.value
-      .filter((t) => t.completed && !t.is_deleted && !t.is_daily)
-      .map((t) => t.id);
-    const clearedTasks = tasks.value
-      .filter((t) => t.completed && !t.is_deleted && !t.is_daily)
-      .map((t) => ({ ...t }));
+    const cleared = tasks.value
+      .filter((task) => task.completed && !task.is_daily)
+      .map((task) => ({ ...task }));
     await invoke('clear_completed');
-    const now = new Date().toISOString();
-    tasks.value = tasks.value.map((t) =>
-      t.completed && !t.is_deleted && !t.is_daily ? { ...t, is_deleted: true, updated_at: now } : t,
-    );
-    const cleared = tasks.value.filter((t) => t.completed && t.is_deleted);
-    for (const task of cleared) {
-      onTaskChanged(task);
-    }
-    tasks.value = tasks.value.filter((t) => !t.is_deleted);
-    // 清理已清除任务的 daily completion 记录
-    dailyCompletedIds.value = dailyCompletedIds.value.filter((tid) => !clearedIds.includes(tid));
-    registerUndo(clearedTasks, `${clearedTasks.length} 个已完成任务已清除`);
+    await refreshLocalSnapshot();
+    registerUndo(cleared, String(cleared.length) + ' 个已完成任务已清除');
   }, 'clearCompleted');
 
   // ── 筛选操作 ──────────────────────────────
@@ -879,7 +534,6 @@ export function useTaskStore() {
     refreshTasks,
     initSync,
     pullAndMerge,
-    pushTask,
     // CRUD
     addTask,
     applyImportedTasks,

@@ -4,6 +4,27 @@ use crate::task_service::{AddTaskInput, UpdateTaskInput};
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskSnapshot {
+    revision: u64,
+    tasks: Vec<store::Task>,
+    daily_completions: Vec<store::DailyCompletion>,
+    outbox_count: usize,
+    legacy_queue_imported: bool,
+}
+
+#[tauri::command]
+pub fn get_task_snapshot(state: tauri::State<AppState>) -> TaskSnapshot {
+    state.read_data(|data| TaskSnapshot {
+        revision: data.revision,
+        tasks: task_service::list(data),
+        daily_completions: data.daily_completions.clone(),
+        outbox_count: data.outbox.len(),
+        legacy_queue_imported: data.legacy_queue_imported,
+    })
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AddTasksBatchInput {
@@ -57,7 +78,7 @@ pub fn get_all_daily_completions(state: tauri::State<AppState>) -> Vec<store::Da
     state.read_data(|d| d.daily_completions.clone())
 }
 
-/// 跨天重置每日任务的 completed 状态，返回被修改的任务快照供前端推送到远端同步后端
+/// 按今日完成记录校正每日任务状态，并返回发生变化的任务。
 #[tauri::command]
 pub fn reset_daily_tasks(
     state: tauri::State<AppState>,
@@ -72,7 +93,9 @@ pub fn reset_daily_tasks(
 
 #[tauri::command]
 pub fn add_task(state: tauri::State<AppState>, args: AddTaskInput) -> Result<store::Task, String> {
-    state.write_data(|d| task_service::add(d, args))
+    state
+        .write_data(|d| task_service::add(d, args))
+        .map(|task| state.saved_task(task))
 }
 
 /// 原子批量新增任务：全部参数校验和持久化成功后才提交内存状态。
@@ -83,15 +106,27 @@ pub fn add_tasks_batch(
 ) -> Result<AddTasksBatchResult, String> {
     state
         .write_data_candidate(|data| task_service::add_batch(data, args.tasks))
-        .map(|created| AddTasksBatchResult { created })
+        .map(|created| AddTasksBatchResult {
+            created: created
+                .into_iter()
+                .map(|task| state.saved_task(task))
+                .collect(),
+        })
 }
 
-/// 切换完成状态，返回后端时间戳规范化的任务快照供前端 LWW 使用
+/// 设置指定的完成状态，返回带后端时间戳的任务快照。
 #[tauri::command]
-pub fn toggle_task(state: tauri::State<AppState>, id: String) -> Result<store::Task, String> {
+pub fn toggle_task(
+    state: tauri::State<AppState>,
+    id: String,
+    completed: bool,
+) -> Result<store::Task, String> {
     state
-        .write_data(|d| task_service::toggle(d, &id))
-        .and_then(|opt| opt.ok_or_else(|| format!("task not found: {id}")))
+        .write_data_candidate(|d| {
+            task_service::set_completed(d, &id, completed)
+                .ok_or_else(|| format!("task not found: {id}"))
+        })
+        .map(|task| state.saved_task(task))
 }
 
 /// 按日期记录每日完成状态，支持跨天追踪
@@ -100,17 +135,24 @@ pub fn toggle_daily_task(
     state: tauri::State<AppState>,
     id: String,
     date: String,
+    completed: bool,
 ) -> Result<(), String> {
-    state.write_data(|d| {
-        task_service::toggle_daily(d, &id, &date);
+    state.write_data_candidate(|d| {
+        chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").map_err(|_| "日期无效")?;
+        task_service::set_daily_completed(d, &id, &date, completed)
+            .ok_or_else(|| format!("task not found: {id}"))?;
+        Ok(())
     })
 }
 
 #[tauri::command]
-pub fn update_task(state: tauri::State<AppState>, args: UpdateTaskInput) -> Result<(), String> {
-    state.write_data(|d| {
-        task_service::update(d, args);
-    })
+pub fn update_task(
+    state: tauri::State<AppState>,
+    args: UpdateTaskInput,
+) -> Result<store::Task, String> {
+    state
+        .write_data_candidate(|d| task_service::update(d, args).ok_or_else(|| "任务不存在".into()))
+        .map(|task| state.saved_task(task))
 }
 
 /// 软删除指定任务（标记 is_deleted = true，保留数据用于同步传播）
@@ -145,26 +187,23 @@ pub fn delete_tag(state: tauri::State<AppState>, tag: String) -> Result<(), Stri
     })
 }
 
-/// 合并远端每日完成记录到本地（只增不删，清理由 cleanStaleDailyCompletions 补齐）
+/// 合并远端完成记录，并在完整快照校正时保留待同步的本地操作。
 #[tauri::command]
 pub fn sync_remote_daily_completions(
     state: tauri::State<AppState>,
     remote_completions: Vec<store::DailyCompletion>,
-) -> Result<(), String> {
-    state.write_data(|d| {
-        for remote in remote_completions {
-            if let Some(local) = d
-                .daily_completions
-                .iter_mut()
-                .find(|dc| dc.task_id == remote.task_id && dc.date == remote.date)
-            {
-                if local.profile_id.is_none() {
-                    local.profile_id = remote.profile_id.clone();
-                }
-            } else {
-                d.daily_completions.push(remote);
-            }
-        }
+    replace_snapshot: Option<bool>,
+    profile_id: Option<String>,
+    snapshot_revision: Option<u64>,
+) -> Result<bool, String> {
+    state.write_remote_data(|data| {
+        Ok(task_service::merge_daily_snapshot(
+            data,
+            remote_completions,
+            replace_snapshot.unwrap_or(false),
+            profile_id.as_deref(),
+            snapshot_revision,
+        ))
     })
 }
 
@@ -176,7 +215,7 @@ pub fn sync_local_tasks(
     state: tauri::State<AppState>,
     remote_tasks: Vec<store::Task>,
 ) -> Result<(), String> {
-    state.write_data(|d| {
+    state.write_remote_data(|d| {
         for rt in &remote_tasks {
             if let Some(idx) = d.tasks.iter().position(|t| t.id == rt.id) {
                 if rt.updated_at >= d.tasks[idx].updated_at {
@@ -186,6 +225,7 @@ pub fn sync_local_tasks(
                 d.tasks.push(rt.clone());
             }
         }
+        Ok(())
     })
 }
 
@@ -196,8 +236,11 @@ pub fn delete_daily_completion(
     task_id: String,
     date: String,
 ) -> Result<(), String> {
-    state.write_data(|d| {
-        d.daily_completions
-            .retain(|dc| !(dc.task_id == task_id && dc.date == date));
+    state.write_remote_data(|d| {
+        if !crate::outbox::pending_daily(d, &task_id, &date) {
+            d.daily_completions
+                .retain(|dc| !(dc.task_id == task_id && dc.date == date));
+        }
+        Ok(())
     })
 }

@@ -240,7 +240,62 @@ pub fn load_data(logger: &LogWriter) -> DataStore {
 pub fn save_data(store: &DataStore) -> Result<(), String> {
     let path = get_data_path();
     let content = serde_json::to_string_pretty(store).map_err(|e| e.to_string())?;
-    fs::write(&path, content).map_err(|e| e.to_string())
+    save_data_file(&path, content.as_bytes())
+}
+
+pub fn backup_data_for_queue_migration() -> Result<(), String> {
+    let source = get_data_path();
+    let backup = source.with_file_name("data.before-outbox.json");
+    if source.exists() && !backup.exists() {
+        fs::copy(&source, &backup).map_err(|error| format!("备份任务数据失败：{error}"))?;
+    }
+    Ok(())
+}
+
+pub fn backup_legacy_queue(operations: &[crate::outbox::QueueOperation]) -> Result<(), String> {
+    let path = get_workspace_dir().join("legacy-queue.before-outbox.json");
+    if !operations.is_empty() && !path.exists() {
+        let content = serde_json::to_vec_pretty(operations).map_err(|error| error.to_string())?;
+        save_data_file(&path, &content)?;
+    }
+    Ok(())
+}
+
+fn save_data_file(path: &std::path::Path, content: &[u8]) -> Result<(), String> {
+    let temporary = path.with_file_name(format!(".data-{}.tmp", uuid::Uuid::new_v4()));
+    let result = (|| {
+        let mut file = fs::File::create_new(&temporary).map_err(|e| e.to_string())?;
+        file.write_all(content).map_err(|e| e.to_string())?;
+        file.sync_all().map_err(|e| e.to_string())?;
+        drop(file);
+        #[cfg(windows)]
+        {
+            use std::os::windows::ffi::OsStrExt;
+            use windows::core::PCWSTR;
+            use windows::Win32::Storage::FileSystem::{
+                MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+            };
+            let source: Vec<u16> = temporary.as_os_str().encode_wide().chain(Some(0)).collect();
+            let target: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+            unsafe {
+                MoveFileExW(
+                    PCWSTR(source.as_ptr()),
+                    PCWSTR(target.as_ptr()),
+                    MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+                )
+            }
+            .map_err(|e| e.to_string())?;
+        }
+        #[cfg(not(windows))]
+        {
+            fs::rename(&temporary, path).map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
 }
 
 /// 从磁盘加载应用配置，文件不存在或解析失败时返回默认配置
@@ -338,6 +393,27 @@ mod tests {
     #[test]
     fn logs_dir_is_inside_workspace() {
         assert_eq!(get_logs_dir(), get_workspace_dir().join("logs"));
+    }
+
+    #[test]
+    fn data_replacement_preserves_complete_snapshot_and_failed_replace_keeps_target() {
+        let dir = temp_dir();
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("data.json");
+        save_data_file(&path, br#"{"version":1,"tasks":[]}"#).unwrap();
+        let data = default_data_store();
+        let content = serde_json::to_vec(&data).unwrap();
+        save_data_file(&path, &content).unwrap();
+        let loaded: DataStore = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert!(loaded.outbox.is_empty());
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 1);
+        let directory_target = dir.join("existing-directory");
+        fs::create_dir(&directory_target).unwrap();
+        assert!(save_data_file(&directory_target, b"replacement").is_err());
+        assert!(directory_target.is_dir());
+        assert_eq!(fs::read(&path).unwrap(), content);
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 2);
+        fs::remove_dir_all(&dir).unwrap();
     }
 
     fn temp_dir() -> PathBuf {

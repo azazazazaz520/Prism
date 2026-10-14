@@ -70,7 +70,7 @@ impl WorkspaceWindows {
         }
     }
 
-    pub fn initialize_main(&self, app: &AppHandle, directory: PathBuf) {
+    pub fn prepare_main(&self, app: &AppHandle, directory: PathBuf) {
         self.running.store(true, Ordering::SeqCst);
         if let Err(error) = self.register(app, "main", directory.clone()) {
             eprintln!("[prism] 文件监听不可用：{error}");
@@ -83,6 +83,9 @@ impl WorkspaceWindows {
                 },
             );
         }
+    }
+
+    pub fn finish_startup(&self, app: &AppHandle) {
         if let Some(window) = app.get_webview_window("main") {
             attach_lifecycle(&window);
         }

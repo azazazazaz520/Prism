@@ -41,3 +41,6 @@ windows = { version = "0.61", features = [
 
 [patch.crates-io]
 tauri-plugin-single-instance = { path = "vendor/tauri-plugin-single-instance" }
+
+[dev-dependencies]
+tauri = { version = "2", features = ["test"] }

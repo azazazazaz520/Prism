@@ -21,12 +21,19 @@ pub struct AddTaskInput {
 #[derive(Clone)]
 pub struct UpdateTaskInput {
     pub id: String,
-    pub title: String,
-    pub due_date: Option<String>,
-    pub tags: Vec<String>,
-    pub important: bool,
-    pub pinned: bool,
-    pub is_daily: bool,
+    pub title: Option<String>,
+    #[serde(default, deserialize_with = "present_date")]
+    pub due_date: Option<Option<String>>,
+    pub tags: Option<Vec<String>>,
+    pub important: Option<bool>,
+    pub pinned: Option<bool>,
+    pub is_daily: Option<bool>,
+}
+
+fn present_date<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<Option<String>>, D::Error> {
+    Option::<String>::deserialize(deserializer).map(Some)
 }
 
 /// 获取所有活跃任务（过滤已软删除）
@@ -70,7 +77,7 @@ pub fn daily_completions(data: &store::DataStore, date: &str) -> Vec<String> {
 }
 
 /// 跨天重置每日任务的 completed 状态
-/// 返回被修改过的任务快照列表，供前端推送到远端同步后端
+/// 返回发生变化的任务快照，供统一提交流程保存并生成同步操作。
 /// - 今日有完成记录 → completed = true
 /// - 今日无完成记录 → completed = false（昨日完成的自动清零）
 pub fn reset_daily_tasks(data: &mut store::DataStore, today: &str) -> Vec<store::Task> {
@@ -178,9 +185,24 @@ fn normalize_batch_input(index: usize, mut input: AddTaskInput) -> Result<AddTas
 
 /// 切换任务完成状态（自动记录完成/取消时间），返回更新后的任务快照
 pub fn toggle(data: &mut store::DataStore, id: &str) -> Option<store::Task> {
+    let completed = !data.tasks.iter().find(|task| task.id == id)?.completed;
+    set_completed(data, id, completed)
+}
+
+pub fn set_completed(
+    data: &mut store::DataStore,
+    id: &str,
+    completed: bool,
+) -> Option<store::Task> {
     let now = chrono::Utc::now().to_rfc3339();
-    let task = data.tasks.iter_mut().find(|t| t.id == id)?;
-    task.completed = !task.completed;
+    let task = data
+        .tasks
+        .iter_mut()
+        .find(|t| t.id == id && !t.is_deleted)?;
+    if task.completed == completed {
+        return Some(task.clone());
+    }
+    task.completed = completed;
     task.completed_at = if task.completed {
         Some(now.clone())
     } else {
@@ -190,59 +212,74 @@ pub fn toggle(data: &mut store::DataStore, id: &str) -> Option<store::Task> {
     Some(task.clone())
 }
 
-/// 切换每日任务的完成状态（按日期记录，支持跨天追踪）
-/// 同时同步更新 task.completed，确保远端同步后端能感知完成状态变更
-pub fn toggle_daily(data: &mut store::DataStore, id: &str, date: &str) {
-    let now = chrono::Utc::now().to_rfc3339();
-    if let Some(pos) = data
+/// 按日期设置每日任务完成状态，并返回最新任务。
+pub fn set_daily_completed(
+    data: &mut store::DataStore,
+    id: &str,
+    date: &str,
+    completed: bool,
+) -> Option<store::Task> {
+    let task = data
+        .tasks
+        .iter()
+        .find(|task| task.id == id && !task.is_deleted)?;
+    let profile_id = task.profile_id.clone();
+    let exists = data
         .daily_completions
         .iter()
-        .position(|dc| dc.task_id == id && dc.date == date)
-    {
-        // 取消完成：移除 daily_completion
-        data.daily_completions.remove(pos);
-        // 若该任务当天不再有完成记录，则设 completed = false
-        let still_completed = data
-            .daily_completions
-            .iter()
-            .any(|dc| dc.task_id == id && dc.date == date);
-        if !still_completed {
-            if let Some(task) = data.tasks.iter_mut().find(|t| t.id == id) {
-                task.completed = false;
-                task.completed_at = None;
-                task.updated_at = now;
-            }
-        }
-    } else {
-        // 完成：添加 daily_completion
+        .any(|dc| dc.task_id == id && dc.date == date);
+    if completed && !exists {
         data.daily_completions.push(store::DailyCompletion {
             task_id: id.to_string(),
             date: date.to_string(),
-            profile_id: None,
+            profile_id: profile_id.clone(),
         });
-        // 同步更新 task.completed，使远端同步后端反映完成状态
-        if let Some(task) = data.tasks.iter_mut().find(|t| t.id == id) {
-            if !task.completed {
-                task.completed = true;
-                task.completed_at = Some(now.clone());
-                task.updated_at = now;
-            }
-        }
+    } else if !completed && exists {
+        data.daily_completions
+            .retain(|dc| dc.task_id != id || dc.date != date);
     }
+    let task = set_completed(data, id, completed);
+    if !completed && !exists {
+        // 取消操作保留删除意图，即使本地尚未收到对应的远端记录。
+        crate::outbox::append(
+            data,
+            crate::outbox::QueueOperation {
+                kind: "delete".into(),
+                table: "daily_completions".into(),
+                data: serde_json::json!({"task_id":id,"date":date,"profile_id":profile_id}),
+            },
+        );
+    }
+    task
 }
 
-/// 更新任务的所有字段
-pub fn update(data: &mut store::DataStore, input: UpdateTaskInput) -> Option<()> {
+/// 在最新任务上更新请求提供的字段。
+pub fn update(data: &mut store::DataStore, input: UpdateTaskInput) -> Option<store::Task> {
     let now = chrono::Utc::now().to_rfc3339();
-    let task = data.tasks.iter_mut().find(|t| t.id == input.id)?;
-    task.title = input.title;
-    task.due_date = input.due_date;
-    task.tags = input.tags;
-    task.important = input.important;
-    task.pinned = input.pinned;
-    task.is_daily = input.is_daily;
+    let task = data
+        .tasks
+        .iter_mut()
+        .find(|t| t.id == input.id && !t.is_deleted)?;
+    if let Some(title) = input.title {
+        task.title = title;
+    }
+    if let Some(date) = input.due_date {
+        task.due_date = date;
+    }
+    if let Some(tags) = input.tags {
+        task.tags = tags;
+    }
+    if let Some(important) = input.important {
+        task.important = important;
+    }
+    if let Some(pinned) = input.pinned {
+        task.pinned = pinned;
+    }
+    if let Some(is_daily) = input.is_daily {
+        task.is_daily = is_daily;
+    }
     task.updated_at = now;
-    Some(())
+    Some(task.clone())
 }
 
 /// 软删除任务（含级联子任务删除 + 清理孤儿 daily_completions）
@@ -300,14 +337,103 @@ pub fn clear_completed(data: &mut store::DataStore) {
 /// 删除指定标签（从所有任务中移除该标签）
 pub fn delete_tag(data: &mut store::DataStore, tag: &str) {
     for task in data.tasks.iter_mut() {
+        let count = task.tags.len();
         task.tags.retain(|t| t != tag);
+        if count != task.tags.len() {
+            task.updated_at = chrono::Utc::now().to_rfc3339();
+        }
     }
+}
+
+/// 校正远端完成记录快照，保留待同步操作并丢弃跨越本地提交的旧快照。
+pub fn merge_daily_snapshot(
+    data: &mut store::DataStore,
+    remote: Vec<store::DailyCompletion>,
+    replace: bool,
+    profile: Option<&str>,
+    revision: Option<u64>,
+) -> bool {
+    if replace && revision.is_some_and(|revision| revision != data.revision) {
+        return false;
+    }
+    if replace {
+        if let Some(profile) = profile {
+            let outbox = &data.outbox;
+            data.daily_completions.retain(|dc| {
+                dc.profile_id.as_deref() != Some(profile)
+                    || outbox.iter().any(|item| {
+                        item.operation.table == "daily_completions"
+                            && item.operation.data["task_id"] == dc.task_id
+                            && item.operation.data["date"] == dc.date
+                    })
+                    || remote
+                        .iter()
+                        .any(|item| item.task_id == dc.task_id && item.date == dc.date)
+            });
+        }
+    }
+    for completion in remote {
+        if crate::outbox::pending_daily(data, &completion.task_id, &completion.date) {
+            continue;
+        }
+        if let Some(local) = data
+            .daily_completions
+            .iter_mut()
+            .find(|dc| dc.task_id == completion.task_id && dc.date == completion.date)
+        {
+            if local.profile_id.is_none() {
+                local.profile_id = completion.profile_id;
+            }
+        } else {
+            data.daily_completions.push(completion);
+        }
+    }
+    true
 }
 
 #[cfg(test)]
 mod tests {
     use super::{add_batch, AddTaskInput};
     use crate::store;
+
+    #[test]
+    fn remote_snapshot_preserves_pending_daily_insert_and_delete() {
+        let mut data = store::default_data_store();
+        let completion = |id: &str| store::DailyCompletion {
+            task_id: id.into(),
+            date: "2026-10-13".into(),
+            profile_id: Some("profile".into()),
+        };
+        data.daily_completions = vec![completion("insert"), completion("stale")];
+        for (kind, id) in [("upsert", "insert"), ("delete", "delete")] {
+            crate::outbox::append(
+                &mut data,
+                crate::outbox::QueueOperation {
+                    kind: kind.into(),
+                    table: "daily_completions".into(),
+                    data: serde_json::to_value(completion(id)).unwrap(),
+                },
+            );
+        }
+        assert!(super::merge_daily_snapshot(
+            &mut data,
+            vec![completion("delete")],
+            true,
+            Some("profile"),
+            Some(0)
+        ));
+        assert_eq!(data.daily_completions, vec![completion("insert")]);
+        data.outbox.clear();
+        data.revision = 1;
+        assert!(!super::merge_daily_snapshot(
+            &mut data,
+            vec![completion("delete")],
+            true,
+            Some("profile"),
+            Some(0)
+        ));
+        assert_eq!(data.daily_completions, vec![completion("insert")]);
+    }
 
     fn input(title: &str, due_date: Option<&str>) -> AddTaskInput {
         AddTaskInput {

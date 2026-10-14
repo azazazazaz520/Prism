@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, nextTick, computed, onMounted, onUnmounted } from 'vue';
-import type { Task } from '../../types';
+import type { Task, TaskMetaPatch } from '../../types';
 import { diagnosticsLogger } from '../../diagnostics/invoke-logged';
 import { getMenuRegistrations } from '../../plugin-api/menus-impl';
 import { useContextMenu } from '../../composables/useContextMenu';
@@ -13,11 +13,11 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  toggle: [id: string];
-  toggleDaily: [id: string, date: string];
+  toggle: [id: string, completed: boolean];
+  toggleDaily: [id: string, date: string, completed: boolean];
   update: [id: string, title: string];
   delete: [id: string];
-  updateMeta: [id: string, tags: string[], important: boolean, pinned: boolean, isDaily: boolean];
+  updateMeta: [id: string, patch: TaskMetaPatch];
 }>();
 
 const editing = ref(false);
@@ -89,38 +89,17 @@ function closeMenu() {
 }
 
 function toggleMenuImportant() {
-  emit(
-    'updateMeta',
-    props.task.id,
-    [...menuTags.value],
-    !props.task.important,
-    props.task.pinned,
-    props.task.is_daily,
-  );
+  emit('updateMeta', props.task.id, { important: !props.task.important });
   showMenu.value = false;
 }
 
 function toggleMenuPinned() {
-  emit(
-    'updateMeta',
-    props.task.id,
-    [...menuTags.value],
-    props.task.important,
-    !props.task.pinned,
-    props.task.is_daily,
-  );
+  emit('updateMeta', props.task.id, { pinned: !props.task.pinned });
   showMenu.value = false;
 }
 
 function toggleMenuDaily() {
-  emit(
-    'updateMeta',
-    props.task.id,
-    [...menuTags.value],
-    props.task.important,
-    props.task.pinned,
-    !props.task.is_daily,
-  );
+  emit('updateMeta', props.task.id, { isDaily: !props.task.is_daily });
   showMenu.value = false;
 }
 
@@ -128,28 +107,14 @@ function addMenuTag() {
   const t = menuNewTag.value.trim();
   if (t && !menuTags.value.includes(t)) {
     menuTags.value.push(t);
-    emit(
-      'updateMeta',
-      props.task.id,
-      [...menuTags.value],
-      props.task.important,
-      props.task.pinned,
-      props.task.is_daily,
-    );
+    emit('updateMeta', props.task.id, { tags: [...menuTags.value] });
   }
   menuNewTag.value = '';
 }
 
 function removeMenuTag(tag: string) {
   menuTags.value = menuTags.value.filter((tg) => tg !== tag);
-  emit(
-    'updateMeta',
-    props.task.id,
-    [...menuTags.value],
-    props.task.important,
-    props.task.pinned,
-    props.task.is_daily,
-  );
+  emit('updateMeta', props.task.id, { tags: [...menuTags.value] });
 }
 
 function onClickOutside(e: MouseEvent) {
@@ -205,16 +170,16 @@ const displayCompleted = computed(() => {
   return props.task.completed;
 });
 
-// 每日任务用 toggleDaily（按日期记录），普通任务用 toggle（直接完成状态切换）
+// 依据界面展示状态提交明确的完成目标。
 function handleToggle() {
   if (props.task.is_daily) {
     const today = new Date();
     const y = today.getFullYear();
     const m = String(today.getMonth() + 1).padStart(2, '0');
     const d = String(today.getDate()).padStart(2, '0');
-    emit('toggleDaily', props.task.id, `${y}-${m}-${d}`);
+    emit('toggleDaily', props.task.id, `${y}-${m}-${d}`, !displayCompleted.value);
   } else {
-    emit('toggle', props.task.id);
+    emit('toggle', props.task.id, !displayCompleted.value);
   }
 }
 

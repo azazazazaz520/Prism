@@ -299,13 +299,7 @@ pub fn plugin_tasks_list_by_date(
     Ok(state.read_data(|d| crate::task_service::list_by_date(d, &date)))
 }
 
-/// 获取当前同步 profile_id，用于插件任务自动关联到同步 Profile
-fn current_profile_id(state: &AppState) -> Option<String> {
-    state.with_sync(|s| s.profile_id.clone())
-}
-
-/// 新增任务，仅限 tasks:write 权限
-/// 自动关联当前同步 profile_id，确保任务可被 Sync 系统推送
+/// 新增任务，仅限 tasks:write 权限。
 #[tauri::command]
 pub fn plugin_tasks_create(
     state: tauri::State<AppState>,
@@ -313,18 +307,12 @@ pub fn plugin_tasks_create(
     args: crate::task_service::AddTaskInput,
 ) -> Result<crate::store::Task, String> {
     check_plugin_permission(&state, &plugin_id, "tasks:write")?;
-    let profile_id = current_profile_id(&state);
-    state.write_data(|d| {
-        let mut task = crate::task_service::add(d, args);
-        task.profile_id = profile_id.clone();
-        if let Some(t) = d.tasks.iter_mut().find(|t| t.id == task.id) {
-            t.profile_id = profile_id;
-        }
-        task
-    })
+    state
+        .write_data(|data| crate::task_service::add(data, args))
+        .map(|task| state.saved_task(task))
 }
 
-/// 更新任务（标题、标签、重要/置顶/每日标记），仅限 tasks:write 权限
+/// 更新请求提供的任务字段，仅限 tasks:write 权限。
 #[tauri::command]
 pub fn plugin_tasks_update(
     state: tauri::State<AppState>,
@@ -332,39 +320,48 @@ pub fn plugin_tasks_update(
     args: crate::task_service::UpdateTaskInput,
 ) -> Result<(), String> {
     check_plugin_permission(&state, &plugin_id, "tasks:write")?;
-    let profile_id = current_profile_id(&state);
-    let task_id = args.id.clone();
-    state.write_data(|d| {
-        crate::task_service::update(d, args);
-        if let Some(t) = d.tasks.iter_mut().find(|t| t.id == task_id) {
-            t.profile_id = profile_id.clone();
-        }
+    state.write_data_candidate(|data| {
+        crate::task_service::update(data, args)
+            .map(|_| ())
+            .ok_or_else(|| "任务不存在".into())
     })
 }
 
-/// 切换任务完成状态，仅限 tasks:write 权限
+/// 设置或切换任务完成状态，仅限 tasks:write 权限。
 #[tauri::command]
 pub fn plugin_tasks_toggle(
     state: tauri::State<AppState>,
     plugin_id: String,
     id: String,
+    completed: Option<bool>,
 ) -> Result<crate::store::Task, String> {
     check_plugin_permission(&state, &plugin_id, "tasks:write")?;
-    let profile_id = current_profile_id(&state);
     state
-        .write_data(|d| {
-            let opt = crate::task_service::toggle(d, &id);
-            if let Some(ref t) = opt {
-                if let Some(store_t) = d.tasks.iter_mut().find(|st| st.id == t.id) {
-                    store_t.profile_id = profile_id.clone();
+        .write_data_candidate(|data| {
+            let daily_task = data
+                .tasks
+                .iter()
+                .find(|task| task.id == id && task.is_daily)
+                .cloned();
+            let task = if let Some(daily) = daily_task {
+                crate::task_service::set_daily_completed(
+                    data,
+                    &id,
+                    &chrono::Local::now().format("%Y-%m-%d").to_string(),
+                    completed.unwrap_or(!daily.completed),
+                )
+            } else {
+                match completed {
+                    Some(target) => crate::task_service::set_completed(data, &id, target),
+                    None => crate::task_service::toggle(data, &id),
                 }
-            }
-            opt
+            };
+            task.ok_or_else(|| format!("task not found: {id}"))
         })
-        .and_then(|opt| opt.ok_or_else(|| format!("task not found: {id}")))
+        .map(|task| state.saved_task(task))
 }
 
-/// 软删除任务，仅限 tasks:write 权限
+/// 软删除任务，仅限 tasks:write 权限。
 #[tauri::command]
 pub fn plugin_tasks_delete(
     state: tauri::State<AppState>,
@@ -372,13 +369,8 @@ pub fn plugin_tasks_delete(
     id: String,
 ) -> Result<(), String> {
     check_plugin_permission(&state, &plugin_id, "tasks:write")?;
-    let profile_id = current_profile_id(&state);
-    state.write_data(|d| {
-        crate::task_service::delete(d, &id);
-        // 更新 profile_id 确保删除操作同步到远端
-        if let Some(t) = d.tasks.iter_mut().find(|t| t.id == id) {
-            t.profile_id = profile_id;
-        }
+    state.write_data_candidate(|data| {
+        crate::task_service::delete(data, &id).ok_or_else(|| "任务不存在".into())
     })
 }
 

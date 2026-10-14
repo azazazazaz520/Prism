@@ -3,6 +3,7 @@ pub mod config;
 pub mod export;
 pub mod logging;
 pub mod notes;
+pub mod outbox;
 pub mod pdf_to_word;
 pub mod plugins;
 pub mod prompt;

@@ -3,7 +3,6 @@ import { invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
 import { diagnosticsLogger } from '../diagnostics/invoke-logged';
 import { useSync } from './useSync';
 import { useAuth, getSupabaseClient } from './useAuth';
-import type { DailyCompletion } from '../types';
 
 /**
  * SyncCode — 跨设备配对与 Profile 管理
@@ -27,7 +26,7 @@ const pairError = ref<string | null>(null);
 
 export function useSyncCode() {
   const { user, isLoggedIn } = useAuth();
-  const { setProfileId, getProfileId, pushDailyCompletion } = useSync();
+  const { setProfileId, getProfileId, flushOutbox } = useSync();
 
   /** 获取伪随机 UUID */
   function generateUUID(): string {
@@ -121,41 +120,11 @@ export function useSyncCode() {
     }
   }
 
-  /** 将本地任务批量关联到 profile 并推送到 Supabase */
+  /** 关联本地未配对记录，持久化同步意图并交由共享发件箱发送。 */
   async function mergeLocalToProfile(profileId: string): Promise<void> {
-    const supabase = getSupabaseClient();
-    if (!supabase || !user.value) return;
-
-    try {
-      const localTasks = await invoke<any[]>('get_all_tasks_including_deleted');
-      const unlinkedTasks = localTasks.filter((t) => !t.profile_id);
-
-      if (unlinkedTasks.length === 0) return;
-
-      for (const task of unlinkedTasks) {
-        const { error } = await supabase.from('tasks').upsert({
-          ...task,
-          profile_id: profileId,
-          user_id: user.value.id,
-        });
-        if (error) throw error;
-      }
-
-      const localDailyCompletions = await invoke<DailyCompletion[]>('get_all_daily_completions');
-      const unlinkedDailyCompletions = localDailyCompletions.filter((dc) => !dc.profile_id);
-      for (const completion of unlinkedDailyCompletions) {
-        await pushDailyCompletion({ ...completion, profile_id: profileId });
-      }
-    } catch (e) {
-      diagnosticsLogger.warn(
-        'sync',
-        'sync.merge_local_to_profile_failed',
-        '合并本地任务到远端 profile 失败',
-        {
-          error: e instanceof Error ? e.message : String(e),
-        },
-      );
-    }
+    if (!user.value) return;
+    await invoke('link_unpaired_tasks', { profileId });
+    if (navigator.onLine) await flushOutbox();
   }
 
   /** 恢复已配对的 profile（启动时调用）

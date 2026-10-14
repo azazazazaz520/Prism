@@ -431,8 +431,8 @@ async function syncEditedTaskReferences(markdown: string) {
       await updateTask(task.id, reference.title);
     }
     if (reference.completed !== task.completed) {
-      if (task.is_daily) await toggleDailyTask(task.id, getTodayStr());
-      else await toggleTask(task.id);
+      if (task.is_daily) await toggleDailyTask(task.id, getTodayStr(), reference.completed);
+      else await toggleTask(task.id, reference.completed);
     }
   }
 }

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use serde::Serialize;
 
-use crate::pdf_to_word_service::{
+use crate::pdf_to_word::{
     configured_base_url, validate_base_url, PdfToWordDownloadResult, PdfToWordHealth, PdfToWordJob,
     PdfToWordService,
 };

@@ -1,29 +1,13 @@
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde::Serialize;
+use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use crate::store::{DailyCompletion, DataStore};
+use crate::models::{DailyCompletion, DataStore, OutboxItem, QueueOperation};
 
 pub const DATA_CHANGED: &str = "tasks://data-changed";
 pub const REQUEST_TIMEOUT_SECS: u64 = 30;
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct QueueOperation {
-    #[serde(rename = "type")]
-    pub kind: String,
-    pub table: String,
-    pub data: Value,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct OutboxItem {
-    pub id: String,
-    pub sequence: u64,
-    #[serde(flatten)]
-    pub operation: QueueOperation,
-}
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -215,7 +199,7 @@ pub fn import_legacy(data: &mut DataStore, operations: Vec<QueueOperation>) -> R
     for operation in &operations {
         match (operation.table.as_str(), operation.kind.as_str()) {
             ("tasks", "upsert") => {
-                serde_json::from_value::<crate::store::Task>(operation.data.clone())
+                serde_json::from_value::<crate::models::Task>(operation.data.clone())
                     .map_err(|e| format!("旧任务记录无效：{e}"))?;
             }
             ("daily_completions", "upsert" | "delete") => {
@@ -237,12 +221,12 @@ pub fn import_legacy(data: &mut DataStore, operations: Vec<QueueOperation>) -> R
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::task_service::{self, AddTaskInput, UpdateTaskInput};
+    use crate::tasks::service::{self, AddTaskInput, UpdateTaskInput};
 
     fn data_with_task() -> DataStore {
-        let mut data = crate::store::default_data_store();
+        let mut data = crate::models::default_data_store();
         data.legacy_queue_imported = true;
-        task_service::add(
+        service::add(
             &mut data,
             AddTaskInput {
                 title: "原标题".into(),
@@ -264,13 +248,13 @@ mod tests {
         let first = data.clone();
         let title: UpdateTaskInput =
             serde_json::from_value(json!({"id":id,"title":"新标题"})).unwrap();
-        task_service::update(&mut data, title).unwrap();
+        service::update(&mut data, title).unwrap();
         enqueue_changes(&first, &mut data, Some("profile"), None);
         let first_id = data.outbox[0].id.clone();
         let first_sequence = data.outbox[0].sequence;
         let second = data.clone();
         let tags = serde_json::from_value(json!({"id":id,"tags":["标签"]})).unwrap();
-        task_service::update(&mut data, tags).unwrap();
+        service::update(&mut data, tags).unwrap();
         enqueue_changes(&second, &mut data, Some("profile"), None);
         assert_eq!(data.tasks[0].title, "新标题");
         assert_eq!(data.tasks[0].tags, vec!["标签"]);
@@ -285,19 +269,19 @@ mod tests {
     fn explicit_completed_target_is_idempotent_and_date_patch_distinguishes_null() {
         let mut data = data_with_task();
         let id = data.tasks[0].id.clone();
-        task_service::set_daily_completed(&mut data, &id, "2026-10-13", true).unwrap();
+        service::set_daily_completed(&mut data, &id, "2026-10-13", true).unwrap();
         let before = data.clone();
-        task_service::set_daily_completed(&mut data, &id, "2026-10-13", true).unwrap();
+        service::set_daily_completed(&mut data, &id, "2026-10-13", true).unwrap();
         enqueue_changes(&before, &mut data, None, None);
         assert!(data.tasks[0].completed);
         assert_eq!(data.daily_completions.len(), 1);
         assert!(data.outbox.is_empty());
         data.tasks[0].due_date = Some("2026-10-14".into());
         let title = serde_json::from_value(json!({"id":id,"title":"标题"})).unwrap();
-        task_service::update(&mut data, title).unwrap();
+        service::update(&mut data, title).unwrap();
         assert_eq!(data.tasks[0].due_date.as_deref(), Some("2026-10-14"));
         let clear = serde_json::from_value(json!({"id":id,"dueDate":null})).unwrap();
-        task_service::update(&mut data, clear).unwrap();
+        service::update(&mut data, clear).unwrap();
         assert!(data.tasks[0].due_date.is_none());
     }
 
@@ -305,9 +289,9 @@ mod tests {
     fn cancel_daily_completion_persists_task_and_delete_intent() {
         let mut data = data_with_task();
         let id = data.tasks[0].id.clone();
-        task_service::set_daily_completed(&mut data, &id, "2026-10-13", true).unwrap();
+        service::set_daily_completed(&mut data, &id, "2026-10-13", true).unwrap();
         let before = data.clone();
-        task_service::set_daily_completed(&mut data, &id, "2026-10-13", false).unwrap();
+        service::set_daily_completed(&mut data, &id, "2026-10-13", false).unwrap();
         enqueue_changes(&before, &mut data, Some("profile"), None);
         assert!(data.daily_completions.is_empty());
         assert_eq!(data.outbox.len(), 2);
@@ -325,7 +309,7 @@ mod tests {
         let id = data.tasks[0].id.clone();
         data.tasks[0].completed = true;
         let before = data.clone();
-        task_service::set_daily_completed(&mut data, &id, "2026-10-13", false).unwrap();
+        service::set_daily_completed(&mut data, &id, "2026-10-13", false).unwrap();
         enqueue_changes(&before, &mut data, None, None);
         assert!(!data.tasks[0].completed);
         assert!(data.daily_completions.is_empty());
@@ -336,7 +320,7 @@ mod tests {
 
     #[test]
     fn legacy_conversion_is_once_and_compacts_pending_operations() {
-        let mut data = crate::store::default_data_store();
+        let mut data = crate::models::default_data_store();
         let operation = QueueOperation {
             kind: "delete".into(),
             table: "daily_completions".into(),
@@ -371,7 +355,7 @@ mod tests {
         for title in ["中间标题", "最新标题"] {
             let before = data.clone();
             let patch = serde_json::from_value(json!({"id":task_id,"title":title})).unwrap();
-            task_service::update(&mut data, patch).unwrap();
+            service::update(&mut data, patch).unwrap();
             enqueue_changes(&before, &mut data, None, consumer.in_flight_id());
         }
         assert_eq!(data.outbox.len(), 2);
@@ -398,19 +382,19 @@ mod tests {
     fn compaction_preserves_task_before_daily_records_and_latest_delete_per_date() {
         let mut data = data_with_task();
         let task_id = data.tasks[0].id.clone();
-        let before = crate::store::default_data_store();
+        let before = crate::models::default_data_store();
         enqueue_changes(&before, &mut data, Some("profile"), None);
         for date in ["2026-10-13", "2026-10-14"] {
             let before = data.clone();
-            task_service::set_daily_completed(&mut data, &task_id, date, true).unwrap();
+            service::set_daily_completed(&mut data, &task_id, date, true).unwrap();
             enqueue_changes(&before, &mut data, Some("profile"), None);
         }
         let before = data.clone();
-        task_service::set_daily_completed(&mut data, &task_id, "2026-10-13", false).unwrap();
+        service::set_daily_completed(&mut data, &task_id, "2026-10-13", false).unwrap();
         enqueue_changes(&before, &mut data, Some("profile"), None);
         let before = data.clone();
         let patch = serde_json::from_value(json!({"id":task_id,"title":"最终标题"})).unwrap();
-        task_service::update(&mut data, patch).unwrap();
+        service::update(&mut data, patch).unwrap();
         enqueue_changes(&before, &mut data, Some("profile"), None);
         assert_eq!(data.outbox.len(), 3);
         assert_eq!(data.outbox[0].operation.table, "tasks");
@@ -427,7 +411,7 @@ mod tests {
 
     #[test]
     fn invalid_legacy_record_keeps_marker_and_queue_unmodified() {
-        let mut data = crate::store::default_data_store();
+        let mut data = crate::models::default_data_store();
         assert!(import_legacy(
             &mut data,
             vec![QueueOperation {

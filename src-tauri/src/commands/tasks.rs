@@ -1,6 +1,5 @@
-use crate::store;
-use crate::task_service;
-use crate::task_service::{AddTaskInput, UpdateTaskInput};
+use crate::tasks::service;
+use crate::tasks::service::{AddTaskInput, UpdateTaskInput};
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 
@@ -8,8 +7,8 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct TaskSnapshot {
     revision: u64,
-    tasks: Vec<store::Task>,
-    daily_completions: Vec<store::DailyCompletion>,
+    tasks: Vec<crate::models::Task>,
+    daily_completions: Vec<crate::models::DailyCompletion>,
     outbox_count: usize,
     legacy_queue_imported: bool,
 }
@@ -18,7 +17,7 @@ pub struct TaskSnapshot {
 pub fn get_task_snapshot(state: tauri::State<AppState>) -> TaskSnapshot {
     state.read_data(|data| TaskSnapshot {
         revision: data.revision,
-        tasks: task_service::list(data),
+        tasks: service::list(data),
         daily_completions: data.daily_completions.clone(),
         outbox_count: data.outbox.len(),
         legacy_queue_imported: data.legacy_queue_imported,
@@ -33,7 +32,7 @@ pub struct AddTasksBatchInput {
 
 #[derive(Debug, Serialize)]
 pub struct AddTasksBatchResult {
-    pub created: Vec<store::Task>,
+    pub created: Vec<crate::models::Task>,
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -41,23 +40,23 @@ pub struct AddTasksBatchResult {
 // ═══════════════════════════════════════════════════════════════
 
 #[tauri::command]
-pub fn get_tasks(state: tauri::State<AppState>) -> Vec<store::Task> {
-    state.read_data(task_service::list)
+pub fn get_tasks(state: tauri::State<AppState>) -> Vec<crate::models::Task> {
+    state.read_data(service::list)
 }
 
 #[tauri::command]
-pub fn get_all_tasks_including_deleted(state: tauri::State<AppState>) -> Vec<store::Task> {
-    state.read_data(task_service::list_all)
+pub fn get_all_tasks_including_deleted(state: tauri::State<AppState>) -> Vec<crate::models::Task> {
+    state.read_data(service::list_all)
 }
 
 #[tauri::command]
-pub fn get_tasks_by_date(state: tauri::State<AppState>, date: String) -> Vec<store::Task> {
-    state.read_data(|d| task_service::list_by_date(d, &date))
+pub fn get_tasks_by_date(state: tauri::State<AppState>, date: String) -> Vec<crate::models::Task> {
+    state.read_data(|d| service::list_by_date(d, &date))
 }
 
 #[tauri::command]
 pub fn get_all_tags(state: tauri::State<AppState>) -> Vec<String> {
-    state.read_data(task_service::all_tags)
+    state.read_data(service::all_tags)
 }
 
 /// 按指定日期获取已完成的每日任务 ID。
@@ -66,7 +65,7 @@ pub fn get_all_tags(state: tauri::State<AppState>) -> Vec<String> {
 /// 用于刷新指定日期的界面完成状态。
 #[tauri::command]
 pub fn get_daily_completions(state: tauri::State<AppState>, date: String) -> Vec<String> {
-    state.read_data(|d| task_service::daily_completions(d, &date))
+    state.read_data(|d| service::daily_completions(d, &date))
 }
 
 /// 获取本地保存的全部每日完成记录。
@@ -74,7 +73,9 @@ pub fn get_daily_completions(state: tauri::State<AppState>, date: String) -> Vec
 /// 返回所有日期的 `DailyCompletion` 完整记录，包括任务 ID、日期和 Profile 归属，
 /// 用于同步快照校正和 Profile 配对迁移。
 #[tauri::command]
-pub fn get_all_daily_completions(state: tauri::State<AppState>) -> Vec<store::DailyCompletion> {
+pub fn get_all_daily_completions(
+    state: tauri::State<AppState>,
+) -> Vec<crate::models::DailyCompletion> {
     state.read_data(|d| d.daily_completions.clone())
 }
 
@@ -83,8 +84,8 @@ pub fn get_all_daily_completions(state: tauri::State<AppState>) -> Vec<store::Da
 pub fn reset_daily_tasks(
     state: tauri::State<AppState>,
     today: String,
-) -> Result<Vec<store::Task>, String> {
-    state.write_data(|d| task_service::reset_daily_tasks(d, &today))
+) -> Result<Vec<crate::models::Task>, String> {
+    state.write_data(|d| service::reset_daily_tasks(d, &today))
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -92,9 +93,12 @@ pub fn reset_daily_tasks(
 // ═══════════════════════════════════════════════════════════════
 
 #[tauri::command]
-pub fn add_task(state: tauri::State<AppState>, args: AddTaskInput) -> Result<store::Task, String> {
+pub fn add_task(
+    state: tauri::State<AppState>,
+    args: AddTaskInput,
+) -> Result<crate::models::Task, String> {
     state
-        .write_data(|d| task_service::add(d, args))
+        .write_data(|d| service::add(d, args))
         .map(|task| state.saved_task(task))
 }
 
@@ -105,7 +109,7 @@ pub fn add_tasks_batch(
     args: AddTasksBatchInput,
 ) -> Result<AddTasksBatchResult, String> {
     state
-        .write_data_candidate(|data| task_service::add_batch(data, args.tasks))
+        .write_data_candidate(|data| service::add_batch(data, args.tasks))
         .map(|created| AddTasksBatchResult {
             created: created
                 .into_iter()
@@ -120,11 +124,10 @@ pub fn toggle_task(
     state: tauri::State<AppState>,
     id: String,
     completed: bool,
-) -> Result<store::Task, String> {
+) -> Result<crate::models::Task, String> {
     state
         .write_data_candidate(|d| {
-            task_service::set_completed(d, &id, completed)
-                .ok_or_else(|| format!("task not found: {id}"))
+            service::set_completed(d, &id, completed).ok_or_else(|| format!("task not found: {id}"))
         })
         .map(|task| state.saved_task(task))
 }
@@ -139,7 +142,7 @@ pub fn toggle_daily_task(
 ) -> Result<(), String> {
     state.write_data_candidate(|d| {
         chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").map_err(|_| "日期无效")?;
-        task_service::set_daily_completed(d, &id, &date, completed)
+        service::set_daily_completed(d, &id, &date, completed)
             .ok_or_else(|| format!("task not found: {id}"))?;
         Ok(())
     })
@@ -149,9 +152,9 @@ pub fn toggle_daily_task(
 pub fn update_task(
     state: tauri::State<AppState>,
     args: UpdateTaskInput,
-) -> Result<store::Task, String> {
+) -> Result<crate::models::Task, String> {
     state
-        .write_data_candidate(|d| task_service::update(d, args).ok_or_else(|| "任务不存在".into()))
+        .write_data_candidate(|d| service::update(d, args).ok_or_else(|| "任务不存在".into()))
         .map(|task| state.saved_task(task))
 }
 
@@ -159,23 +162,21 @@ pub fn update_task(
 #[tauri::command]
 pub fn delete_task(state: tauri::State<AppState>, id: String) -> Result<(), String> {
     state.write_data(|d| {
-        task_service::delete(d, &id);
+        service::delete(d, &id);
     })
 }
 
 /// 恢复指定的软删除任务，供前端撤销删除操作使用
 #[tauri::command]
 pub fn restore_task(state: tauri::State<AppState>, id: String) -> Result<(), String> {
-    state
-        .write_data(|d| task_service::restore(d, &id))
-        .map(|_| ())
+    state.write_data(|d| service::restore(d, &id)).map(|_| ())
 }
 
 /// 一键软删除所有已完成任务
 #[tauri::command]
 pub fn clear_completed(state: tauri::State<AppState>) -> Result<(), String> {
     state.write_data(|d| {
-        task_service::clear_completed(d);
+        service::clear_completed(d);
     })
 }
 
@@ -183,7 +184,7 @@ pub fn clear_completed(state: tauri::State<AppState>) -> Result<(), String> {
 #[tauri::command]
 pub fn delete_tag(state: tauri::State<AppState>, tag: String) -> Result<(), String> {
     state.write_data(|d| {
-        task_service::delete_tag(d, &tag);
+        service::delete_tag(d, &tag);
     })
 }
 
@@ -191,13 +192,13 @@ pub fn delete_tag(state: tauri::State<AppState>, tag: String) -> Result<(), Stri
 #[tauri::command]
 pub fn sync_remote_daily_completions(
     state: tauri::State<AppState>,
-    remote_completions: Vec<store::DailyCompletion>,
+    remote_completions: Vec<crate::models::DailyCompletion>,
     replace_snapshot: Option<bool>,
     profile_id: Option<String>,
     snapshot_revision: Option<u64>,
 ) -> Result<bool, String> {
     state.write_remote_data(|data| {
-        Ok(task_service::merge_daily_snapshot(
+        Ok(service::merge_daily_snapshot(
             data,
             remote_completions,
             replace_snapshot.unwrap_or(false),
@@ -213,7 +214,7 @@ pub fn sync_remote_daily_completions(
 #[tauri::command]
 pub fn sync_local_tasks(
     state: tauri::State<AppState>,
-    remote_tasks: Vec<store::Task>,
+    remote_tasks: Vec<crate::models::Task>,
 ) -> Result<(), String> {
     state.write_remote_data(|d| {
         for rt in &remote_tasks {
@@ -237,7 +238,7 @@ pub fn delete_daily_completion(
     date: String,
 ) -> Result<(), String> {
     state.write_remote_data(|d| {
-        if !crate::outbox::pending_daily(d, &task_id, &date) {
+        if !crate::tasks::outbox::pending_daily(d, &task_id, &date) {
             d.daily_completions
                 .retain(|dc| !(dc.task_id == task_id && dc.date == date));
         }

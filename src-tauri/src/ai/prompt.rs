@@ -1,9 +1,7 @@
 use std::fs;
 
-use crate::store;
-
 // ═══════════════════════════════════════════════════════════════
-//  模板文件名常量（保留 pub 以兼容 ai.rs 调用方）
+//  模板文件名常量
 // ═══════════════════════════════════════════════════════════════
 
 pub const PARSE_INPUT: &str = "parse-input.md";
@@ -306,7 +304,9 @@ fn render(template: &str, vars: &[(&str, &str)]) -> String {
 /// 加载 Prompt 模板：优先从文件读取，缺失时回退到编译时默认值。
 /// 每次调用都重新读取文件，用户外部编辑后下次调用自动生效。
 pub fn load(name: &str, vars: &[(&str, &str)]) -> String {
-    let path = store::get_workspace_dir().join("prompts").join(name);
+    let path = crate::storage::paths::get_workspace_dir()
+        .join("prompts")
+        .join(name);
     let template = fs::read_to_string(&path).unwrap_or_else(|_| get_default(name).to_string());
     render(&template, vars)
 }

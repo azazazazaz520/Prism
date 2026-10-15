@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, WebviewWindow, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_dialog::DialogExt;
 
-use crate::{file_watcher::FileWatcher, note_service, AppState};
+use crate::{notes, notes::watcher::FileWatcher, AppState};
 
 struct NoteWorkspace {
     directory: PathBuf,
@@ -182,7 +182,7 @@ pub fn request_new_workspace(app: &AppHandle) {
 }
 
 fn open_workspace_window(app: &AppHandle, directory: PathBuf) -> Result<(), String> {
-    note_service::is_safe_notes_dir(&directory)?;
+    notes::is_safe_notes_dir(&directory)?;
     std::fs::read_dir(&directory).map_err(|error| format!("无法读取所选文件夹：{error}"))?;
     let mut config = app
         .config()
@@ -240,10 +240,10 @@ mod tests {
         bind(&state, "main", first.clone());
         bind(&state, "workspace-second", second.clone());
         assert_eq!(
-            note_service::read_note_content(&state.directory("main").unwrap(), "note.md").unwrap(),
+            notes::read_note_content(&state.directory("main").unwrap(), "note.md").unwrap(),
             "原窗口内容"
         );
-        note_service::write_note_content(
+        notes::write_note_content(
             &state.directory("workspace-second").unwrap(),
             "note.md",
             "修改新窗口",

@@ -1,4 +1,4 @@
-#[path = "../src/startup.rs"]
+#[path = "../src/app/startup.rs"]
 mod startup;
 
 use tauri::test::{mock_builder, mock_context, noop_assets};

@@ -105,7 +105,7 @@ pub struct DataStore {
     #[serde(default)]
     pub revision: u64,
     #[serde(default)]
-    pub outbox: Vec<crate::outbox::OutboxItem>,
+    pub outbox: Vec<OutboxItem>,
     #[serde(default)]
     pub outbox_sequence: u64,
     #[serde(default)]
@@ -217,5 +217,156 @@ pub fn default_sync_store() -> SyncStore {
         sync_code: None,
         profile_id: None,
         last_sync_at: None,
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct QueueOperation {
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub table: String,
+    pub data: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct OutboxItem {
+    pub id: String,
+    pub sequence: u64,
+    #[serde(flatten)]
+    pub operation: QueueOperation,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_data_store_is_empty() {
+        let store = default_data_store();
+        assert_eq!(store.tasks.len(), 0);
+        assert_eq!(store.daily_completions.len(), 0);
+        assert_eq!(store.version, 1);
+    }
+
+    #[test]
+    fn test_default_config_store_has_defaults() {
+        let config = default_config_store();
+        assert!(config.vendors.is_empty());
+        assert!(config.active_vendor_id.is_none());
+        assert_eq!(config.theme, "auto");
+        assert_eq!(config.reminder_minutes, 30);
+        assert!(config.plugins.is_empty());
+    }
+
+    #[test]
+    fn test_task_serialization() {
+        let task = Task {
+            id: "test-id".to_string(),
+            title: "测试任务".to_string(),
+            completed: false,
+            created_at: "2026-05-17T00:00:00+08:00".to_string(),
+            completed_at: None,
+            due_date: Some("2026-05-21".to_string()),
+            tags: vec![],
+            important: false,
+            pinned: false,
+            is_daily: false,
+            parent_id: None,
+            updated_at: "2026-05-17T00:00:00+08:00".to_string(),
+            is_deleted: false,
+            profile_id: None,
+        };
+        let json = serde_json::to_string(&task).unwrap();
+        let parsed: Task = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.title, "测试任务");
+        assert!(!parsed.completed);
+        assert!(parsed.completed_at.is_none());
+        assert_eq!(parsed.due_date, Some("2026-05-21".to_string()));
+    }
+
+    #[test]
+    fn test_data_store_roundtrip() {
+        let store = DataStore {
+            version: 1,
+            tasks: vec![Task {
+                id: "1".to_string(),
+                title: "hello".to_string(),
+                completed: true,
+                created_at: "2026-01-01T00:00:00Z".to_string(),
+                completed_at: Some("2026-01-02T00:00:00Z".to_string()),
+                due_date: None,
+                tags: vec!["tag1".to_string()],
+                important: true,
+                pinned: false,
+                is_daily: false,
+                parent_id: None,
+                updated_at: "2026-01-01T00:00:00Z".to_string(),
+                is_deleted: false,
+                profile_id: None,
+            }],
+            daily_completions: vec![DailyCompletion {
+                task_id: "1".to_string(),
+                date: "2026-01-02".to_string(),
+                profile_id: None,
+            }],
+            ..default_data_store()
+        };
+        let json = serde_json::to_string(&store).unwrap();
+        let parsed: DataStore = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.tasks.len(), 1);
+        assert_eq!(parsed.tasks[0].title, "hello");
+        assert_eq!(parsed.daily_completions.len(), 1);
+    }
+
+    #[test]
+    fn test_config_store_roundtrip() {
+        let config = ConfigStore {
+            vendors: vec![Vendor {
+                id: "v1".to_string(),
+                name: "Test".to_string(),
+                provider: "openai".to_string(),
+                api_key: "key".to_string(),
+                base_url: "https://api.test.com".to_string(),
+                api_path: "/v1".to_string(),
+                model: "gpt-4".to_string(),
+                enabled: true,
+                is_default: false,
+            }],
+            active_vendor_id: Some("v1".to_string()),
+            theme: "dark".to_string(),
+            reminder_minutes: 15,
+            module_enabled: std::collections::HashMap::new(),
+            notes_dir: None,
+            pandoc_path: None,
+            pandoc_reference_doc: None,
+            dashboard_layout: None,
+            plugins: std::collections::HashMap::new(),
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let parsed: ConfigStore = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.vendors.len(), 1);
+        assert_eq!(parsed.active_vendor_id, Some("v1".to_string()));
+        assert_eq!(parsed.theme, "dark");
+        assert_eq!(parsed.reminder_minutes, 15);
+    }
+
+    #[test]
+    fn test_data_store_missing_fields_deserialization() {
+        let json = r#"{"version":1,"tasks":[]}"#;
+        let store: DataStore = serde_json::from_str(json).unwrap();
+        assert_eq!(store.version, 1);
+        assert!(store.tasks.is_empty());
+        assert!(store.daily_completions.is_empty());
+    }
+
+    #[test]
+    fn test_config_store_missing_fields_deserialization() {
+        let json = r#"{}"#;
+        let config: ConfigStore = serde_json::from_str(json).unwrap();
+        assert!(config.vendors.is_empty());
+        assert!(config.active_vendor_id.is_none());
+        assert_eq!(config.theme, "auto");
+        assert_eq!(config.reminder_minutes, 30);
+        assert!(config.plugins.is_empty());
     }
 }

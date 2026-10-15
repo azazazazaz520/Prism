@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::prompt;
-use crate::store;
+use crate::ai::prompt;
 
 /// AI 调用所需的配置（从供应商解析而来）
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -153,7 +152,7 @@ fn extract_json(text: &str) -> Result<String, String> {
 }
 
 /// 将任务序列化为安全的 JSON 字符串（防止注入）
-fn task_to_summary(t: &store::Task) -> String {
+fn task_to_summary(t: &crate::models::Task) -> String {
     serde_json::json!({
         "id": t.id,
         "title": t.title,
@@ -233,7 +232,7 @@ pub async fn parse_wechat(
 
 pub async fn daily_focus(
     settings: &AiSettings,
-    tasks: &[store::Task],
+    tasks: &[crate::models::Task],
 ) -> Result<FocusSuggestion, String> {
     // 仅发送未完成任务摘要（保护隐私）
     let task_summaries: Vec<String> = tasks
@@ -265,7 +264,7 @@ pub async fn daily_focus(
 
 pub async fn overdue_suggest(
     settings: &AiSettings,
-    overdue_tasks: &[store::Task],
+    overdue_tasks: &[crate::models::Task],
 ) -> Result<Vec<OverdueSuggestion>, String> {
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
 
@@ -292,7 +291,7 @@ pub async fn overdue_suggest(
 pub async fn chat(
     settings: &AiSettings,
     message: &str,
-    tasks: &[store::Task],
+    tasks: &[crate::models::Task],
 ) -> Result<String, String> {
     // 构建任务上下文（全部任务，含完成状态）
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
@@ -335,9 +334,9 @@ pub async fn execute(
     settings: &AiSettings,
     mode: &str,
     input: &str,
-    all_tasks: &[store::Task],
+    all_tasks: &[crate::models::Task],
     existing_tags: &[String],
-    today_completed: &[store::Task],
+    today_completed: &[crate::models::Task],
     today_str: &str,
 ) -> Result<AiExecuteResult, String> {
     match mode {

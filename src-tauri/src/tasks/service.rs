@@ -1,7 +1,5 @@
 use serde::Deserialize;
 
-use crate::store;
-
 /// 新增任务的参数（同时作为 Tauri 命令的请求体）
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -37,7 +35,7 @@ fn present_date<'de, D: serde::Deserializer<'de>>(
 }
 
 /// 获取所有活跃任务（过滤已软删除）
-pub fn list(data: &store::DataStore) -> Vec<store::Task> {
+pub fn list(data: &crate::models::DataStore) -> Vec<crate::models::Task> {
     data.tasks
         .iter()
         .filter(|t| !t.is_deleted)
@@ -46,12 +44,12 @@ pub fn list(data: &store::DataStore) -> Vec<store::Task> {
 }
 
 /// 获取所有任务（包含已软删除，供同步配对）
-pub fn list_all(data: &store::DataStore) -> Vec<store::Task> {
+pub fn list_all(data: &crate::models::DataStore) -> Vec<crate::models::Task> {
     data.tasks.clone()
 }
 
 /// 按截止日期筛选任务
-pub fn list_by_date(data: &store::DataStore, date: &str) -> Vec<store::Task> {
+pub fn list_by_date(data: &crate::models::DataStore, date: &str) -> Vec<crate::models::Task> {
     data.tasks
         .iter()
         .filter(|t| t.due_date.as_deref() == Some(date))
@@ -60,7 +58,7 @@ pub fn list_by_date(data: &store::DataStore, date: &str) -> Vec<store::Task> {
 }
 
 /// 获取所有标签（去重排序）
-pub fn all_tags(data: &store::DataStore) -> Vec<String> {
+pub fn all_tags(data: &crate::models::DataStore) -> Vec<String> {
     let mut tags: Vec<String> = data.tasks.iter().flat_map(|t| t.tags.clone()).collect();
     tags.sort();
     tags.dedup();
@@ -68,7 +66,7 @@ pub fn all_tags(data: &store::DataStore) -> Vec<String> {
 }
 
 /// 获取指定日期已完成的每日任务 ID 列表
-pub fn daily_completions(data: &store::DataStore, date: &str) -> Vec<String> {
+pub fn daily_completions(data: &crate::models::DataStore, date: &str) -> Vec<String> {
     data.daily_completions
         .iter()
         .filter(|dc| dc.date == date)
@@ -80,7 +78,10 @@ pub fn daily_completions(data: &store::DataStore, date: &str) -> Vec<String> {
 /// 返回发生变化的任务快照，供统一提交流程保存并生成同步操作。
 /// - 今日有完成记录 → completed = true
 /// - 今日无完成记录 → completed = false（昨日完成的自动清零）
-pub fn reset_daily_tasks(data: &mut store::DataStore, today: &str) -> Vec<store::Task> {
+pub fn reset_daily_tasks(
+    data: &mut crate::models::DataStore,
+    today: &str,
+) -> Vec<crate::models::Task> {
     let today_ids: Vec<String> = data
         .daily_completions
         .iter()
@@ -109,9 +110,9 @@ pub fn reset_daily_tasks(data: &mut store::DataStore, today: &str) -> Vec<store:
 }
 
 /// 新增任务
-pub fn add(data: &mut store::DataStore, input: AddTaskInput) -> store::Task {
+pub fn add(data: &mut crate::models::DataStore, input: AddTaskInput) -> crate::models::Task {
     let now = chrono::Utc::now().to_rfc3339();
-    let task = store::Task {
+    let task = crate::models::Task {
         id: uuid::Uuid::new_v4().to_string(),
         title: input.title,
         completed: false,
@@ -133,9 +134,9 @@ pub fn add(data: &mut store::DataStore, input: AddTaskInput) -> store::Task {
 
 /// 批量新增任务。全部参数先完成校验和规范化，再统一写入候选 DataStore。
 pub fn add_batch(
-    data: &mut store::DataStore,
+    data: &mut crate::models::DataStore,
     inputs: Vec<AddTaskInput>,
-) -> Result<Vec<store::Task>, String> {
+) -> Result<Vec<crate::models::Task>, String> {
     if inputs.is_empty() {
         return Err("没有可导入的任务".into());
     }
@@ -184,16 +185,16 @@ fn normalize_batch_input(index: usize, mut input: AddTaskInput) -> Result<AddTas
 }
 
 /// 切换任务完成状态（自动记录完成/取消时间），返回更新后的任务快照
-pub fn toggle(data: &mut store::DataStore, id: &str) -> Option<store::Task> {
+pub fn toggle(data: &mut crate::models::DataStore, id: &str) -> Option<crate::models::Task> {
     let completed = !data.tasks.iter().find(|task| task.id == id)?.completed;
     set_completed(data, id, completed)
 }
 
 pub fn set_completed(
-    data: &mut store::DataStore,
+    data: &mut crate::models::DataStore,
     id: &str,
     completed: bool,
-) -> Option<store::Task> {
+) -> Option<crate::models::Task> {
     let now = chrono::Utc::now().to_rfc3339();
     let task = data
         .tasks
@@ -214,11 +215,11 @@ pub fn set_completed(
 
 /// 按日期设置每日任务完成状态，并返回最新任务。
 pub fn set_daily_completed(
-    data: &mut store::DataStore,
+    data: &mut crate::models::DataStore,
     id: &str,
     date: &str,
     completed: bool,
-) -> Option<store::Task> {
+) -> Option<crate::models::Task> {
     let task = data
         .tasks
         .iter()
@@ -229,7 +230,7 @@ pub fn set_daily_completed(
         .iter()
         .any(|dc| dc.task_id == id && dc.date == date);
     if completed && !exists {
-        data.daily_completions.push(store::DailyCompletion {
+        data.daily_completions.push(crate::models::DailyCompletion {
             task_id: id.to_string(),
             date: date.to_string(),
             profile_id: profile_id.clone(),
@@ -241,9 +242,9 @@ pub fn set_daily_completed(
     let task = set_completed(data, id, completed);
     if !completed && !exists {
         // 取消操作保留删除意图，即使本地尚未收到对应的远端记录。
-        crate::outbox::append(
+        crate::tasks::outbox::append(
             data,
-            crate::outbox::QueueOperation {
+            crate::models::QueueOperation {
                 kind: "delete".into(),
                 table: "daily_completions".into(),
                 data: serde_json::json!({"task_id":id,"date":date,"profile_id":profile_id}),
@@ -254,7 +255,10 @@ pub fn set_daily_completed(
 }
 
 /// 在最新任务上更新请求提供的字段。
-pub fn update(data: &mut store::DataStore, input: UpdateTaskInput) -> Option<store::Task> {
+pub fn update(
+    data: &mut crate::models::DataStore,
+    input: UpdateTaskInput,
+) -> Option<crate::models::Task> {
     let now = chrono::Utc::now().to_rfc3339();
     let task = data
         .tasks
@@ -283,7 +287,7 @@ pub fn update(data: &mut store::DataStore, input: UpdateTaskInput) -> Option<sto
 }
 
 /// 软删除任务（含级联子任务删除 + 清理孤儿 daily_completions）
-pub fn delete(data: &mut store::DataStore, id: &str) -> Option<()> {
+pub fn delete(data: &mut crate::models::DataStore, id: &str) -> Option<()> {
     let now = chrono::Utc::now().to_rfc3339();
     // 标记主任务
     let task = data.tasks.iter_mut().find(|t| t.id == id)?;
@@ -304,7 +308,7 @@ pub fn delete(data: &mut store::DataStore, id: &str) -> Option<()> {
 }
 
 /// 恢复软删除任务，并更新时间戳以便跨设备同步撤销操作。
-pub fn restore(data: &mut store::DataStore, id: &str) -> Option<()> {
+pub fn restore(data: &mut crate::models::DataStore, id: &str) -> Option<()> {
     let task = data.tasks.iter_mut().find(|t| t.id == id)?;
     if !task.is_deleted {
         return Some(());
@@ -315,7 +319,7 @@ pub fn restore(data: &mut store::DataStore, id: &str) -> Option<()> {
 }
 
 /// 一键软删除所有已完成任务（跳过每日任务，每日任务每天自动重置）
-pub fn clear_completed(data: &mut store::DataStore) {
+pub fn clear_completed(data: &mut crate::models::DataStore) {
     let now = chrono::Utc::now().to_rfc3339();
     let completed_ids: Vec<String> = data
         .tasks
@@ -335,7 +339,7 @@ pub fn clear_completed(data: &mut store::DataStore) {
 }
 
 /// 删除指定标签（从所有任务中移除该标签）
-pub fn delete_tag(data: &mut store::DataStore, tag: &str) {
+pub fn delete_tag(data: &mut crate::models::DataStore, tag: &str) {
     for task in data.tasks.iter_mut() {
         let count = task.tags.len();
         task.tags.retain(|t| t != tag);
@@ -347,8 +351,8 @@ pub fn delete_tag(data: &mut store::DataStore, tag: &str) {
 
 /// 校正远端完成记录快照，保留待同步操作并丢弃跨越本地提交的旧快照。
 pub fn merge_daily_snapshot(
-    data: &mut store::DataStore,
-    remote: Vec<store::DailyCompletion>,
+    data: &mut crate::models::DataStore,
+    remote: Vec<crate::models::DailyCompletion>,
     replace: bool,
     profile: Option<&str>,
     revision: Option<u64>,
@@ -373,7 +377,7 @@ pub fn merge_daily_snapshot(
         }
     }
     for completion in remote {
-        if crate::outbox::pending_daily(data, &completion.task_id, &completion.date) {
+        if crate::tasks::outbox::pending_daily(data, &completion.task_id, &completion.date) {
             continue;
         }
         if let Some(local) = data
@@ -394,21 +398,20 @@ pub fn merge_daily_snapshot(
 #[cfg(test)]
 mod tests {
     use super::{add_batch, AddTaskInput};
-    use crate::store;
 
     #[test]
     fn remote_snapshot_preserves_pending_daily_insert_and_delete() {
-        let mut data = store::default_data_store();
-        let completion = |id: &str| store::DailyCompletion {
+        let mut data = crate::models::default_data_store();
+        let completion = |id: &str| crate::models::DailyCompletion {
             task_id: id.into(),
             date: "2026-10-13".into(),
             profile_id: Some("profile".into()),
         };
         data.daily_completions = vec![completion("insert"), completion("stale")];
         for (kind, id) in [("upsert", "insert"), ("delete", "delete")] {
-            crate::outbox::append(
+            crate::tasks::outbox::append(
                 &mut data,
-                crate::outbox::QueueOperation {
+                crate::models::QueueOperation {
                     kind: kind.into(),
                     table: "daily_completions".into(),
                     data: serde_json::to_value(completion(id)).unwrap(),
@@ -449,7 +452,7 @@ mod tests {
 
     #[test]
     fn add_batch_validates_all_items_before_mutating_store() {
-        let mut data = store::default_data_store();
+        let mut data = crate::models::default_data_store();
         let error = add_batch(
             &mut data,
             vec![input("第一项", None), input("  ", Some("2026-08-20"))],
@@ -462,7 +465,7 @@ mod tests {
 
     #[test]
     fn add_batch_normalizes_fields_and_returns_created_tasks() {
-        let mut data = store::default_data_store();
+        let mut data = crate::models::default_data_store();
         let created = add_batch(
             &mut data,
             vec![
@@ -480,7 +483,7 @@ mod tests {
 
     #[test]
     fn add_batch_rejects_invalid_date_without_mutating_store() {
-        let mut data = store::default_data_store();
+        let mut data = crate::models::default_data_store();
         let error = add_batch(&mut data, vec![input("提交报告", Some("明天"))])
             .expect_err("无效日期应被拒绝");
 

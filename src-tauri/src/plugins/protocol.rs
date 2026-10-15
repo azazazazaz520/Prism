@@ -1,3 +1,7 @@
+use crate::AppState;
+use std::sync::Arc;
+use tauri::{Manager, Runtime, UriSchemeResponder};
+
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -25,8 +29,7 @@ impl TokenRegistry {
         }
     }
 
-    /// 注册一个一次性 token（3s TTL），返回 token 字符串
-    /// 注册一次性令牌（3s TTL），当前预留供未来 API 使用。
+    /// 注册有效期为 3 秒的一次性令牌，返回令牌字符串。
     #[allow(dead_code)]
     pub fn register(&self, plugin_id: &str, permissions: &[String]) -> String {
         let token = uuid::Uuid::new_v4().to_string();
@@ -59,8 +62,7 @@ impl TokenRegistry {
         Ok(entry)
     }
 
-    /// 主动注销 token
-    /// 主动注销令牌，当前预留供未来 API 使用。
+    /// 主动注销令牌。
     #[allow(dead_code)]
     pub fn revoke(&self, token: &str) {
         let mut map = self.tokens.lock().unwrap();
@@ -170,4 +172,97 @@ pub fn handle_api_request(
     }
 
     Ok(generate_api_module(module_name, plugin_id))
+}
+
+pub(crate) async fn respond_to_api_request<R: Runtime>(
+    app_handle: tauri::AppHandle<R>,
+    request: tauri::http::Request<Vec<u8>>,
+    responder: UriSchemeResponder,
+    registry: Arc<TokenRegistry>,
+) {
+    let state = app_handle.state::<AppState>();
+    let module_name = request
+        .uri()
+        .path()
+        .trim_start_matches('/')
+        .trim_end_matches(".js");
+    let (plugin_id, token) = parse_api_credentials(&request.uri().to_string());
+
+    if module_name == "module" {
+        respond_with_plugin_module(&state, &token, responder);
+        return;
+    }
+
+    let response = match handle_api_request(&registry, module_name, &plugin_id, &token) {
+        Ok(body) => javascript_response(200, body),
+        Err(error) => javascript_response(403, format!("// Error: {error}")),
+    };
+    responder.respond(response);
+}
+
+fn parse_api_credentials(uri: &str) -> (String, String) {
+    let params: HashMap<String, String> = uri
+        .split('?')
+        .nth(1)
+        .unwrap_or("")
+        .split('&')
+        .filter_map(|part| {
+            let (key, value) = part.split_once('=')?;
+            Some((key.to_string(), value.to_string()))
+        })
+        .collect();
+    (
+        params.get("pluginId").cloned().unwrap_or_default(),
+        params.get("token").cloned().unwrap_or_default(),
+    )
+}
+
+fn respond_with_plugin_module(
+    state: &tauri::State<'_, AppState>,
+    token: &str,
+    responder: UriSchemeResponder,
+) {
+    let source = state.plugin_modules.lock().unwrap().remove(token);
+    let response = match source {
+        Some(body) => javascript_response(200, body),
+        None => javascript_response(404, "// Error: module not found or token expired".into()),
+    };
+    responder.respond(response);
+}
+
+fn javascript_response(status: u16, body: String) -> tauri::http::Response<Vec<u8>> {
+    let mut builder =
+        tauri::http::Response::builder().header("Content-Type", "application/javascript");
+    if status != 200 {
+        builder = builder.status(status);
+    }
+    builder
+        .body(body.into_bytes())
+        .expect("固定的 JavaScript 响应头应始终有效")
+}
+
+/// 将插件主模块源码注册到内存中，返回 URL 供 import() 加载。
+/// token 用于一次性安全校验，protocol handler 响应后即销。
+pub fn register_plugin_module(
+    state: &AppState,
+    plugin_id: String,
+    token: String,
+    source: String,
+) -> Result<String, String> {
+    let mut modules = state.plugin_modules.lock().unwrap();
+    modules.insert(token.clone(), source);
+    Ok(format!(
+        "prism-api://localhost/module.js?pluginId={}&token={}",
+        urlencoding(&plugin_id),
+        urlencoding(&token)
+    ))
+}
+
+fn urlencoding(s: &str) -> String {
+    // 简单的手动 URL 编码，避免引入额外依赖
+    s.replace('%', "%25")
+        .replace(' ', "%20")
+        .replace('&', "%26")
+        .replace('=', "%3D")
+        .replace('?', "%3F")
 }

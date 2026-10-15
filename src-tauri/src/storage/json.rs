@@ -1,150 +1,8 @@
-use std::fs;
-use std::io::Write;
-use std::path::PathBuf;
-
+use super::paths::*;
 use crate::logging::{LogLevel, LogWriter};
 use crate::models::*;
-
-// ═══════════════════════════════════════════════════════════════
-//  路径解析
-// ═══════════════════════════════════════════════════════════════
-
-/// 获取 Workspace 根目录
-pub fn get_workspace_dir() -> PathBuf {
-    let mut path = dirs::home_dir().unwrap_or_default();
-    path.push(".prism");
-    path
-}
-
-/// 获取结构化日志目录
-pub fn get_logs_dir() -> PathBuf {
-    get_workspace_dir().join("logs")
-}
-
-/// 获取任务数据文件路径（data.json）
-pub fn get_data_path() -> PathBuf {
-    get_workspace_dir().join("data.json")
-}
-
-/// 获取同步状态文件路径（sync.json）
-pub fn get_sync_path() -> PathBuf {
-    get_workspace_dir().join("sync.json")
-}
-
-/// 获取应用配置文件路径（config.json）
-pub fn get_config_path() -> PathBuf {
-    get_workspace_dir().join("config.json")
-}
-
-/// 获取默认笔记工作区路径。
-pub fn get_default_notes_dir() -> PathBuf {
-    dirs::document_dir()
-        .or_else(dirs::home_dir)
-        .unwrap_or_default()
-        .join("Prism")
-}
-
-/// 获取笔记目录（优先使用自定义路径，否则使用默认）
-pub fn get_notes_dir(config: &ConfigStore) -> PathBuf {
-    if let Some(ref custom_dir) = config.notes_dir {
-        custom_dir.clone()
-    } else {
-        get_default_notes_dir()
-    }
-}
-
-/// 获取插件目录
-pub fn get_plugins_dir() -> PathBuf {
-    get_workspace_dir().join("plugins")
-}
-
-/// 获取脚本目录
-pub fn get_scripts_dir() -> PathBuf {
-    get_workspace_dir().join("scripts")
-}
-
-// ═══════════════════════════════════════════════════════════════
-//  Workspace 初始化
-// ═══════════════════════════════════════════════════════════════
-
-/// 确保应用数据目录和默认笔记工作区存在。
-/// 目录创建失败时记录 stderr 但不阻塞启动（用户可能无权限写入父目录）
-pub fn ensure_workspace(logger: &LogWriter) {
-    let root = get_workspace_dir();
-    if let Err(e) = fs::create_dir_all(&root) {
-        eprintln!("[store] 无法创建 workspace 目录 {:?}: {}", root, e);
-        record_workspace_error(logger, "persistence.workspace_create_failed", &root, &e);
-    }
-    let notes_dir_to_create = get_default_notes_dir();
-    if let Err(e) = fs::create_dir_all(&notes_dir_to_create) {
-        eprintln!("[store] 无法创建 notes 目录: {}", e);
-        record_workspace_error(
-            logger,
-            "persistence.notes_create_failed",
-            &notes_dir_to_create,
-            &e,
-        );
-    }
-    if let Err(e) = fs::create_dir_all(root.join("prompts")) {
-        eprintln!("[store] 无法创建 prompts 目录: {}", e);
-        record_workspace_error(
-            logger,
-            "persistence.prompts_create_failed",
-            &root.join("prompts"),
-            &e,
-        );
-    }
-    if let Err(e) = fs::create_dir_all(root.join("plugins")) {
-        eprintln!("[store] 无法创建 plugins 目录: {}", e);
-        record_workspace_error(
-            logger,
-            "persistence.plugins_create_failed",
-            &root.join("plugins"),
-            &e,
-        );
-    }
-    if let Err(e) = fs::create_dir_all(root.join("scripts")) {
-        eprintln!("[store] 无法创建 scripts 目录: {}", e);
-        record_workspace_error(
-            logger,
-            "persistence.scripts_create_failed",
-            &root.join("scripts"),
-            &e,
-        );
-    }
-    // notes.meta.json 不存在时初始化为空数组
-    let meta_path = root.join("notes.meta.json");
-    if !meta_path.exists() {
-        if let Err(e) = fs::write(&meta_path, "[]") {
-            eprintln!("[store] 无法初始化 notes.meta.json: {}", e);
-            record_workspace_error(
-                logger,
-                "persistence.notes_meta_create_failed",
-                &meta_path,
-                &e,
-            );
-        }
-    }
-}
-
-fn record_workspace_error(
-    logger: &LogWriter,
-    event: &str,
-    path: &std::path::Path,
-    error: &std::io::Error,
-) {
-    let _ = logger.append_internal(
-        LogLevel::Error,
-        "persistence",
-        event,
-        "初始化工作区失败",
-        serde_json::json!({ "path": path.display().to_string(), "error": error.to_string() }),
-    );
-}
-
-// ═══════════════════════════════════════════════════════════════
-//  JSON 持久化
-// ═══════════════════════════════════════════════════════════════
+use std::fs;
+use std::io::Write;
 
 /// 解析失败时将损坏文件备份为 `<文件名>.corrupt-<时间戳>`，保留用户数据以便手动恢复。
 /// 备份成功后原文件被移走，后续写入将创建新文件。
@@ -252,7 +110,7 @@ pub fn backup_data_for_queue_migration() -> Result<(), String> {
     Ok(())
 }
 
-pub fn backup_legacy_queue(operations: &[crate::outbox::QueueOperation]) -> Result<(), String> {
+pub fn backup_legacy_queue(operations: &[crate::models::QueueOperation]) -> Result<(), String> {
     let path = get_workspace_dir().join("legacy-queue.before-outbox.json");
     if !operations.is_empty() && !path.exists() {
         let content = serde_json::to_vec_pretty(operations).map_err(|error| error.to_string())?;
@@ -389,6 +247,7 @@ pub fn save_sync(store: &SyncStore) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
     fn logs_dir_is_inside_workspace() {

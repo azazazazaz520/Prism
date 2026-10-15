@@ -4,8 +4,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use crate::note_service;
-use crate::persistence;
+use crate::notes;
 
 pub(crate) const RECOVERY_CONFLICT: &str = "NOTE_RECOVERY_CONFLICT";
 
@@ -155,7 +154,7 @@ impl RecoveryStore {
             return Err("恢复快照不属于当前笔记工作区".into());
         }
 
-        let target = note_service::resolve_note_path(&current_workspace, &snapshot.note_path)?;
+        let target = notes::resolve_note_path(&current_workspace, &snapshot.note_path)?;
         let current_mtime = file_mtime(&target)?;
         match (&snapshot.document_mtime, &current_mtime) {
             (Some(expected), Some(current)) if expected != current => {
@@ -174,14 +173,13 @@ impl RecoveryStore {
             .as_ref()
             .and(snapshot.document_mtime.as_ref())
             .cloned();
-        let restored_mtime = note_service::write_note_content(
+        let restored_mtime = notes::write_note_content(
             &current_workspace,
             &snapshot.note_path,
             &snapshot.content,
             expected_mtime_for_write,
         )?;
-        let actual_content =
-            note_service::read_note_content(&current_workspace, &snapshot.note_path)?;
+        let actual_content = notes::read_note_content(&current_workspace, &snapshot.note_path)?;
         if actual_content != snapshot.content {
             return Err("恢复后内容校验失败".into());
         }
@@ -275,7 +273,7 @@ fn file_mtime(path: &Path) -> Result<Option<String>, String> {
 }
 
 fn store() -> RecoveryStore {
-    RecoveryStore::new(persistence::get_workspace_dir().join("recovery"))
+    RecoveryStore::new(crate::storage::paths::get_workspace_dir().join("recovery"))
 }
 
 pub fn save(
@@ -290,7 +288,7 @@ pub fn save(
     let workspace_path = workspace_path
         .canonicalize()
         .map_err(|e| format!("笔记目录解析失败: {e}"))?;
-    note_service::resolve_note_path(&workspace_path, &note_path)?;
+    notes::resolve_note_path(&workspace_path, &note_path)?;
     let snapshot = NoteRecoverySnapshot {
         id: uuid::Uuid::new_v4().simple().to_string(),
         workspace_path: workspace_path.to_string_lossy().to_string(),

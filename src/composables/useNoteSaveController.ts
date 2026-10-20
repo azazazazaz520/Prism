@@ -248,6 +248,18 @@ export function createNoteSaveController(delay = 500) {
     return lastResults.get(path) ?? null;
   }
 
+  /** 立即执行全部已接受的写入，返回每个路径最后一次保存结果。 */
+  async function flushAll(): Promise<NoteSaveResult[]> {
+    for (const timer of timers.values()) clearTimeout(timer);
+    timers.clear();
+
+    while (pending.size > 0 || running.size > 0) {
+      const paths = new Set([...pending.keys(), ...running.keys()]);
+      await Promise.all([...paths].map((path) => drain(path)));
+    }
+    return [...lastResults.values()];
+  }
+
   function dispose() {
     for (const timer of timers.values()) clearTimeout(timer);
     timers.clear();
@@ -263,6 +275,7 @@ export function createNoteSaveController(delay = 500) {
     scheduleResult,
     getLatestSnapshot,
     flush,
+    flushAll,
     dispose,
   };
 }

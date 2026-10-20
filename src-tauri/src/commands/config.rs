@@ -1,6 +1,7 @@
+use crate::app::tray::{self, CloseToTrayStatus};
 use crate::AppState;
 use std::path::PathBuf;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 
 /// 设置任务到期提醒的提前分钟数（0 表示关闭提醒）
 #[tauri::command]
@@ -13,6 +14,21 @@ pub fn set_reminder_minutes(state: tauri::State<AppState>, minutes: u32) -> Resu
 #[tauri::command]
 pub fn get_reminder_minutes(state: tauri::State<AppState>) -> u32 {
     state.with_config(|config| config.reminder_minutes)
+}
+
+/// 读取关闭到托盘的完整设置与运行状态快照。
+#[tauri::command]
+pub fn get_close_to_tray(app: tauri::AppHandle) -> CloseToTrayStatus {
+    app.state::<tray::CloseToTrayState>().snapshot(&app)
+}
+
+/// 提交关闭到托盘的目标值；成功后返回最新快照。
+#[tauri::command]
+pub async fn set_close_to_tray(
+    app: tauri::AppHandle,
+    enabled: bool,
+) -> Result<CloseToTrayStatus, String> {
+    tray::set_enabled(app, enabled).await
 }
 
 // ═══════════════════════════════════════════

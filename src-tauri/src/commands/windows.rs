@@ -1,3 +1,5 @@
+use crate::app::exit::{self, AppExitState, ExitPreparationReport};
+use crate::app::workspace_windows;
 use tauri::{LogicalSize, Manager};
 
 /// 显示并聚焦悬浮小窗。
@@ -65,6 +67,38 @@ pub fn hide_selector_window(app: tauri::AppHandle) -> Result<(), String> {
         win.hide().map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+/// 登记当前完整窗口已挂接退出保存处理器。
+#[tauri::command]
+pub fn register_exit_participant(
+    window: tauri::WebviewWindow,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    if !workspace_windows::is_application_window(window.label()) {
+        return Err("只有完整应用窗口可以参与退出保存".into());
+    }
+    app.state::<exit::ExitCoordinator>()
+        .register_ready(window.label());
+    Ok(())
+}
+
+/// 提交当前窗口的退出保存结果；窗口身份由命令注入取得。
+#[tauri::command]
+pub fn complete_exit_preparation(
+    window: tauri::WebviewWindow,
+    app: tauri::AppHandle,
+    request_id: u64,
+    report: ExitPreparationReport,
+) -> Result<(), String> {
+    exit::complete(&app, window.label(), request_id, report)
+}
+
+/// 查询当前窗口看到的退出请求与完成状态。
+#[tauri::command]
+pub fn get_app_exit_state(window: tauri::WebviewWindow, app: tauri::AppHandle) -> AppExitState {
+    app.state::<exit::ExitCoordinator>()
+        .state_for(window.label())
 }
 
 /// 用系统默认浏览器打开 URL（仅允许 http / https 协议，防止命令注入）

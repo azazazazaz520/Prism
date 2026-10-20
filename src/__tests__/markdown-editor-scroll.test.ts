@@ -157,4 +157,15 @@ describe('Markdown 编辑器滚动稳定性', () => {
     view.dispatch({ selection: { anchor: markdownWithLinks.length } });
     expect(previewText(parent)).toBe('label alt tail');
   });
+
+  it('禁用时编辑器内容不可编辑', async () => {
+    parent = document.createElement('div');
+    document.body.appendChild(parent);
+    app = createApp(MarkdownEditor, { modelValue: markdown, disabled: true });
+    app.mount(parent);
+
+    await waitForEditor(parent);
+
+    expect(parent.querySelector('.cm-content')?.getAttribute('contenteditable')).toBe('false');
+  });
 });

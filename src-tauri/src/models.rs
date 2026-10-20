@@ -147,6 +147,9 @@ pub struct ConfigStore {
     pub theme: String,
     #[serde(default = "default_reminder_minutes")]
     pub reminder_minutes: u32,
+    /// 关闭主窗口或最后一个未隐藏完整窗口时隐藏到系统托盘。
+    #[serde(default)]
+    pub close_to_tray: bool,
     /// 模块启用状态（key=AppModule id, value=enabled）
     /// 模块不在 map 中时默认启用
     #[serde(default)]
@@ -202,6 +205,7 @@ pub fn default_config_store() -> ConfigStore {
         active_vendor_id: None,
         theme: default_theme(),
         reminder_minutes: default_reminder_minutes(),
+        close_to_tray: false,
         module_enabled: std::collections::HashMap::new(),
         notes_dir: None,
         pandoc_path: None,
@@ -255,6 +259,7 @@ mod tests {
         assert!(config.active_vendor_id.is_none());
         assert_eq!(config.theme, "auto");
         assert_eq!(config.reminder_minutes, 30);
+        assert!(!config.close_to_tray);
         assert!(config.plugins.is_empty());
     }
 
@@ -335,6 +340,7 @@ mod tests {
             active_vendor_id: Some("v1".to_string()),
             theme: "dark".to_string(),
             reminder_minutes: 15,
+            close_to_tray: true,
             module_enabled: std::collections::HashMap::new(),
             notes_dir: None,
             pandoc_path: None,
@@ -348,6 +354,15 @@ mod tests {
         assert_eq!(parsed.active_vendor_id, Some("v1".to_string()));
         assert_eq!(parsed.theme, "dark");
         assert_eq!(parsed.reminder_minutes, 15);
+        assert!(parsed.close_to_tray);
+    }
+
+    #[test]
+    fn test_config_store_without_close_to_tray_stays_disabled() {
+        let json = r#"{"reminder_minutes":15,"theme":"dark"}"#;
+        let config: ConfigStore = serde_json::from_str(json).unwrap();
+        assert!(!config.close_to_tray);
+        assert_eq!(config.reminder_minutes, 15);
     }
 
     #[test]

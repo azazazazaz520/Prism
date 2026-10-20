@@ -146,6 +146,49 @@ describe('笔记保存队列', () => {
     controller.dispose();
   });
 
+  it('flushAll 会立即执行全部路径的已接受写入并返回各路径最后结果', async () => {
+    vi.useFakeTimers();
+    const controller = createNoteSaveController(500);
+    const writes: string[] = [];
+    for (const path of ['notes/a.md', 'notes/b.md']) {
+      controller.scheduleResult({
+        path,
+        snapshot: { content: path, expectedMtime: null },
+        source: 'task-projection',
+        write: async (request) => {
+          writes.push(request.path);
+          return 'mtime-1';
+        },
+      });
+    }
+
+    const results = await controller.flushAll();
+
+    expect(writes.sort()).toEqual(['notes/a.md', 'notes/b.md']);
+    expect(results.map((result) => result.path).sort()).toEqual(['notes/a.md', 'notes/b.md']);
+    expect(results.every((result) => result.status === 'saved')).toBe(true);
+    controller.dispose();
+    vi.useRealTimers();
+  });
+
+  it('flushAll 保留失败结果用于退出前检查', async () => {
+    const controller = createNoteSaveController(0);
+    controller.scheduleResult({
+      path: 'notes/a.md',
+      snapshot: { content: '内容', expectedMtime: null },
+      source: 'editor',
+      write: async () => {
+        throw new Error('写入失败');
+      },
+    });
+
+    const results = await controller.flushAll();
+
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe('failed');
+    controller.dispose();
+  });
+
   it('任务投影可以基于编辑器尚未写入的最新快照排队', async () => {
     const controller = createNoteSaveController(0);
     const writes: string[] = [];

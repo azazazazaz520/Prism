@@ -33,6 +33,8 @@ export function useNoteTaskSync(
   let indexGeneration = 0;
   let indexPromise: Promise<void> | null = null;
   const pendingTaskProjections = new Map<string, Pick<Task, 'id' | 'title' | 'completed'>>();
+  let projectionPaused = false;
+  const pausedTaskProjections = new Map<string, Pick<Task, 'id' | 'title' | 'completed'>>();
   const referenceIndex = ref<TaskReferenceIndex>({
     byTaskId: new Map(),
     byNotePath: new Map(),
@@ -352,8 +354,9 @@ export function useNoteTaskSync(
     }
   }
 
-  async function projectTask(task: Pick<Task, 'id' | 'title' | 'completed'>) {
-    pendingTaskProjections.set(task.id, task);
+  const activeProjections = new Set<Promise<void>>();
+
+  async function writeProjection(task: Pick<Task, 'id' | 'title' | 'completed'>) {
     const references = referencesForTask(referenceIndex.value, task.id);
     const paths = [...new Set(references.map((reference) => reference.notePath))];
     await Promise.all(
@@ -371,6 +374,28 @@ export function useNoteTaskSync(
         }
       }),
     );
+  }
+
+  async function projectTask(task: Pick<Task, 'id' | 'title' | 'completed'>) {
+    pendingTaskProjections.set(task.id, task);
+    if (projectionPaused) {
+      pausedTaskProjections.set(task.id, task);
+      return;
+    }
+    const operation = writeProjection(task);
+    activeProjections.add(operation);
+    try {
+      await operation;
+    } finally {
+      activeProjections.delete(operation);
+    }
+  }
+
+  /** 等待当前窗口已经接受的任务投影写入结束。 */
+  async function settleProjections() {
+    while (activeProjections.size > 0) {
+      await Promise.allSettled([...activeProjections]);
+    }
   }
 
   async function removeTaskFromAllNotes(taskId: string) {
@@ -407,6 +432,23 @@ export function useNoteTaskSync(
     return writingPaths.has(path);
   }
 
+  /** 冻结期间暂缓新增的任务投影；解除后补发暂缓的投影。 */
+  async function setProjectionPaused(paused: boolean) {
+    if (projectionPaused === paused) return;
+    projectionPaused = paused;
+    if (paused || pausedTaskProjections.size === 0) return;
+
+    const tasks = [...pausedTaskProjections.values()];
+    pausedTaskProjections.clear();
+    for (const task of tasks) {
+      try {
+        await projectTask(task);
+      } catch {
+        pausedTaskProjections.set(task.id, task);
+      }
+    }
+  }
+
   return {
     noteContents,
     referenceIndex,
@@ -425,5 +467,7 @@ export function useNoteTaskSync(
     projectTask,
     removeTaskFromAllNotes,
     isProjecting,
+    setProjectionPaused,
+    settleProjections,
   };
 }

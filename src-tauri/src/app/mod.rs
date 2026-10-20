@@ -1,7 +1,9 @@
+pub(crate) mod exit;
 mod reminder;
 mod shortcuts;
 mod startup;
 pub(crate) mod state;
+pub(crate) mod tray;
 pub(crate) mod workspace_windows;
 
 use crate::{commands, logging, plugins::protocol, tasks::outbox, AppState};
@@ -64,10 +66,13 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(workspace_windows::WorkspaceWindows::default())
+        .manage(tray::CloseToTrayState::default())
+        .manage(tray::OperationGate::default())
+        .manage(exit::ExitCoordinator::default())
         // 单实例插件必须先注册，Windows/Linux 深链接会通过命令行参数转发到现有实例。
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             if !argv.iter().any(|arg| arg.starts_with("prism:")) {
-                workspace_windows::request_new_workspace(app);
+                workspace_windows::handle_second_launch(app);
             }
         }))
         .plugin(tauri_plugin_deep_link::init())
@@ -128,9 +133,14 @@ pub fn run() {
             commands::windows::show_import_window,
             commands::windows::hide_import_window,
             commands::windows::hide_selector_window,
+            commands::windows::register_exit_participant,
+            commands::windows::complete_exit_preparation,
+            commands::windows::get_app_exit_state,
             // 配置命令
             commands::config::set_reminder_minutes,
             commands::config::get_reminder_minutes,
+            commands::config::get_close_to_tray,
+            commands::config::set_close_to_tray,
             commands::config::get_ai_settings_all,
             commands::config::get_vendors,
             commands::config::add_vendor,

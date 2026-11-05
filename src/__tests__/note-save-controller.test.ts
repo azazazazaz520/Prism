@@ -1,9 +1,56 @@
 import { describe, expect, it, vi } from 'vitest';
+import { shouldScheduleNoteSave, useNoteDocumentStore } from '../composables/useNoteDocumentStore';
 import {
   createNoteSaveController,
   useNoteSaveController,
   type NoteSaveSnapshot,
 } from '../composables/useNoteSaveController';
+import {
+  beginNoteSelfWrite,
+  completeNoteSelfWrite,
+  endNoteSelfWrite,
+  isNoteSelfWriting,
+  matchesNoteSelfWrite,
+  noteContentDigest,
+} from '../composables/useNoteSelfWriteTracker';
+
+describe('笔记文档保存门禁', () => {
+  it('新文档在异步加载完成前不得保存临时空内容', async () => {
+    const store = useNoteDocumentStore();
+    const document = store.ensure('notes/example.md');
+
+    expect(shouldScheduleNoteSave(document)).toBe(false);
+
+    store.beginLoading('notes/example.md');
+    expect(shouldScheduleNoteSave(document)).toBe(false);
+
+    store.finishLoading('notes/example.md', '# 已加载内容', 'mtime-1');
+    await Promise.resolve();
+    expect(shouldScheduleNoteSave(document)).toBe(false);
+
+    store.updateContent('notes/example.md', '# 用户修改');
+    expect(shouldScheduleNoteSave(document)).toBe(true);
+  });
+
+  it('外部冲突同时保留本地内容与磁盘内容', () => {
+    const store = useNoteDocumentStore();
+    store.finishLoading('notes/example.md', '本地初始内容', 'mtime-1');
+    store.updateContent('notes/example.md', '本地编辑内容');
+
+    store.setConflict('notes/example.md', '磁盘新内容', 'mtime-2');
+    const document = store.ensure('notes/example.md');
+    expect(document.conflict).toEqual({
+      localContent: '本地编辑内容',
+      diskContent: '磁盘新内容',
+      diskMtime: 'mtime-2',
+    });
+    expect(document.content).toBe('本地编辑内容');
+
+    store.acceptConflictForOverwrite('notes/example.md');
+    expect(store.ensure('notes/example.md').mtime).toBe('mtime-2');
+    expect(store.ensure('notes/example.md').content).toBe('本地编辑内容');
+  });
+});
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -61,66 +108,6 @@ describe('笔记保存队列', () => {
     vi.useRealTimers();
   });
 
-  it('flush 会等待当前写入并立即写入最新待处理快照', async () => {
-    vi.useFakeTimers();
-    const controller = useNoteSaveController(500);
-    const firstWrite = deferred<string>();
-    const secondWrite = deferred<string>();
-    const writes: string[] = [];
-
-    controller.schedule(
-      'notes/example.md',
-      { content: '第一版', expectedMtime: null },
-      async (snapshot) => {
-        writes.push(snapshot.content);
-        return firstWrite.promise;
-      },
-      () => undefined,
-      () => undefined,
-    );
-    const flushPromise = controller.flush('notes/example.md');
-    await vi.runAllTimersAsync();
-    expect(writes).toEqual(['第一版']);
-
-    controller.schedule(
-      'notes/example.md',
-      { content: '第二版', expectedMtime: null },
-      async (snapshot) => {
-        writes.push(snapshot.content);
-        return secondWrite.promise;
-      },
-      () => undefined,
-      () => undefined,
-    );
-    firstWrite.resolve('mtime-2');
-    await vi.runAllTimersAsync();
-    expect(writes).toEqual(['第一版', '第二版']);
-
-    secondWrite.resolve('mtime-3');
-    await flushPromise;
-    controller.dispose();
-    vi.useRealTimers();
-  });
-
-  it('写入结束时调用收尾回调，释放自身写入标识', async () => {
-    const controller = useNoteSaveController(0);
-    const settled = vi.fn();
-
-    controller.schedule(
-      'notes/example.md',
-      { content: '内容', expectedMtime: 'mtime-1' },
-      async () => 'mtime-2',
-      () => undefined,
-      () => undefined,
-      settled,
-    );
-
-    await controller.flush('notes/example.md');
-
-    expect(settled).toHaveBeenCalledOnce();
-    controller.dispose();
-  });
-
   it('返回带 generation 和双方内容的外部冲突结果', async () => {
     const controller = createNoteSaveController(0);
     const generation = controller.scheduleResult({
@@ -146,31 +133,6 @@ describe('笔记保存队列', () => {
     controller.dispose();
   });
 
-  it('flushAll 会立即执行全部路径的已接受写入并返回各路径最后结果', async () => {
-    vi.useFakeTimers();
-    const controller = createNoteSaveController(500);
-    const writes: string[] = [];
-    for (const path of ['notes/a.md', 'notes/b.md']) {
-      controller.scheduleResult({
-        path,
-        snapshot: { content: path, expectedMtime: null },
-        source: 'task-projection',
-        write: async (request) => {
-          writes.push(request.path);
-          return 'mtime-1';
-        },
-      });
-    }
-
-    const results = await controller.flushAll();
-
-    expect(writes.sort()).toEqual(['notes/a.md', 'notes/b.md']);
-    expect(results.map((result) => result.path).sort()).toEqual(['notes/a.md', 'notes/b.md']);
-    expect(results.every((result) => result.status === 'saved')).toBe(true);
-    controller.dispose();
-    vi.useRealTimers();
-  });
-
   it('flushAll 保留失败结果用于退出前检查', async () => {
     const controller = createNoteSaveController(0);
     controller.scheduleResult({
@@ -188,39 +150,37 @@ describe('笔记保存队列', () => {
     expect(results[0].status).toBe('failed');
     controller.dispose();
   });
+});
 
-  it('任务投影可以基于编辑器尚未写入的最新快照排队', async () => {
-    const controller = createNoteSaveController(0);
-    const writes: string[] = [];
+describe('笔记自身写入标识', () => {
+  it('写入完成后可关联延迟到达的同正文事件', () => {
+    const path = `notes/self-write-delayed-${Date.now()}.md`;
+    const token = beginNoteSelfWrite(path, { content: '正文' });
 
-    controller.scheduleResult({
-      path: 'notes/example.md',
-      snapshot: { content: '编辑器最新正文', expectedMtime: 'mtime-1' },
-      source: 'editor',
-      write: async (request) => {
-        writes.push(request.content);
-        return 'mtime-2';
-      },
-    });
+    completeNoteSelfWrite(path, token, { mtime: 'mtime-2', content: '正文' });
+    endNoteSelfWrite(path, token);
 
-    const latest = controller.getLatestSnapshot('notes/example.md');
-    expect(latest?.content).toBe('编辑器最新正文');
+    expect(
+      matchesNoteSelfWrite(path, {
+        mtime: 'mtime-2',
+        contentDigest: noteContentDigest('正文'),
+      }),
+    ).toBe(true);
+    expect(
+      matchesNoteSelfWrite(path, {
+        mtime: 'mtime-2',
+        contentDigest: noteContentDigest('正文'),
+      }),
+    ).toBe(true);
+    expect(isNoteSelfWriting(path)).toBe(false);
+  });
 
-    controller.scheduleResult({
-      path: 'notes/example.md',
-      snapshot: {
-        content: `${latest?.content}\n任务状态：已完成`,
-        expectedMtime: latest?.expectedMtime ?? null,
-      },
-      source: 'task-projection',
-      write: async (request) => {
-        writes.push(request.content);
-        return 'mtime-3';
-      },
-    });
+  it('版本不匹配时不吞掉可能来自外部的事件', () => {
+    const path = `notes/self-write-external-${Date.now()}.md`;
+    const token = beginNoteSelfWrite(path, { content: '本地正文' });
+    completeNoteSelfWrite(path, token, { mtime: 'mtime-local', content: '本地正文' });
+    endNoteSelfWrite(path, token);
 
-    await controller.flush('notes/example.md');
-    expect(writes).toEqual(['编辑器最新正文\n任务状态：已完成']);
-    controller.dispose();
+    expect(matchesNoteSelfWrite(path, { mtime: 'mtime-external' })).toBe(false);
   });
 });

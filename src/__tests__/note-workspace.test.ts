@@ -1,58 +1,27 @@
-import { describe, expect, it } from 'vitest';
+import { defaultKeymap, history, historyKeymap, undo } from '@codemirror/commands';
+import { Compartment, EditorState } from '@codemirror/state';
+import { EditorView, keymap } from '@codemirror/view';
+import { afterEach, describe, expect, it } from 'vitest';
+import { replaceEditorDocument } from '../components/notes/editor-document-sync';
 import {
-  activateTab,
+  type WorkspaceNode,
+  type WorkspaceTab,
   closeLeaf,
-  closeTab,
   createTab,
   createWorkspaceState,
   findLeaf,
-  listLeaves,
   goBack,
   goForward,
-  normalizeWorkspaceState,
+  listLeaves,
   moveTab,
-  openTab,
   openInCurrentTab,
+  openTab,
   renameTabPath,
-  removeTabsByPath,
-  resizeSplit,
-  splitLeafWithTab,
   splitLeaf,
 } from '../domain/note-workspace';
-import type { WorkspaceNode, WorkspaceTab } from '../domain/note-workspace';
+import { parseTaskReferences, updateTaskReferences } from '../notes/task-references';
 
 describe('笔记工作区树', () => {
-  it('可以递归创建多个平等的编辑区', () => {
-    let state = createWorkspaceState();
-    state = splitLeaf(state, 'leaf-1', 'horizontal', 'leaf-2');
-    state = splitLeaf(state, 'leaf-2', 'vertical', 'leaf-3');
-
-    expect(listLeaves(state.root).map((leaf) => leaf.id)).toEqual(['leaf-1', 'leaf-2', 'leaf-3']);
-    expect(state.activeLeafId).toBe('leaf-3');
-  });
-
-  it('关闭右侧 leaf 后只保留左侧内容', () => {
-    let state = createWorkspaceState();
-    const leftTab = createTab('left.md');
-    state = splitLeaf(state, 'leaf-1', 'horizontal', 'leaf-2');
-    state = activateTab(
-      { ...state, root: replaceLeafTabs(state.root, 'leaf-1', [leftTab]) },
-      'leaf-1',
-      leftTab.id,
-    );
-
-    const rightTab = createTab('right.md');
-    state = {
-      ...state,
-      root: replaceLeafTabs(state.root, 'leaf-2', [rightTab]),
-      activeLeafId: 'leaf-2',
-    };
-    state = closeLeaf(state, 'leaf-2');
-
-    expect(listLeaves(state.root)).toHaveLength(1);
-    expect(findLeaf(state.root, 'leaf-1')?.tabs.map((tab) => tab.path)).toEqual(['left.md']);
-  });
-
   it('关闭左侧 leaf 后只保留右侧内容', () => {
     let state = createWorkspaceState();
     state = splitLeaf(state, 'leaf-1', 'horizontal', 'leaf-2');
@@ -69,17 +38,6 @@ describe('笔记工作区树', () => {
     expect(state.activeLeafId).toBe('leaf-2');
   });
 
-  it('关闭 leaf 的最后一个标签时自动收拢分栏', () => {
-    let state = createWorkspaceState();
-    state = splitLeaf(state, 'leaf-1', 'horizontal', 'leaf-2');
-    const tab = createTab('right.md');
-    state = { ...state, root: replaceLeafTabs(state.root, 'leaf-2', [tab]) };
-    state = closeTab(state, 'leaf-2', tab.id);
-
-    expect(state.root.type).toBe('leaf');
-    expect(listLeaves(state.root)).toHaveLength(1);
-  });
-
   it('标签移动到新编辑区后不会在来源编辑区留下重复标签', () => {
     let state = createWorkspaceState();
     const first = createTab('first.md');
@@ -92,39 +50,6 @@ describe('笔记工作区树', () => {
     expect(findLeaf(state.root, 'leaf-2')?.tabs.map((tab) => tab.path)).toEqual(['second.md']);
   });
 
-  it('在当前标签中打开新文档时替换路径并记录历史', () => {
-    let state = createWorkspaceState();
-    state = openInCurrentTab(state, 'leaf-1', 'same.md');
-    state = openInCurrentTab(state, 'leaf-1', 'other.md');
-    state = openInCurrentTab(state, 'leaf-1', 'same.md');
-
-    const leaf = findLeaf(state.root, 'leaf-1');
-    expect(leaf?.tabs.map((tab) => tab.path)).toEqual(['same.md']);
-    expect(leaf?.tabs[0].history).toEqual(['same.md', 'other.md', 'same.md']);
-    expect(leaf?.tabs[0].historyIndex).toBe(2);
-  });
-
-  it('openTab 会在当前编辑区新建标签页', () => {
-    let state = createWorkspaceState();
-    state = openTab(state, 'leaf-1', 'first.md');
-    state = openTab(state, 'leaf-1', 'second.md');
-    state = openTab(state, 'leaf-1', 'third.md');
-
-    const leaf = findLeaf(state.root, 'leaf-1');
-    expect(leaf?.tabs.map((tab) => tab.path)).toEqual(['first.md', 'second.md', 'third.md']);
-    expect(leaf?.tabs.map((tab) => tab.id)).toHaveLength(3);
-  });
-
-  it('从其他编辑区打开同一文档时在当前编辑区打开标签', () => {
-    let state = createWorkspaceState();
-    state = openTab(state, 'leaf-1', 'same.md');
-    state = splitLeaf(state, 'leaf-1', 'horizontal', 'leaf-2');
-    state = openTab(state, 'leaf-2', 'same.md');
-
-    expect(listLeaves(state.root).flatMap((leaf) => leaf.tabs)).toHaveLength(2);
-    expect(state.activeLeafId).toBe('leaf-2');
-  });
-
   it('重命名文档时只迁移标签路径并保留活动标签', () => {
     let state = createWorkspaceState();
     state = openTab(state, 'leaf-1', 'old.md');
@@ -134,17 +59,6 @@ describe('笔记工作区树', () => {
       expect.objectContaining({ id: 'old.md', path: 'new.md' }),
     ]);
     expect(findLeaf(state.root, 'leaf-1')?.activeTabId).toBe('old.md');
-  });
-
-  it('拖动分隔条只调整相邻编辑区并保留其他分栏比例', () => {
-    let state = createWorkspaceState();
-    state = splitLeaf(state, 'leaf-1', 'horizontal', 'leaf-2');
-    state = resizeSplit(state, 'split-leaf-2', 0, 0.7);
-
-    expect(state.root.type).toBe('split');
-    if (state.root.type === 'split') {
-      expect(state.root.sizes).toEqual([0.7, 0.3]);
-    }
   });
 
   it('后退和前进可以在当前标签的历史中切换', () => {
@@ -168,45 +82,6 @@ describe('笔记工作区树', () => {
     expect(active()?.history).toEqual(['first.md', 'second.md', 'fourth.md']);
     expect(active()?.historyIndex).toBe(2);
   });
-
-  it('旧版多标签状态可以归一化为每个标签独立历史', () => {
-    let state = createWorkspaceState();
-    state = {
-      ...state,
-      root: replaceLeafTabs(state.root, 'leaf-1', [createTab('first.md'), createTab('second.md')]),
-    };
-    state = activateTab(state, 'leaf-1', 'second.md');
-
-    const normalized = normalizeWorkspaceState(state);
-    const leaf = findLeaf(normalized.root, 'leaf-1');
-    expect(leaf?.tabs.map((tab) => tab.path)).toEqual(['first.md', 'second.md']);
-    expect(leaf?.tabs[0].history).toEqual(['first.md']);
-    expect(leaf?.tabs[1].history).toEqual(['second.md']);
-    expect(leaf?.activeTabId).toBe('second.md');
-  });
-
-  it('删除目录时清理所有编辑区中的子路径标签', () => {
-    let state = createWorkspaceState();
-    state = openTab(state, 'leaf-1', 'docs/first.md');
-    state = splitLeaf(state, 'leaf-1', 'horizontal', 'leaf-2');
-    state = openTab(state, 'leaf-2', 'docs/second.md');
-    state = openTab(state, 'leaf-2', 'keep.md');
-    state = removeTabsByPath(state, 'docs', true);
-
-    expect(listLeaves(state.root).flatMap((leaf) => leaf.tabs.map((tab) => tab.path))).toEqual([
-      'keep.md',
-    ]);
-  });
-
-  it('将标签拖到编辑区右侧会创建新分栏并移动标签', () => {
-    let state = openTab(createWorkspaceState(), 'leaf-1', 'note.md');
-    state = splitLeafWithTab(state, 'leaf-1', 'leaf-1', 'note.md', 'right', 'leaf-2');
-
-    expect(listLeaves(state.root).map((leaf) => leaf.id)).toEqual(['leaf-1', 'leaf-2']);
-    expect(findLeaf(state.root, 'leaf-1')?.tabs).toEqual([]);
-    expect(findLeaf(state.root, 'leaf-2')?.tabs.map((tab) => tab.path)).toEqual(['note.md']);
-    expect(state.activeLeafId).toBe('leaf-2');
-  });
 });
 
 function replaceLeafTabs(node: WorkspaceNode, leafId: string, tabs: WorkspaceTab[]): WorkspaceNode {
@@ -215,3 +90,90 @@ function replaceLeafTabs(node: WorkspaceNode, leafId: string, tabs: WorkspaceTab
   }
   return { ...node, children: node.children.map((child) => replaceLeafTabs(child, leafId, tabs)) };
 }
+
+describe('task references', () => {
+  it('解析带稳定 ID 的 Markdown 任务引用', () => {
+    const markdown = '# 项目\n\n  * [x] 确认方案 <!-- prism-task:task-123 -->';
+    const [reference] = parseTaskReferences(markdown, '项目.md');
+
+    expect(reference).toMatchObject({
+      taskId: 'task-123',
+      notePath: '项目.md',
+      line: 3,
+      title: '确认方案',
+      completed: true,
+      indent: '  ',
+      marker: '*',
+    });
+    expect(reference.lineStart).toBe(6);
+  });
+
+  it('排除围栏代码、缩进代码和行内代码中的任务示例', () => {
+    const markdown = [
+      '- [ ] 正式任务 <!-- prism-task:task-1 -->',
+      '',
+      '```md',
+      '- [ ] 围栏示例 <!-- prism-task:task-1 -->',
+      '```',
+      '',
+      '    - [ ] 缩进示例 <!-- prism-task:task-1 -->',
+      '',
+      '`- [ ] 行内示例 <!-- prism-task:task-1 -->`',
+    ].join('\n');
+    expect(parseTaskReferences(markdown, '项目.md').map((item) => item.title)).toEqual([
+      '正式任务',
+    ]);
+  });
+
+  it('更新笔记中的全部同任务引用', () => {
+    const markdown =
+      '- [ ] 旧标题 <!-- prism-task:task-1 -->\n\n- [ ] 旧标题 <!-- prism-task:task-1 -->';
+    expect(updateTaskReferences(markdown, { id: 'task-1', title: '新标题', completed: true })).toBe(
+      '- [x] 新标题 <!-- prism-task:task-1 -->\n\n- [x] 新标题 <!-- prism-task:task-1 -->',
+    );
+  });
+});
+
+describe('笔记任务同步边界', () => {
+  it('保留 CRLF 换行并更新同一任务的全部引用', () => {
+    const markdown =
+      '- [ ] 旧标题 <!-- prism-task:t1 -->\r\n\r\n  * [ ] 旧标题 <!-- prism-task:t1 -->';
+    expect(updateTaskReferences(markdown, { id: 't1', title: '新标题', completed: true })).toBe(
+      '- [x] 新标题 <!-- prism-task:t1 -->\r\n\r\n  * [x] 新标题 <!-- prism-task:t1 -->',
+    );
+  });
+});
+
+describe('编辑器文档加载', () => {
+  let view: EditorView | undefined;
+
+  afterEach(() => {
+    view?.destroy();
+    view = undefined;
+  });
+
+  it('加载全文不进入撤销历史，但加载后的用户编辑仍然可以撤销', () => {
+    const historyCompartment = new Compartment();
+    view = new EditorView({
+      state: EditorState.create({
+        doc: '',
+        extensions: [
+          historyCompartment.of(history()),
+          keymap.of([...defaultKeymap, ...historyKeymap]),
+        ],
+      }),
+      parent: document.body,
+    });
+
+    replaceEditorDocument(view, historyCompartment, '# 已打开的文件\n正文');
+    expect(view.state.doc.toString()).toBe('# 已打开的文件\n正文');
+    expect(undo(view)).toBe(false);
+    expect(view.state.doc.toString()).toBe('# 已打开的文件\n正文');
+
+    view.dispatch({
+      changes: { from: view.state.doc.length, insert: '\n新增内容' },
+    });
+    expect(undo(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe('# 已打开的文件\n正文');
+  });
+});

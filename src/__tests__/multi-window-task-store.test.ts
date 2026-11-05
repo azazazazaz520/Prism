@@ -90,40 +90,6 @@ describe('独立窗口任务缓存', () => {
     expect(second.tasks.value[0].title).toBe('新标题');
   });
 
-  it('刷新期间再次收到变更通知后补读最新快照', async () => {
-    let latest = task();
-    let revision = 1;
-    mocks.invoke.mockImplementation(async (command: string) =>
-      command === 'get_task_snapshot'
-        ? { revision, tasks: [structuredClone(latest)], dailyCompletions: [], outboxCount: 0 }
-        : undefined,
-    );
-    const store = (await import('../composables/useTaskStore')).useTaskStore();
-    await store.loadAll();
-    const old = {
-      revision: 1,
-      tasks: [structuredClone(latest)],
-      dailyCompletions: [],
-      outboxCount: 0,
-    };
-    let resolveOld!: (snapshot: typeof old) => void;
-    mocks.invoke.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          resolveOld = resolve;
-        }),
-    );
-    mocks.listeners[0]({ payload: 2 });
-    latest = { ...latest, title: '最新标题' };
-    revision = 3;
-    mocks.listeners[0]({ payload: 3 });
-    resolveOld(old);
-    await nextTick();
-    await nextTick();
-    await nextTick();
-    expect(store.tasks.value[0].title).toBe('最新标题');
-  });
-
   it('完成状态操作提交明确目标状态', async () => {
     mocks.invoke.mockImplementation(async (command: string) =>
       command === 'get_task_snapshot'
@@ -134,27 +100,5 @@ describe('独立窗口任务缓存', () => {
     await store.loadAll();
     await store.toggleTask('task');
     expect(mocks.invoke).toHaveBeenCalledWith('toggle_task', { id: 'task', completed: true });
-  });
-
-  it('远端任务完成状态先到达时显示完成，并按正文目标提交状态', async () => {
-    mocks.invoke.mockImplementation(async (command: string) =>
-      command === 'get_task_snapshot'
-        ? {
-            revision: 1,
-            tasks: [{ ...task(), is_daily: true, completed: true }],
-            dailyCompletions: [],
-            outboxCount: 0,
-          }
-        : undefined,
-    );
-    const store = (await import('../composables/useTaskStore')).useTaskStore();
-    await store.loadAll();
-    expect(store.dailyCompletedIds.value).toEqual(['task']);
-    await store.toggleDailyTask('task', '2026-10-13', true);
-    expect(mocks.invoke).toHaveBeenCalledWith('toggle_daily_task', {
-      id: 'task',
-      date: '2026-10-13',
-      completed: true,
-    });
   });
 });

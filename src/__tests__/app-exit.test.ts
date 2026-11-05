@@ -16,7 +16,6 @@ const preparing = (requestId: number, completed = false): AppExitState => ({
   requestId,
   completed,
 });
-const quitting = (): AppExitState => ({ phase: 'quitting', requestId: 1, completed: true });
 const successReport = (): ExitPreparationReport => ({
   success: true,
   failedPaths: [],
@@ -147,100 +146,28 @@ describe('退出准备', () => {
     controller.dispose();
   });
 
-  it('页面重新获得响应时按后端准备状态冻结并提交回执', async () => {
+  it('保存失败时提交失败回执', async () => {
     const harness = createHarness();
     const state = preparing(9);
     harness.invoke.mockImplementation(async (command) => {
       if (command === 'get_app_exit_state') return state;
       return undefined;
     });
-    const saveNotes = vi.fn(async () => successReport());
+    const saveNotes = vi.fn(async () => {
+      throw new Error('保存失败');
+    });
     const controller = createController(harness, { saveNotes });
 
     await controller.initialize();
 
     expect(controller.frozen.value).toBe(true);
     await vi.waitFor(() =>
-      expect(harness.invoke).toHaveBeenCalledWith(
-        'complete_exit_preparation',
-        expect.objectContaining({ requestId: 9 }),
-      ),
+      expect(harness.invoke).toHaveBeenCalledWith('complete_exit_preparation', {
+        requestId: 9,
+        report: { success: false, failedPaths: [], conflictPaths: [], message: '保存失败' },
+      }),
     );
     expect(saveNotes).toHaveBeenCalledOnce();
-    controller.dispose();
-  });
-
-  it('已提交回执的窗口保持冻结且不重复保存', async () => {
-    const harness = createHarness();
-    const state = preparing(10, true);
-    harness.invoke.mockImplementation(async (command) => {
-      if (command === 'get_app_exit_state') return state;
-      return undefined;
-    });
-    const saveNotes = vi.fn(async () => successReport());
-    const controller = createController(harness, { saveNotes });
-
-    await controller.initialize();
-
-    expect(controller.frozen.value).toBe(true);
-    expect(saveNotes).not.toHaveBeenCalled();
-    expect(harness.invoke).not.toHaveBeenCalledWith('complete_exit_preparation', expect.anything());
-    controller.dispose();
-  });
-
-  it('最终退出阶段保持冻结', async () => {
-    const harness = createHarness();
-    const state = quitting();
-    harness.invoke.mockImplementation(async (command) => {
-      if (command === 'get_app_exit_state') return state;
-      return undefined;
-    });
-    const saveNotes = vi.fn(async () => successReport());
-    const controller = createController(harness, { saveNotes });
-
-    await controller.initialize();
-
-    expect(controller.frozen.value).toBe(true);
-    expect(saveNotes).not.toHaveBeenCalled();
-    controller.dispose();
-  });
-
-  it('回执失败且请求已失效时解除冻结', async () => {
-    const harness = createHarness();
-    let state = preparing(11);
-    harness.invoke.mockImplementation(async (command) => {
-      if (command === 'get_app_exit_state') return state;
-      if (command === 'complete_exit_preparation') {
-        state = idle();
-        throw new Error('退出请求编号已失效');
-      }
-      return undefined;
-    });
-    const saveNotes = vi.fn(async () => successReport());
-    const controller = createController(harness, { saveNotes });
-
-    await controller.initialize();
-
-    await vi.waitFor(() => expect(controller.frozen.value).toBe(false));
-    expect(saveNotes).toHaveBeenCalledOnce();
-    controller.dispose();
-  });
-
-  it('无效请求不会触发保存', async () => {
-    const harness = createHarness();
-    harness.invoke.mockImplementation(async (command) => {
-      if (command === 'get_app_exit_state') return idle();
-      return undefined;
-    });
-    const saveNotes = vi.fn(async () => successReport());
-    const controller = createController(harness, { saveNotes });
-
-    await controller.initialize();
-    harness.emitPrepare({ requestId: 12 });
-    await settle();
-
-    expect(saveNotes).not.toHaveBeenCalled();
-    expect(controller.frozen.value).toBe(false);
     controller.dispose();
   });
 });

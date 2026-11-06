@@ -1,0 +1,308 @@
+use super::paths::*;
+use crate::logging::{LogLevel, LogWriter};
+use crate::models::*;
+use std::fs;
+use std::io::Write;
+
+/// 解析失败时将损坏文件备份为 `<文件名>.corrupt-<时间戳>`，保留用户数据以便手动恢复。
+/// 备份成功后原文件被移走，后续写入将创建新文件。
+fn backup_corrupt_file(path: &std::path::Path, logger: &LogWriter) {
+    if !path.exists() {
+        return;
+    }
+    let file_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "data".to_string());
+    let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
+    let backup = path.with_file_name(format!("{}.corrupt-{}", file_name, timestamp));
+    match fs::rename(path, &backup) {
+        Ok(()) => {
+            let _ = logger.append_internal(
+                LogLevel::Error,
+                "persistence",
+                "persistence.backup_created",
+                "损坏数据文件已备份",
+                serde_json::json!({ "backup": backup.display().to_string() }),
+            );
+        }
+        Err(error) => {
+            let _ = logger.append_internal(
+                LogLevel::Error,
+                "persistence",
+                "persistence.backup_failed",
+                "备份损坏数据文件失败",
+                serde_json::json!({
+                    "path": path.display().to_string(),
+                    "error": error.to_string()
+                }),
+            );
+        }
+    }
+}
+
+/// 读取并解析 JSON 文件：文件不存在时返回默认值；
+/// 解析失败时记录日志、备份损坏文件并返回默认值。
+fn load_json_or_default<T>(
+    path: &std::path::Path,
+    logger: &LogWriter,
+    default: T,
+    parse_event: &str,
+    parse_description: &str,
+    read_event: &str,
+    read_description: &str,
+) -> T
+where
+    T: serde::de::DeserializeOwned,
+{
+    match fs::read_to_string(path) {
+        Ok(content) => serde_json::from_str(&content).unwrap_or_else(|error| {
+            let _ = logger.append_internal(
+                LogLevel::Error,
+                "persistence",
+                parse_event,
+                parse_description,
+                serde_json::json!({ "path": path.display().to_string(), "error": error.to_string() }),
+            );
+            backup_corrupt_file(path, logger);
+            default
+        }),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => default,
+        Err(error) => {
+            let _ = logger.append_internal(
+                LogLevel::Error,
+                "persistence",
+                read_event,
+                read_description,
+                serde_json::json!({ "path": path.display().to_string(), "error": error.to_string() }),
+            );
+            default
+        }
+    }
+}
+
+/// 从磁盘加载任务数据，文件不存在或解析失败时返回默认空数据
+pub fn load_data(logger: &LogWriter) -> DataStore {
+    load_json_or_default(
+        &get_data_path(),
+        logger,
+        default_data_store(),
+        "persistence.data_parse_failed",
+        "任务数据解析失败，已使用默认数据",
+        "persistence.data_read_failed",
+        "读取任务数据失败，已使用默认数据",
+    )
+}
+
+/// 将任务数据序列化写入磁盘
+pub fn save_data(store: &DataStore) -> Result<(), String> {
+    let path = get_data_path();
+    let content = serde_json::to_string_pretty(store).map_err(|e| e.to_string())?;
+    save_data_file(&path, content.as_bytes())
+}
+
+pub fn backup_data_for_queue_migration() -> Result<(), String> {
+    let source = get_data_path();
+    let backup = source.with_file_name("data.before-outbox.json");
+    if source.exists() && !backup.exists() {
+        fs::copy(&source, &backup).map_err(|error| format!("备份任务数据失败：{error}"))?;
+    }
+    Ok(())
+}
+
+pub fn backup_legacy_queue(operations: &[crate::models::QueueOperation]) -> Result<(), String> {
+    let path = get_workspace_dir().join("legacy-queue.before-outbox.json");
+    if !operations.is_empty() && !path.exists() {
+        let content = serde_json::to_vec_pretty(operations).map_err(|error| error.to_string())?;
+        save_data_file(&path, &content)?;
+    }
+    Ok(())
+}
+
+fn save_data_file(path: &std::path::Path, content: &[u8]) -> Result<(), String> {
+    let temporary = path.with_file_name(format!(".data-{}.tmp", uuid::Uuid::new_v4()));
+    let result = (|| {
+        let mut file = fs::File::create_new(&temporary).map_err(|e| e.to_string())?;
+        file.write_all(content).map_err(|e| e.to_string())?;
+        file.sync_all().map_err(|e| e.to_string())?;
+        drop(file);
+        #[cfg(windows)]
+        {
+            use std::os::windows::ffi::OsStrExt;
+            use windows::core::PCWSTR;
+            use windows::Win32::Storage::FileSystem::{
+                MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+            };
+            let source: Vec<u16> = temporary.as_os_str().encode_wide().chain(Some(0)).collect();
+            let target: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+            unsafe {
+                MoveFileExW(
+                    PCWSTR(source.as_ptr()),
+                    PCWSTR(target.as_ptr()),
+                    MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+                )
+            }
+            .map_err(|e| e.to_string())?;
+        }
+        #[cfg(not(windows))]
+        {
+            fs::rename(&temporary, path).map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
+}
+
+/// 从磁盘加载应用配置，文件不存在或解析失败时返回默认配置
+pub fn load_config(logger: &LogWriter) -> ConfigStore {
+    load_json_or_default(
+        &get_config_path(),
+        logger,
+        default_config_store(),
+        "persistence.config_parse_failed",
+        "应用配置解析失败，已使用默认配置",
+        "persistence.config_read_failed",
+        "读取应用配置失败，已使用默认配置",
+    )
+}
+
+/// 将应用配置序列化写入磁盘
+pub fn save_config(store: &ConfigStore) -> Result<(), String> {
+    let path = get_config_path();
+    let content = serde_json::to_string_pretty(store).map_err(|e| e.to_string())?;
+    let temporary = path.with_file_name(format!(
+        ".config.json.prism-{}.tmp",
+        uuid::Uuid::new_v4().simple()
+    ));
+    let result = (|| -> Result<(), String> {
+        let mut file =
+            fs::File::create_new(&temporary).map_err(|e| format!("创建临时配置文件失败: {}", e))?;
+        file.write_all(content.as_bytes())
+            .map_err(|e| format!("写入临时配置文件失败: {}", e))?;
+        file.sync_all()
+            .map_err(|e| format!("刷新临时配置文件失败: {}", e))?;
+        replace_config_file(&temporary, &path)
+    })();
+
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
+}
+
+fn replace_config_file(
+    temporary: &std::path::Path,
+    target: &std::path::Path,
+) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        use windows::core::PCWSTR;
+        use windows::Win32::Storage::FileSystem::{
+            MoveFileExW, MOVEFILE_COPY_ALLOWED, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+        };
+
+        let temporary: Vec<u16> = temporary.as_os_str().encode_wide().chain(Some(0)).collect();
+        let target: Vec<u16> = target.as_os_str().encode_wide().chain(Some(0)).collect();
+        unsafe {
+            MoveFileExW(
+                PCWSTR(temporary.as_ptr()),
+                PCWSTR(target.as_ptr()),
+                MOVEFILE_COPY_ALLOWED | MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+            )
+        }
+        .map_err(|e| format!("替换配置文件失败: {}", e))?;
+        Ok(())
+    }
+
+    #[cfg(not(windows))]
+    {
+        fs::rename(temporary, target).map_err(|e| format!("替换配置文件失败: {}", e))
+    }
+}
+
+/// 从磁盘加载同步状态，文件不存在或解析失败时返回默认空状态
+pub fn load_sync(logger: &LogWriter) -> SyncStore {
+    load_json_or_default(
+        &get_sync_path(),
+        logger,
+        default_sync_store(),
+        "persistence.sync_parse_failed",
+        "同步状态解析失败，已使用默认状态",
+        "persistence.sync_read_failed",
+        "读取同步状态失败，已使用默认状态",
+    )
+}
+
+/// 将同步状态序列化写入磁盘
+pub fn save_sync(store: &SyncStore) -> Result<(), String> {
+    let path = get_sync_path();
+    let content = serde_json::to_string_pretty(store).map_err(|e| e.to_string())?;
+    fs::write(&path, content).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn data_replacement_preserves_complete_snapshot_and_failed_replace_keeps_target() {
+        let dir = temp_dir();
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("data.json");
+        save_data_file(&path, br#"{"version":1,"tasks":[]}"#).unwrap();
+        let data = default_data_store();
+        let content = serde_json::to_vec(&data).unwrap();
+        save_data_file(&path, &content).unwrap();
+        let loaded: DataStore = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert!(loaded.outbox.is_empty());
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 1);
+        let directory_target = dir.join("existing-directory");
+        fs::create_dir(&directory_target).unwrap();
+        assert!(save_data_file(&directory_target, b"replacement").is_err());
+        assert!(directory_target.is_dir());
+        assert_eq!(fs::read(&path).unwrap(), content);
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 2);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    fn temp_dir() -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "prism-persist-test-{}",
+            uuid::Uuid::new_v4().simple()
+        ))
+    }
+
+    #[test]
+    fn load_json_or_default_backs_up_corrupt_file() {
+        let dir = temp_dir();
+        fs::create_dir_all(&dir).unwrap();
+        let logger = LogWriter::new(dir.clone()).unwrap();
+        let path = dir.join("data.json");
+        fs::write(&path, "{ not valid json ]").unwrap();
+
+        let loaded: serde_json::Value = load_json_or_default(
+            &path,
+            &logger,
+            serde_json::json!(null),
+            "e1",
+            "d1",
+            "e2",
+            "d2",
+        );
+        assert_eq!(loaded, serde_json::json!(null));
+        assert!(!path.exists());
+        let backups: Vec<String> = fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().to_string())
+            .filter(|name| name.contains(".corrupt-"))
+            .collect();
+        assert_eq!(backups.len(), 1);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+}

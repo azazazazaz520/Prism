@@ -13,6 +13,7 @@ import { diagnosticsLogger } from '../../diagnostics/invoke-logged';
 import type { SettingsSubModule } from '../../types';
 import { useTheme, type ThemeMode } from '../../composables/useTheme';
 import { useModuleRegistry } from '../../composables/useModuleRegistry';
+import { useCloseToTray } from '../../composables/useCloseToTray';
 import VendorList from '../vendors/VendorList.vue';
 import SyncSetup from '../workspace/SyncSetup.vue';
 import PromptEditor from '../plugins/PromptEditor.vue';
@@ -33,6 +34,13 @@ import { open } from '@tauri-apps/plugin-dialog';
 
 const { theme, setTheme } = useTheme();
 const { allModules, isEnabled, toggle: toggleModule } = useModuleRegistry();
+const {
+  status: closeToTrayStatus,
+  error: closeToTrayError,
+  busy: closeToTrayBusy,
+  initialize: initializeCloseToTray,
+  setEnabled: setCloseToTrayEnabled,
+} = useCloseToTray();
 
 interface PandocInfo {
   path: string;
@@ -135,6 +143,18 @@ async function saveReminder() {
   } catch (e) {
     diagnosticsLogger.error('settings', 'settings.save_reminder_failed', '保存提醒设置失败', e);
   }
+}
+
+onMounted(() => {
+  void initializeCloseToTray();
+});
+
+async function toggleCloseToTray() {
+  await setCloseToTrayEnabled(!(closeToTrayStatus.value?.enabled ?? false));
+}
+
+async function retryCloseToTray() {
+  await setCloseToTrayEnabled(true);
 }
 
 async function loadPandocInfo() {
@@ -463,6 +483,44 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
                 <span class="unit">分钟</span>
               </div>
             </div>
+          </div>
+
+          <div class="settings-group">
+            <div class="group-title">运行与窗口</div>
+            <div class="setting-row">
+              <label>关闭到系统托盘</label>
+              <button
+                type="button"
+                :class="['toggle-btn', { on: closeToTrayStatus?.enabled === true }]"
+                role="switch"
+                :aria-checked="closeToTrayStatus?.enabled === true"
+                aria-label="关闭到系统托盘"
+                :disabled="closeToTrayBusy"
+                @click="toggleCloseToTray"
+              >
+                <span class="toggle-knob" />
+              </button>
+            </div>
+            <p class="setting-hint">
+              开启后，关闭主窗口或最后一个未隐藏的工作区窗口时，Prism
+              将继续在后台运行。可通过托盘恢复窗口或退出。
+            </p>
+            <p
+              v-if="closeToTrayStatus?.enabled && !closeToTrayStatus.available"
+              class="setting-hint is-error"
+            >
+              托盘初始化失败，关闭窗口将按普通关闭流程处理。
+            </p>
+            <p v-if="closeToTrayError" class="setting-hint is-error">{{ closeToTrayError }}</p>
+            <button
+              v-if="closeToTrayStatus?.enabled && !closeToTrayStatus.available"
+              type="button"
+              class="text-action-btn setting-action"
+              :disabled="closeToTrayBusy"
+              @click="retryCloseToTray"
+            >
+              重试
+            </button>
           </div>
 
           <div class="settings-group">
@@ -897,7 +955,9 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
 /* 模块开关按钮 */
 .toggle-btn {
   position: relative;
+  flex-shrink: 0;
   width: 44px;
+  min-width: 44px;
   height: 24px;
   border-radius: 12px;
   border: none;
@@ -925,6 +985,19 @@ const subModules: { key: SettingsSubModule; label: string }[] = [
 
 .toggle-btn.on .toggle-knob {
   transform: translateX(20px);
+}
+
+.toggle-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.setting-hint.is-error {
+  color: var(--danger, #ef4444);
+}
+
+.setting-action {
+  margin-top: var(--space-sm);
 }
 
 /* ── 暗色适配 ──────────────────────────── */

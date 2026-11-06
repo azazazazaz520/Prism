@@ -14,6 +14,7 @@ import { invokeWithDiagnostics as invoke } from '../../diagnostics/invoke-logged
 import { diagnosticsLogger } from '../../diagnostics/invoke-logged';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { FileEntry, FileTreeContextTarget, Task } from '../../types';
 import {
   countDescendantEntries,
@@ -84,7 +85,10 @@ import {
 } from '../../domain/note-workspace';
 import { findNoteSearchPosition, type NoteSearchMatch } from '../../notes/note-search';
 
-const props = withDefaults(defineProps<{ active?: boolean }>(), { active: true });
+const props = withDefaults(defineProps<{ active?: boolean; frozen?: boolean }>(), {
+  active: true,
+  frozen: false,
+});
 
 // ═══ 工作区存储常量 ═══
 
@@ -157,6 +161,8 @@ const {
   renameNotesUnderPath,
   projectTask,
   removeTaskFromAllNotes,
+  setProjectionPaused,
+  settleProjections,
 } = useNoteTaskSync(documentStore);
 let projectingTaskReferences = false;
 let taskSyncTimer: ReturnType<typeof setTimeout> | null = null;
@@ -180,6 +186,21 @@ function showStatus(msg: string) {
     statusMsg.value = '';
   }, 3000);
 }
+
+/** 退出准备期间拒绝新的笔记修改入口。 */
+function modificationBlocked(): boolean {
+  if (!props.frozen) return false;
+  showStatus('正在退出应用，已暂停笔记修改');
+  return true;
+}
+
+watch(
+  () => props.frozen,
+  (frozen) => {
+    void setProjectionPaused(frozen);
+  },
+  { immediate: true },
+);
 
 function resetNoteWorkspaceLayout() {
   workspaceBoardState.value = createWorkspaceState();
@@ -430,8 +451,8 @@ async function syncEditedTaskReferences(markdown: string) {
       await updateTask(task.id, reference.title);
     }
     if (reference.completed !== task.completed) {
-      if (task.is_daily) await toggleDailyTask(task.id, getTodayStr());
-      else await toggleTask(task.id);
+      if (task.is_daily) await toggleDailyTask(task.id, getTodayStr(), reference.completed);
+      else await toggleTask(task.id, reference.completed);
     }
   }
 }
@@ -444,6 +465,7 @@ function scheduleTaskReferenceSync(markdown: string) {
 }
 
 async function handleTaskToggle(taskId: string) {
+  if (modificationBlocked()) return;
   const task = tasks.value.find((item) => item.id === taskId);
   if (!task) return;
   if (task.is_daily) await toggleDailyTask(taskId, getTodayStr());
@@ -451,6 +473,7 @@ async function handleTaskToggle(taskId: string) {
 }
 
 async function addTaskReference() {
+  if (modificationBlocked()) return;
   if (!activeNotePath.value) return;
   const title = await showDialog('在笔记中创建任务', '任务标题');
   const trimmed = title?.trim();
@@ -471,6 +494,7 @@ function closeTaskPicker() {
 }
 
 function insertTaskReference(task: Task) {
+  if (modificationBlocked()) return;
   if (currentTaskReferences.value.some((reference) => reference.taskId === task.id)) {
     showStatus('该任务已经关联到当前笔记');
     closeTaskPicker();
@@ -481,6 +505,7 @@ function insertTaskReference(task: Task) {
 }
 
 async function createTaskFromPicker(title: string) {
+  if (modificationBlocked()) return;
   const task = await addTask(title, null, [], false, false, false);
   if (!task) return;
   workspaceBoardRef.value?.insertText(`${renderTaskReference(task)}\n`);
@@ -488,6 +513,7 @@ async function createTaskFromPicker(title: string) {
 }
 
 async function copyTaskReference(reference: TaskReference) {
+  if (modificationBlocked()) return;
   const task = taskForReference(reference);
   if (!task) return;
   const copied = await addTask(
@@ -507,6 +533,7 @@ async function linkExistingTask() {
 }
 
 async function removeReference(reference: TaskReference) {
+  if (modificationBlocked()) return;
   const task = taskForReference(reference);
   const confirmed = await showConfirm(
     '移除笔记中的任务引用',
@@ -517,6 +544,7 @@ async function removeReference(reference: TaskReference) {
 }
 
 async function deleteReferencedTask(reference: TaskReference) {
+  if (modificationBlocked()) return;
   const task = taskForReference(reference);
   if (!task) return removeReference(reference);
   const confirmed = await showConfirm(
@@ -777,6 +805,7 @@ function showNoteConflictPrompt(path: string) {
 
 /** 检查当前文件是否被外部修改，若变化则自动加载最新版本 */
 type NoteFileChangeEvent = {
+  workspacePath?: string;
   kind: string;
   path: string;
   oldPath?: string;
@@ -1020,6 +1049,7 @@ function preserveNoteRecovery(input: {
 }
 
 async function restoreRecovery(id: string) {
+  if (modificationBlocked()) return;
   const snapshot = recoverySnapshots.value.find((item) => item.id === id);
   if (!snapshot) return;
 
@@ -1160,7 +1190,57 @@ async function flushDirtyDocuments(): Promise<WorkspaceFlushReport> {
   };
 }
 
+/** 退出准备：保存脏文档并等待全部已接受写入，返回可上报的保存结果。 */
+async function flushNotesForExit(): Promise<{
+  success: boolean;
+  failedPaths: string[];
+  conflictPaths: string[];
+  message: string | null;
+}> {
+  await setProjectionPaused(true);
+  await settleProjections();
+  await flushDirtyDocuments();
+  const drained = await noteSaveController.flushAll();
+
+  const failedPaths = new Set<string>();
+  const conflictPaths = new Set<string>();
+  const consider = (path: string, conflict: boolean) => {
+    const document = documentStore.ensure(path);
+    if (!document.dirty && !document.conflict) return;
+    if (conflict || document.conflict) conflictPaths.add(path);
+    else failedPaths.add(path);
+  };
+
+  for (const result of drained) {
+    if (result.status === 'failed') consider(result.path, false);
+    else if (result.status === 'conflict') consider(result.path, true);
+  }
+  for (const [path, document] of documentStore.documents) {
+    if (document.dirty || document.conflict) consider(path, false);
+  }
+  for (const path of allWorkspaceTabPaths.value) {
+    const document = documentStore.ensure(path);
+    if (document.dirty || document.conflict) consider(path, false);
+  }
+
+  for (const path of conflictPaths) failedPaths.delete(path);
+  const success = failedPaths.size === 0 && conflictPaths.size === 0;
+  return {
+    success,
+    failedPaths: [...failedPaths],
+    conflictPaths: [...conflictPaths],
+    message: success
+      ? null
+      : conflictPaths.size > 0
+        ? `存在 ${conflictPaths.size} 个未处理的笔记冲突`
+        : `有 ${failedPaths.size} 个笔记保存失败`,
+  };
+}
+
+defineExpose({ flushNotesForExit });
+
 async function switchNotesWorkspace(selected: string) {
+  if (modificationBlocked()) return;
   if (normalizeWorkspacePath(selected) === normalizeWorkspacePath(notesDir.value)) {
     workspaceMenuOpen.value = false;
     return;
@@ -1218,6 +1298,7 @@ async function openNotesWorkspace() {
 }
 
 async function changeNotesDir() {
+  if (modificationBlocked()) return;
   try {
     const selected = await open({
       directory: true,
@@ -1459,6 +1540,7 @@ async function handleWorkspaceOpenPath(path: string) {
 }
 
 function handleWorkspaceContentUpdate(path: string, value: string) {
+  if (modificationBlocked()) return;
   documentStore.updateContent(path, value);
   const document = documentStore.ensure(path);
   if (!shouldScheduleNoteSave(document)) return;
@@ -1474,6 +1556,7 @@ async function handleWorkspaceSavePath(path: string) {
 }
 
 async function handleWorkspaceRename(path: string, title: string) {
+  if (modificationBlocked()) return;
   const nextTitle = title.trim();
   const currentTitle = path.split('/').pop()?.replace(/\.md$/i, '') || '';
   if (!nextTitle || nextTitle === currentTitle) return;
@@ -1512,6 +1595,7 @@ async function handleWorkspaceRename(path: string, title: string) {
 }
 
 async function handleWorkspaceCreateNote() {
+  if (modificationBlocked()) return;
   await createUntitledFile();
 }
 
@@ -1590,6 +1674,7 @@ async function createEmptyNoteFile(path: string) {
 
 /** 直接创建未命名文件，标题输入框会在打开后自动选中。 */
 async function createUntitledFile(parentDir = '') {
+  if (modificationBlocked()) return;
   const path = getUntitledPath(parentDir);
   try {
     await createEmptyNoteFile(path);
@@ -1610,6 +1695,7 @@ async function createUntitledFile(parentDir = '') {
 
 /** 标题失焦时将标题同步为文件名和标签页名称。 */
 async function renameCurrentNoteTitle() {
+  if (modificationBlocked()) return;
   if (!activeNotePath.value) return;
   const nextTitle = titleDraft.value.trim();
   const currentTitle = activeNotePath.value.split('/').pop()?.replace(/\.md$/i, '') || '';
@@ -1734,6 +1820,7 @@ function queueNoteSave(
 
 /** 保存失败后由状态栏“重试”按钮触发，立即以当前内容重新保存。 */
 async function retrySave() {
+  if (modificationBlocked()) return;
   const path = activeNotePath.value;
   if (!path) return;
   const document = documentStore.ensure(path);
@@ -1827,6 +1914,7 @@ function validateName(name: string): string | null {
 }
 
 async function createFile(parentDir: string) {
+  if (modificationBlocked()) return;
   const name = await showDialog('新建文件', '文件名称（不含扩展名）：', '例如：我的笔记', '');
   if (!name) return;
   const err = validateName(name);
@@ -1854,6 +1942,7 @@ async function createFile(parentDir: string) {
 }
 
 async function createFolder(parentDir: string) {
+  if (modificationBlocked()) return;
   const name = await showDialog('新建文件夹', '文件夹名称：', '例如：工作文档', '');
   if (!name) return;
   const err = validateName(name);
@@ -1921,6 +2010,7 @@ function showFileTreeContextMenu(event: MouseEvent, target: FileTreeContextTarge
 }
 
 async function renameEntry(path: string, isDir: boolean) {
+  if (modificationBlocked()) return;
   const oldName = path.split('/').pop() || '';
   const newName = await showDialog('重命名', '新名称：', '', oldName);
   if (!newName || newName === oldName) return;
@@ -1996,6 +2086,7 @@ function cleanExpandedForPath(deletedPath: string) {
 /** 删除文件或文件夹（移入系统回收站）。
  *  删除后先更新本地界面，再等待系统回收站操作结果；失败时恢复界面快照。 */
 async function deleteEntry(path: string) {
+  if (modificationBlocked()) return;
   const name = path.split('/').pop() || '';
   const entry = findNoteEntry(tree.value, path);
   const isDirectory = Boolean(entry?.isDir);
@@ -2144,6 +2235,7 @@ function handleKeyboardShortcuts(event: KeyboardEvent) {
 }
 
 function removeWorkspace(path: string) {
+  if (modificationBlocked()) return;
   const normalized = normalizeWorkspacePath(path);
   if (normalized === normalizeWorkspacePath(notesDir.value)) {
     showStatus('无法移除当前打开的工作区');
@@ -2167,6 +2259,11 @@ let fileTreeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** 处理文件系统监听事件 */
 function handleFileChangeEvent(event: NoteFileChangeEvent) {
+  if (
+    event.workspacePath &&
+    normalizeWorkspacePath(event.workspacePath) !== normalizeWorkspacePath(notesDir.value)
+  )
+    return;
   const version = { mtime: event.mtime, contentDigest: event.contentDigest };
   if (shouldIgnoreNoteSelfWriteEvent(event.path, event.kind, version)) return;
   if (
@@ -2279,8 +2376,10 @@ onMounted(async () => {
   document.addEventListener('click', handleDocumentClick);
 
   // 监听 Rust 后端的文件系统变更事件
-  const unlisten = await listen<NoteFileChangeEvent>('notes://file-changed', (event) =>
-    handleFileChangeEvent(event.payload),
+  const unlisten = await listen<NoteFileChangeEvent>(
+    'notes://file-changed',
+    (event) => handleFileChangeEvent(event.payload),
+    { target: getCurrentWindow().label },
   );
   unlistenFileWatcher = () => unlisten();
 });
@@ -2389,6 +2488,7 @@ onUnmounted(() => {
             ref="workspaceBoardRef"
             :documents="documentStore.documents"
             :initial-state="workspaceBoardState"
+            :frozen="props.frozen"
             @open-path="handleWorkspaceOpenPath"
             @update-content="handleWorkspaceContentUpdate"
             @save-path="handleWorkspaceSavePath"

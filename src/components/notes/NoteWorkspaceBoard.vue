@@ -28,9 +28,11 @@ const props = withDefaults(
   defineProps<{
     documents: Map<string, NoteDocumentState>;
     initialState?: NoteWorkspaceState;
+    frozen?: boolean;
   }>(),
   {
     initialState: undefined,
+    frozen: false,
   },
 );
 
@@ -380,6 +382,7 @@ defineExpose({
           :dragging-tab-id="draggingTabId"
           :dragging-tab-label="draggingTabLabel"
           :drop-zone="dropTarget?.leafId === leaf.id ? dropTarget.zone : null"
+          :frozen="frozen"
           @activate-tab="handleActivateTab"
           @go-back="handleGoBack"
           @go-forward="handleGoForward"

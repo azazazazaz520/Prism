@@ -28,7 +28,7 @@ pub struct WindowsUpdateManifest {
 
 /// 任务条目，支持软删除、标签、每日重复、父子拆解。
 /// updated_at 用于跨设备 LWW 合并，is_deleted 保留用于同步传播。
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Task {
     pub id: String,
     pub title: String,
@@ -59,7 +59,7 @@ pub struct Task {
 }
 
 /// 每日任务完成记录，按 (task_id, date) 追踪每日重复任务的完成状态。
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct DailyCompletion {
     pub task_id: String,
     pub date: String,
@@ -96,12 +96,20 @@ pub struct Vendor {
 // ═══════════════════════════════════════════════════════════════
 
 /// 结构化任务数据（存储于 data.json）
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct DataStore {
     pub version: u32,
     pub tasks: Vec<Task>,
     #[serde(default)]
     pub daily_completions: Vec<DailyCompletion>,
+    #[serde(default)]
+    pub revision: u64,
+    #[serde(default)]
+    pub outbox: Vec<OutboxItem>,
+    #[serde(default)]
+    pub outbox_sequence: u64,
+    #[serde(default)]
+    pub legacy_queue_imported: bool,
 }
 
 /// 同步状态（存储于 sync.json，独立于用户偏好配置）
@@ -139,6 +147,9 @@ pub struct ConfigStore {
     pub theme: String,
     #[serde(default = "default_reminder_minutes")]
     pub reminder_minutes: u32,
+    /// 关闭主窗口或最后一个未隐藏完整窗口时隐藏到系统托盘。
+    #[serde(default)]
+    pub close_to_tray: bool,
     /// 模块启用状态（key=AppModule id, value=enabled）
     /// 模块不在 map 中时默认启用
     #[serde(default)]
@@ -180,6 +191,10 @@ pub fn default_data_store() -> DataStore {
         version: 1,
         tasks: vec![],
         daily_completions: vec![],
+        revision: 0,
+        outbox: vec![],
+        outbox_sequence: 0,
+        legacy_queue_imported: false,
     }
 }
 
@@ -190,6 +205,7 @@ pub fn default_config_store() -> ConfigStore {
         active_vendor_id: None,
         theme: default_theme(),
         reminder_minutes: default_reminder_minutes(),
+        close_to_tray: false,
         module_enabled: std::collections::HashMap::new(),
         notes_dir: None,
         pandoc_path: None,
@@ -205,5 +221,47 @@ pub fn default_sync_store() -> SyncStore {
         sync_code: None,
         profile_id: None,
         last_sync_at: None,
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct QueueOperation {
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub table: String,
+    pub data: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct OutboxItem {
+    pub id: String,
+    pub sequence: u64,
+    #[serde(flatten)]
+    pub operation: QueueOperation,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_data_store_missing_fields_deserialization() {
+        let json = r#"{"version":1,"tasks":[]}"#;
+        let store: DataStore = serde_json::from_str(json).unwrap();
+        assert_eq!(store.version, 1);
+        assert!(store.tasks.is_empty());
+        assert!(store.daily_completions.is_empty());
+    }
+
+    #[test]
+    fn test_config_store_missing_fields_deserialization() {
+        let json = r#"{}"#;
+        let config: ConfigStore = serde_json::from_str(json).unwrap();
+        assert!(config.vendors.is_empty());
+        assert!(config.active_vendor_id.is_none());
+        assert_eq!(config.theme, "auto");
+        assert_eq!(config.reminder_minutes, 30);
+        assert!(!config.close_to_tray);
+        assert!(config.plugins.is_empty());
     }
 }

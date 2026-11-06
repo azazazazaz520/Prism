@@ -46,6 +46,7 @@ const props = defineProps<{
   draggingTabId?: string | null;
   draggingTabLabel?: string;
   dropZone?: WorkspaceDropZone | null;
+  frozen?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -547,6 +548,7 @@ defineExpose({
         v-if="activeTab"
         class="split-pane-document-title split-pane-document-title-input"
         :value="tabName(activeTab.path).replace(/\.md$/i, '')"
+        :disabled="frozen"
         aria-label="笔记标题"
         @blur="emit('rename-path', activeTab.path, ($event.target as HTMLInputElement).value)"
         @keydown.enter.prevent="($event.target as HTMLInputElement).blur()"
@@ -591,6 +593,7 @@ defineExpose({
         ref="editorRef"
         :key="activeTab.path"
         :model-value="activeDocument?.content ?? ''"
+        :disabled="frozen"
         placeholder="开始编写 Markdown..."
         @update:model-value="emit('update-content', activeTab.path, $event)"
         @save="emit('save-path', activeTab.path)"

@@ -13,6 +13,7 @@
     "windows": [
       {
         "label": "main",
+        "create": false,
         "title": "Prism",
         "width": 1350,
         "height": 680,
@@ -22,6 +23,7 @@
       },
       {
         "label": "floating",
+        "create": false,
         "title": "Prism",
         "width": 260,
         "height": 320,
@@ -36,6 +38,7 @@
       },
       {
         "label": "import",
+        "create": false,
         "title": "Import",
         "width": 400,
         "height": 560,
@@ -50,6 +53,7 @@
       },
       {
         "label": "selector",
+        "create": false,
         "title": "Prism",
         "width": 1920,
         "height": 1080,

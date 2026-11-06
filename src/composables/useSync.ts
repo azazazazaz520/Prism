@@ -1,109 +1,24 @@
 import { ref, watch } from 'vue';
-import type { RealtimeChannel } from '@supabase/supabase-js';
+import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 import { useAuth, getSupabaseClient } from './useAuth';
 import type { Task, DailyCompletion } from '../types';
 import { diagnosticsLogger } from '../diagnostics/invoke-logged';
 
-/** 离线操作队列：网络断开时暂存本地，恢复后批量推送 */
-const OFFLINE_QUEUE_KEY = 'prism_offline_queue';
+import { invokeWithDiagnostics as invoke } from '../diagnostics/invoke-logged';
+import {
+  createOutboxConsumer,
+  normalizeOperation,
+  outboxCount,
+  type QueueOperation,
+} from './useOutbox';
 
-export interface OfflineQueueItem {
-  type: 'upsert' | 'delete';
-  table: string;
-  data: Record<string, unknown>;
-}
-
-/**
- * 执行单条离线操作的结果。Supabase 的请求失败可能通过返回 error 表示，
- * 也可能由适配层直接抛出异常，因此调用方不能只依赖 Promise reject。
- */
-export interface OfflineQueueExecutionResult {
-  error?: unknown | null;
-}
-
-/**
- * 执行一批离线操作并返回未成功消费的队列项。
- *
- * 该函数不修改全局队列，便于在浏览器测试中验证“返回 error 也必须保留”的契约。
- */
-export async function flushOfflineQueueItems(
-  queue: readonly OfflineQueueItem[],
-  execute: (item: OfflineQueueItem) => Promise<OfflineQueueExecutionResult | void>,
-): Promise<OfflineQueueItem[]> {
-  const failedItems: OfflineQueueItem[] = [];
-  for (const item of queue) {
-    try {
-      const result = await execute(item);
-      if (result?.error) throw result.error;
-    } catch {
-      failedItems.push(item);
-    }
-  }
-  return failedItems;
-}
-
-function loadOfflineQueue(): OfflineQueueItem[] {
-  try {
-    const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function persistOfflineQueue(queue: OfflineQueueItem[]) {
-  offlineQueueCount.value = queue.length;
-  if (offlinePersistTimer) return;
-  offlinePersistTimer = setTimeout(() => {
-    offlinePersistTimer = null;
-    localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(offlineQueue));
-  }, 100);
-}
-
-/**
- * 恢复队列项中的当前身份字段。
- *
- * 启动期间可能先产生队列项、后恢复同步 Profile。此时旧载荷中的
- * `profile_id: null` 会把共享任务当作仅用户私有任务重放，进而无法通过
- * 共享任务的 RLS 更新检查。已有非空 Profile 归属必须保留，避免切换同步
- * Profile 时误改动历史任务的归属。
- */
-export function normalizeOfflineQueueItem(
-  item: OfflineQueueItem,
-  profileId: string | null,
-  uid: string | undefined,
-) {
-  const data = { ...item.data };
-  if (uid) data.user_id = uid;
-  if (profileId && data.profile_id == null) {
-    data.profile_id = profileId;
-  }
-  return { ...item, data };
-}
-
-const offlineQueue: OfflineQueueItem[] = loadOfflineQueue();
-const offlineQueueCount = ref(offlineQueue.length);
-let offlinePersistTimer: ReturnType<typeof setTimeout> | null = null;
-/** 同步状态指示器 */
 const isOnline = ref(navigator.onLine);
-/** 同步状态：启动时根据实际网络状态初始化，避免离线启动显示"已同步" */
 const syncStatus = ref<'idle' | 'syncing' | 'error' | 'offline' | 'unauthorized'>(
   navigator.onLine ? 'idle' : 'offline',
 );
 const lastSyncAt = ref<string | null>(null);
-
-/** 队列重试定时器：push 失败后延迟重试，防止 Tauri 中 online 事件不可靠 */
-let retryTimer: ReturnType<typeof setTimeout> | null = null;
-const RETRY_DELAY_MS = 10_000;
 let syncNetworkListenersBound = false;
-
-function scheduleRetry(fn: () => void) {
-  if (retryTimer) return; // 已有待执行的重试，去重
-  retryTimer = setTimeout(() => {
-    retryTimer = null;
-    fn();
-  }, RETRY_DELAY_MS);
-}
+let outboxConsumer: ReturnType<typeof createOutboxConsumer> | null = null;
 
 /** 当前设备所属的 profile_id，由 useSyncCode 设置 */
 const currentProfileId = ref<string | null>(null);
@@ -116,6 +31,61 @@ let realtimeSubscriptionGeneration = 0;
 /** 分页大小 */
 const PAGE_SIZE = 500;
 
+/** 按实体键幂等发送，任务更新以数据库时间戳条件保持 LWW。 */
+export async function sendOutboxOperation(
+  client: SupabaseClient,
+  operation: QueueOperation,
+  signal: AbortSignal,
+) {
+  if (operation.table === 'tasks') {
+    const inserted = await client
+      .from('tasks')
+      .upsert(operation.data, { onConflict: 'id', ignoreDuplicates: true })
+      .abortSignal(signal);
+    if (inserted.error) throw inserted.error;
+    const updated = await client
+      .from('tasks')
+      .update(operation.data)
+      .eq('id', operation.data.id)
+      .lte('updated_at', operation.data.updated_at)
+      .select('id,updated_at')
+      .abortSignal(signal);
+    if (updated.error) throw updated.error;
+    const modifiedAt = Date.parse(String(operation.data.updated_at));
+    if (updated.data.length > 0) {
+      if (Date.parse(updated.data[0].updated_at) !== modifiedAt)
+        throw new Error('远端任务修改时间与发送版本不一致');
+      return updated;
+    }
+    const remote = await client
+      .from('tasks')
+      .select('updated_at')
+      .eq('id', operation.data.id)
+      .abortSignal(signal)
+      .maybeSingle();
+    if (remote.error) throw remote.error;
+    if (!remote.data || !(Date.parse(remote.data.updated_at) > modifiedAt))
+      throw new Error('远端任务尚未确认写入');
+    return remote;
+  }
+  if (operation.type === 'delete') {
+    let query = client
+      .from('daily_completions')
+      .delete()
+      .eq('task_id', operation.data.task_id)
+      .eq('date', operation.data.date);
+    query =
+      operation.data.profile_id == null
+        ? query.is('profile_id', null).eq('user_id', operation.data.user_id)
+        : query.eq('profile_id', operation.data.profile_id);
+    return query.abortSignal(signal);
+  }
+  return client
+    .from('daily_completions')
+    .upsert(operation.data, { onConflict: 'task_id,date' })
+    .abortSignal(signal);
+}
+
 export function useSync() {
   const { user, isLoggedIn } = useAuth();
 
@@ -123,7 +93,11 @@ export function useSync() {
     syncNetworkListenersBound = true;
     window.addEventListener('online', () => {
       isOnline.value = true;
-      void flushOfflineQueue();
+      void flushOutbox().catch((error) =>
+        diagnosticsLogger.warn('sync', 'sync.online_flush_failed', '网络恢复后发送失败', {
+          error: String(error),
+        }),
+      );
     });
     window.addEventListener('offline', () => {
       isOnline.value = false;
@@ -160,22 +134,7 @@ export function useSync() {
     if (channel) await channel.unsubscribe();
   }
 
-  /** 判断指定每日完成记录的最后一个离线操作是否仍是待推送的新增。 */
-  function hasPendingDailyCompletion(taskId: string, date: string): boolean {
-    for (let index = offlineQueue.length - 1; index >= 0; index -= 1) {
-      const item = offlineQueue[index];
-      if (
-        item.table === 'daily_completions' &&
-        item.data.task_id === taskId &&
-        item.data.date === date
-      ) {
-        return item.type === 'upsert';
-      }
-    }
-    return false;
-  }
-
-  /** 监听登录状态变化，刷新离线队列 */
+  /** 会话退出时释放当前 Profile 和远端订阅。 */
   watch(isLoggedIn, (val) => {
     if (!val) {
       currentProfileId.value = null;
@@ -184,181 +143,34 @@ export function useSync() {
     }
   });
 
-  // ── 上行同步 ──
-
-  async function pushTask(task: Task): Promise<void> {
-    const uid = userId();
-    if (!uid) return;
-    // 已关联任务的归属优先于当前 Profile，防止启动恢复尚未完成时将共享任务
-    // 写成 profile_id=null；新建的本地任务再使用当前设备的 Profile。
-    const profileId = task.profile_id ?? getProfileId();
-    const supabase = getSupabaseClient();
-
-    if (!isOnline.value) {
-      offlineQueue.push({
-        type: 'upsert',
-        table: 'tasks',
-        data: {
-          ...(task as unknown as Record<string, unknown>),
-          profile_id: profileId,
-          user_id: uid,
-        },
-      });
-      persistOfflineQueue(offlineQueue);
-      return;
-    }
-
-    try {
-      syncStatus.value = 'syncing';
-      const { error } = await supabase.from('tasks').upsert({
-        id: task.id,
-        title: task.title,
-        completed: task.completed,
-        created_at: task.created_at,
-        completed_at: task.completed_at,
-        due_date: task.due_date,
-        tags: task.tags,
-        important: task.important,
-        pinned: task.pinned,
-        is_daily: task.is_daily,
-        parent_id: task.parent_id,
-        updated_at: task.updated_at,
-        is_deleted: task.is_deleted,
-        user_id: uid,
-        profile_id: profileId,
-      });
-
-      if (error) throw error;
-      lastSyncAt.value = new Date().toISOString();
-      syncStatus.value = 'idle';
-      // 推送成功后消费离线队列
-      flushOfflineQueue();
-    } catch (e) {
-      diagnosticsLogger.error('sync', 'sync.push_task_failed', '同步任务失败', e, {
-        task_id: task.id,
-      });
-      syncStatus.value = 'error';
-      offlineQueue.push({
-        type: 'upsert',
-        table: 'tasks',
-        data: {
-          ...(task as unknown as Record<string, unknown>),
-          profile_id: profileId,
-          user_id: uid,
-        },
-      });
-      persistOfflineQueue(offlineQueue);
-      // 延迟重试，定期自愈
-      scheduleRetry(() => flushOfflineQueue());
-    }
+  if (!outboxConsumer) {
+    outboxConsumer = createOutboxConsumer(
+      () => isOnline.value && isLoggedIn.value && !!userId(),
+      async (item, signal) => {
+        const config = await invoke<{ profile_id: string | null; sync_code: string | null }>(
+          'get_sync_config',
+        );
+        if (config.sync_code && currentProfileId.value !== config.profile_id)
+          throw new Error('同步 Profile 尚未恢复');
+        const operation = normalizeOperation(item, currentProfileId.value, userId()!);
+        const client = getSupabaseClient();
+        syncStatus.value = 'syncing';
+        try {
+          const result = await sendOutboxOperation(client, operation, signal);
+          if (result.error) throw result.error;
+          syncStatus.value = 'idle';
+          return result;
+        } catch (error) {
+          syncStatus.value = 'error';
+          throw error;
+        }
+      },
+    );
   }
 
-  async function pushDailyCompletion(dc: DailyCompletion): Promise<void> {
-    const uid = userId();
-    if (!uid) return;
-    const profileId = dc.profile_id ?? getProfileId();
-    const supabase = getSupabaseClient();
-
-    if (!isOnline.value) {
-      offlineQueue.push({
-        type: 'upsert',
-        table: 'daily_completions',
-        data: {
-          task_id: dc.task_id,
-          date: dc.date,
-          user_id: uid,
-          profile_id: profileId,
-        },
-      });
-      persistOfflineQueue(offlineQueue);
-      return;
-    }
-
-    try {
-      const { error } = await supabase.from('daily_completions').upsert({
-        task_id: dc.task_id,
-        date: dc.date,
-        user_id: uid,
-        profile_id: profileId,
-      });
-
-      if (error) throw error;
-      // 成功推送后消费离线队列
-      flushOfflineQueue();
-    } catch (e) {
-      diagnosticsLogger.error(
-        'sync',
-        'sync.push_daily_completion_failed',
-        '同步每日完成记录失败',
-        e,
-        {
-          task_id: dc.task_id,
-          date: dc.date,
-        },
-      );
-      offlineQueue.push({
-        type: 'upsert',
-        table: 'daily_completions',
-        data: {
-          task_id: dc.task_id,
-          date: dc.date,
-          user_id: uid,
-          profile_id: profileId,
-        },
-      });
-      persistOfflineQueue(offlineQueue);
-      scheduleRetry(() => flushOfflineQueue());
-    }
-  }
-
-  /** 从 Supabase 删除每日完成记录（取消完成时调用） */
-  async function pushDeleteDailyCompletion(taskId: string, date: string): Promise<void> {
-    const uid = userId();
-    if (!uid) return;
-    const profileId = getProfileId();
-    const supabase = getSupabaseClient();
-
-    if (!isOnline.value) {
-      offlineQueue.push({
-        type: 'delete',
-        table: 'daily_completions',
-        data: { task_id: taskId, date, user_id: uid, profile_id: profileId },
-      });
-      persistOfflineQueue(offlineQueue);
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('daily_completions')
-        .delete()
-        .eq('task_id', taskId)
-        .eq('date', date)
-        .eq('user_id', uid)
-        .eq('profile_id', profileId);
-
-      if (error) throw error;
-      // 成功推送后消费离线队列
-      flushOfflineQueue();
-    } catch (e) {
-      diagnosticsLogger.error(
-        'sync',
-        'sync.delete_daily_completion_failed',
-        '删除每日完成记录失败',
-        e,
-        {
-          task_id: taskId,
-          date,
-        },
-      );
-      offlineQueue.push({
-        type: 'delete',
-        table: 'daily_completions',
-        data: { task_id: taskId, date, user_id: uid, profile_id: profileId },
-      });
-      persistOfflineQueue(offlineQueue);
-      scheduleRetry(() => flushOfflineQueue());
-    }
+  async function flushOutbox(): Promise<void> {
+    await outboxConsumer!.initialize();
+    await outboxConsumer!.flush();
   }
 
   /** 拉取远端的每日完成记录 */
@@ -539,69 +351,17 @@ export function useSync() {
     return channel;
   }
 
-  // ── 离线队列 ──
-
-  /**
-   * 刷新离线队列：网络恢复后将暂存的操作批量推送到 Supabase。
-   * 采用「先清空再逐条推送」策略：清空后若某条失败则重新入队。
-   * 若队列未清空，自动调度重试。
-   */
-  async function flushOfflineQueue(): Promise<void> {
-    if (offlineQueue.length === 0) return;
-    const supabase = getSupabaseClient();
-    const uid = userId();
-
-    syncStatus.value = 'syncing';
-    const queue = offlineQueue.map((item) =>
-      normalizeOfflineQueueItem(item, currentProfileId.value, uid),
-    );
-    offlineQueue.length = 0;
-    persistOfflineQueue(offlineQueue);
-
-    const failedItems = await flushOfflineQueueItems(queue, async (item) => {
-      if (item.type === 'delete') {
-        return supabase.from(item.table).delete().match(item.data);
-      }
-      return supabase.from(item.table).upsert(item.data);
-    });
-
-    for (const item of failedItems) {
-      try {
-        offlineQueue.push(item);
-        persistOfflineQueue(offlineQueue);
-        diagnosticsLogger.warn('sync', 'sync.offline_queue_item_failed', '离线队列推送失败', {
-          type: item.type,
-          table: item.table,
-        });
-      } catch {
-        // 队列持久化失败不应阻止其他失败项继续回到内存队列。
-      }
-    }
-
-    if (offlineQueue.length > 0) {
-      // 队列未清空（网络仍未恢复），调度重试
-      syncStatus.value = 'error';
-      scheduleRetry(() => flushOfflineQueue());
-    } else {
-      syncStatus.value = 'idle';
-    }
-  }
-
   return {
     syncStatus,
     lastSyncAt,
-    offlineQueueCount,
+    offlineQueueCount: outboxCount,
     currentProfileId,
     getProfileId,
     setProfileId,
-    pushTask,
-    pushDailyCompletion,
-    pushDeleteDailyCompletion,
     pullTasks,
     pullDailyCompletions,
     subscribeToChanges,
     unsubscribeFromChanges,
-    hasPendingDailyCompletion,
-    flushOfflineQueue,
+    flushOutbox,
   };
 }

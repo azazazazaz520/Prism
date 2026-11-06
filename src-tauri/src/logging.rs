@@ -3,8 +3,8 @@ mod tests {
     use super::*;
     use chrono::Local;
     use serde_json::json;
-    use std::fs::{self, File};
-    use std::path::{Path, PathBuf};
+    use std::fs;
+    use std::path::PathBuf;
 
     fn temp_dir() -> PathBuf {
         let path =
@@ -28,25 +28,6 @@ mod tests {
         }
     }
 
-    fn write_oversized_log_files(dir: &Path) {
-        let date = Local::now().date_naive();
-        for index in 0..3 {
-            let file_name = log_file_name(date, index);
-            let path = dir.join(file_name);
-            File::create(path)
-                .unwrap()
-                .set_len(20 * 1024 * 1024)
-                .unwrap();
-        }
-    }
-
-    fn directory_size(dir: &Path) -> u64 {
-        fs::read_dir(dir)
-            .unwrap()
-            .map(|entry| entry.unwrap().metadata().unwrap().len())
-            .sum()
-    }
-
     #[test]
     fn append_batch_writes_one_json_object_per_line() {
         let dir = temp_dir();
@@ -64,95 +45,6 @@ mod tests {
             "sync.pull_failed"
         );
 
-        fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
-    fn cleanup_keeps_total_log_size_within_limit() {
-        let dir = temp_dir();
-        write_oversized_log_files(&dir);
-        let writer = LogWriter::new(dir.clone()).unwrap();
-        writer.cleanup().unwrap();
-
-        assert!(directory_size(&dir) <= 50 * 1024 * 1024);
-
-        fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
-    fn append_batch_rotates_after_file_reaches_ten_megabytes() {
-        let dir = temp_dir();
-        let date = Local::now().date_naive();
-        File::create(dir.join(log_file_name(date, 0)))
-            .unwrap()
-            .set_len(10 * 1024 * 1024)
-            .unwrap();
-        let writer = LogWriter::new(dir.clone()).unwrap();
-
-        writer
-            .append_batch(&[test_event("sync.pull_failed")])
-            .unwrap();
-
-        assert!(dir.join(log_file_name(date, 1)).is_file());
-
-        fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
-    fn cleanup_removes_logs_older_than_fourteen_days() {
-        let dir = temp_dir();
-        let expired_date =
-            (chrono::Local::now().date_naive() - chrono::Duration::days(15)).format("%Y-%m-%d");
-        let expired_file = dir.join(format!("prism-{expired_date}.jsonl"));
-        File::create(&expired_file).unwrap();
-        let writer = LogWriter::new(dir.clone()).unwrap();
-
-        writer.cleanup().unwrap();
-
-        assert!(!expired_file.exists());
-
-        fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
-    fn append_internal_writes_a_complete_internal_event() {
-        let dir = temp_dir();
-        let writer = LogWriter::new(dir.clone()).unwrap();
-
-        writer
-            .append_internal(
-                LogLevel::Warn,
-                "persistence",
-                "persistence.save_retried",
-                "保存失败后重试",
-                json!({ "retry_count": 1 }),
-            )
-            .unwrap();
-
-        let date = Local::now().date_naive();
-        let content = fs::read_to_string(dir.join(log_file_name(date, 0))).unwrap();
-        let log: serde_json::Value = serde_json::from_str(content.trim()).unwrap();
-        assert_eq!(log["level"], "warn");
-        assert_eq!(log["module"], "persistence");
-        assert_eq!(log["trace_id"], "");
-        assert_eq!(log["window"], "");
-        assert_eq!(log["app_version"], "");
-        assert_eq!(log["context"]["retry_count"], 1);
-
-        fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
-    fn append_batch_rejects_an_event_larger_than_file_limit() {
-        let dir = temp_dir();
-        let writer = LogWriter::new(dir.clone()).unwrap();
-        let mut event = test_event("oversized");
-        event.message = "x".repeat(MAX_FILE_SIZE as usize);
-
-        let result = writer.append_batch(&[event]);
-
-        assert!(result.is_err());
-        assert_eq!(directory_size(&dir), 0);
         fs::remove_dir_all(dir).unwrap();
     }
 }

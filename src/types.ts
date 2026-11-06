@@ -19,6 +19,14 @@ export interface Task {
   profile_id?: string | null;
 }
 
+export interface TaskMetaPatch {
+  tags?: string[];
+  important?: boolean;
+  pinned?: boolean;
+  isDaily?: boolean;
+  dueDate?: string | null;
+}
+
 export interface DailyCompletion {
   task_id: string;
   date: string;

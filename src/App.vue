@@ -5,7 +5,7 @@ import {
   activatePluginPage,
   deactivatePluginPage,
 } from './plugin-api/views-impl';
-import { invokeWithDiagnostics as invoke } from './diagnostics/invoke-logged';
+import { diagnosticsLogger, invokeWithDiagnostics as invoke } from './diagnostics/invoke-logged';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { AppModule, SettingsSubModule, Task } from './types';
@@ -28,6 +28,7 @@ import { useTaskStore } from './composables/useTaskStore';
 import { useAiStatus } from './composables/useAiStatus';
 import { usePluginLoader } from './composables/usePluginLoader';
 import { useContextMenu } from './composables/useContextMenu';
+import { createAppExitController } from './composables/useAppExit';
 import { getTodayStr } from './composables/useFilterEngine';
 
 // ── 模块注册表 ──────────────────────────────
@@ -50,7 +51,6 @@ const {
   loadError,
   loadAll,
   refreshTasks,
-  pushTask,
   pullAndMerge,
   addTask,
   applyImportedTasks,
@@ -127,10 +127,68 @@ const hasTaskFilters = computed(
     taskView.value !== 'all',
 );
 
+// ── 退出协调 ──────────────────────────────
+
+const noteEditorRef = ref<InstanceType<typeof NoteEditor> | null>(null);
+/** 退出准备期间冻结笔记修改并展示提示。 */
+const exitFrozen = ref(false);
+const noticeMessage = ref('');
+let _noticeTimer: ReturnType<typeof setTimeout> | null = null;
+let _lastSyncAt = 0;
+let _restoreSyncPending = false;
+
+function showNotice(message: string) {
+  noticeMessage.value = message;
+  if (_noticeTimer) clearTimeout(_noticeTimer);
+  _noticeTimer = setTimeout(() => {
+    noticeMessage.value = '';
+  }, 5000);
+}
+
+const appExit = createAppExitController(
+  {},
+  {
+    saveNotes: async () => {
+      const editor = noteEditorRef.value;
+      if (!editor) {
+        return {
+          success: false,
+          failedPaths: [],
+          conflictPaths: [],
+          message: '笔记编辑器尚未就绪',
+        };
+      }
+      return editor.flushNotesForExit();
+    },
+    onFrozenChange: (frozen) => {
+      exitFrozen.value = frozen;
+      if (!frozen) flushPendingRestoreCompensation();
+    },
+    onNotice: showNotice,
+  },
+);
+
+/** 恢复事件绕过焦点刷新节流；退出准备期间暂缓，解除冻结后补发。 */
+function runRestoreCompensation() {
+  if (exitFrozen.value) {
+    _restoreSyncPending = true;
+    return;
+  }
+  _restoreSyncPending = false;
+  _lastSyncAt = Date.now();
+  pullAndMerge().catch(() => {});
+  loadAiSettings();
+}
+
+function flushPendingRestoreCompensation() {
+  if (_restoreSyncPending) runRestoreCompensation();
+}
+
 // ── 生命周期 ──────────────────────────────
 
 // 在 setup 顶层注册清理，避免 async onMounted 中 await 后丢失组件上下文
 let _unlistenFocus: (() => void) | null = null;
+let _unlistenRestored: (() => void) | null = null;
 let _unlistenTasksImported: (() => void) | null = null;
 let _pollInterval: ReturnType<typeof setInterval> | null = null;
 let _dateInterval: ReturnType<typeof setInterval> | null = null;
@@ -142,12 +200,6 @@ function refreshCurrentDate() {
 }
 const _handleForceSync = async () => {
   await refreshTasks();
-  // 推送插件创建/修改的任务到 Supabase
-  for (const t of tasks.value) {
-    if (t.profile_id) {
-      pushTask(t).catch(() => {});
-    }
-  }
 };
 
 // ── 全局右键菜单 ──────────────────────────
@@ -175,7 +227,10 @@ function onNavigateSettings(event: Event) {
 
 onUnmounted(() => {
   _unlistenFocus?.();
+  _unlistenRestored?.();
   _unlistenTasksImported?.();
+  appExit.dispose();
+  if (_noticeTimer) clearTimeout(_noticeTimer);
   window.removeEventListener('prism:force-sync', _handleForceSync);
   if (_pollInterval) clearInterval(_pollInterval);
   if (_dateInterval) clearInterval(_dateInterval);
@@ -195,17 +250,31 @@ onMounted(async () => {
   loadPlugins();
 
   const appWindow = getCurrentWindow();
-  let lastRefresh = 0;
   _unlistenFocus = await appWindow.listen('tauri://focus', () => {
     refreshCurrentDate();
     const now = Date.now();
-    if (now - lastRefresh < 60_000) return;
-    lastRefresh = now;
+    if (now - _lastSyncAt < 60_000) return;
+    _lastSyncAt = now;
     pullAndMerge().catch(() => {});
     loadAiSettings();
   });
+  // 恢复事件绕过焦点节流直接补偿同步，与同窗口在途同步合并。
+  _unlistenRestored = await appWindow.listen('prism:application-restored', () => {
+    runRestoreCompensation();
+  });
   window.addEventListener('prism:force-sync', _handleForceSync);
   window.addEventListener('prism:nav-settings', onNavigateSettings);
+  await appExit.initialize();
+  try {
+    await invoke('register_exit_participant');
+  } catch (error) {
+    diagnosticsLogger.error(
+      'app',
+      'app.exit_participant_register_failed',
+      '登记退出保存参与者失败',
+      error,
+    );
+  }
   // 每 5 分钟触发一次增量后台同步，用于补偿 Realtime 丢失并校正跨设备状态
   _pollInterval = setInterval(() => {
     pullAndMerge().catch(() => {});
@@ -534,7 +603,7 @@ function dismissImportDiscoveryHint() {
           v-show="activeModule === 'notes' && isEnabled('notes')"
           class="module-notes module-notes-persistent"
         >
-          <NoteEditor :active="activeModule === 'notes'" />
+          <NoteEditor ref="noteEditorRef" :active="activeModule === 'notes'" :frozen="exitFrozen" />
         </div>
       </div>
 
@@ -600,6 +669,7 @@ function dismissImportDiscoveryHint() {
     @close="closeContextMenu"
   />
   <Toast :message="undoMessage || ''" action-label="撤销" @action="undoLastAction" />
+  <Toast :message="noticeMessage" />
 </template>
 
 <style scoped>

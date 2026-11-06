@@ -2,8 +2,7 @@ use serde::Serialize;
 use std::fs;
 use std::io::ErrorKind;
 
-use crate::prompt;
-use crate::store;
+use crate::ai::prompt;
 
 /// 前端可见的 Prompt 元数据（不包含完整内容体）。
 #[derive(Debug, Serialize, Clone)]
@@ -19,7 +18,7 @@ pub struct PromptMeta {
 /// 前端可据此渲染 Prompt 设置列表。
 #[tauri::command]
 pub fn list_prompts() -> Vec<PromptMeta> {
-    let dir = store::get_workspace_dir().join("prompts");
+    let dir = crate::storage::paths::get_workspace_dir().join("prompts");
     prompt::all()
         .iter()
         .map(|t| PromptMeta {
@@ -33,7 +32,9 @@ pub fn list_prompts() -> Vec<PromptMeta> {
 /// 获取单个 Prompt 的完整内容（优先文件，回退默认值）。
 #[tauri::command]
 pub fn get_prompt(name: String) -> Result<String, String> {
-    let path = store::get_workspace_dir().join("prompts").join(&name);
+    let path = crate::storage::paths::get_workspace_dir()
+        .join("prompts")
+        .join(&name);
     match fs::read_to_string(&path) {
         Ok(content) => Ok(content),
         Err(err) => match err.kind() {
@@ -55,7 +56,7 @@ pub fn update_prompt(name: String, content: String) -> Result<(), String> {
     if !prompt::all().iter().any(|t| t.name == name) {
         return Err(format!("未知的 Prompt: {}", name));
     }
-    let dir = store::get_workspace_dir().join("prompts");
+    let dir = crate::storage::paths::get_workspace_dir().join("prompts");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     fs::write(dir.join(&name), &content).map_err(|e| e.to_string())
 }
@@ -67,7 +68,9 @@ pub fn reset_prompt(name: String) -> Result<(), String> {
     if !prompt::all().iter().any(|t| t.name == name) {
         return Err(format!("未知的 Prompt: {}", name));
     }
-    let path = store::get_workspace_dir().join("prompts").join(&name);
+    let path = crate::storage::paths::get_workspace_dir()
+        .join("prompts")
+        .join(&name);
     if path.exists() {
         fs::remove_file(&path).map_err(|e| e.to_string())?;
     }

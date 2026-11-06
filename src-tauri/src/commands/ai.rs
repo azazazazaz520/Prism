@@ -1,5 +1,6 @@
-use crate::{ai, store};
-use crate::{with_ai_context, AppState};
+use crate::ai;
+use crate::ai::context::with_ai_context;
+use crate::AppState;
 
 /// 统一 AI 入口：根据 mode 路由处理
 /// mode: "auto" | "add" | "summary" | "focus"
@@ -9,9 +10,9 @@ pub async fn ai_execute(
     mode: String,
     input: String,
 ) -> Result<ai::AiExecuteResult, String> {
-    let settings = state.with_config(crate::resolve_ai_settings)?;
+    let settings = state.with_config(crate::ai::context::resolve_ai_settings)?;
     let (all_tasks, existing_tags, today_completed) = state.read_data(|data| {
-        let all: Vec<store::Task> = data
+        let all: Vec<crate::models::Task> = data
             .tasks
             .iter()
             .filter(|t| !t.is_deleted)
@@ -24,7 +25,7 @@ pub async fn ai_execute(
             .flat_map(|t| t.tags.clone())
             .collect();
         let today = chrono::Local::now().date_naive();
-        let completed: Vec<store::Task> = data
+        let completed: Vec<crate::models::Task> = data
             .tasks
             .iter()
             .filter(|t| {
@@ -73,7 +74,7 @@ pub async fn ai_overdue_suggest(
 ) -> Result<Vec<ai::OverdueSuggestion>, String> {
     let (settings, overdue) = with_ai_context(&state, |settings, data| {
         let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-        let overdue: Vec<store::Task> = data
+        let overdue: Vec<crate::models::Task> = data
             .tasks
             .iter()
             .filter(|t| {
@@ -92,7 +93,7 @@ pub async fn ai_overdue_suggest(
 #[tauri::command]
 pub async fn ai_chat(state: tauri::State<'_, AppState>, message: String) -> Result<String, String> {
     let (settings, tasks) = with_ai_context(&state, |settings, data| {
-        let tasks: Vec<store::Task> = data
+        let tasks: Vec<crate::models::Task> = data
             .tasks
             .iter()
             .filter(|t| !t.is_deleted)

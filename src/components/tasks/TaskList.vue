@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { Task } from '../../types';
+import type { Task, TaskMetaPatch } from '../../types';
 import TaskItem from './TaskItem.vue';
 import EmptyState from '../workspace/EmptyState.vue';
 
@@ -13,11 +13,11 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  toggle: [id: string];
-  toggleDaily: [id: string, date: string];
+  toggle: [id: string, completed: boolean];
+  toggleDaily: [id: string, date: string, completed: boolean];
   update: [id: string, title: string];
   delete: [id: string];
-  updateMeta: [id: string, tags: string[], important: boolean, pinned: boolean, isDaily: boolean];
+  updateMeta: [id: string, patch: TaskMetaPatch];
   clearFilters: [];
 }>();
 
@@ -85,14 +85,11 @@ const normalTasks = computed(() => sortedTasks.value.filter((t) => !t.pinned || 
             :task="task"
             :is-daily-completed="dailyCompletionsMap[task.id] ?? false"
             :ai-enabled="props.aiEnabled"
-            @toggle="(id) => emit('toggle', id)"
-            @toggle-daily="(id, date) => emit('toggleDaily', id, date)"
+            @toggle="(id, completed) => emit('toggle', id, completed)"
+            @toggle-daily="(id, date, completed) => emit('toggleDaily', id, date, completed)"
             @update="(id, title) => emit('update', id, title)"
             @delete="(id) => emit('delete', id)"
-            @update-meta="
-              (id, tags, important, pinned, isDaily) =>
-                emit('updateMeta', id, tags, important, pinned, isDaily)
-            "
+            @update-meta="(id, patch) => emit('updateMeta', id, patch)"
           />
         </TransitionGroup>
       </div>
@@ -107,14 +104,11 @@ const normalTasks = computed(() => sortedTasks.value.filter((t) => !t.pinned || 
           :task="task"
           :is-daily-completed="dailyCompletionsMap[task.id] ?? false"
           :ai-enabled="props.aiEnabled"
-          @toggle="(id) => emit('toggle', id)"
-          @toggle-daily="(id, date) => emit('toggleDaily', id, date)"
+          @toggle="(id, completed) => emit('toggle', id, completed)"
+          @toggle-daily="(id, date, completed) => emit('toggleDaily', id, date, completed)"
           @update="(id, title) => emit('update', id, title)"
           @delete="(id) => emit('delete', id)"
-          @update-meta="
-            (id, tags, important, pinned, isDaily) =>
-              emit('updateMeta', id, tags, important, pinned, isDaily)
-          "
+          @update-meta="(id, patch) => emit('updateMeta', id, patch)"
         />
       </TransitionGroup>
     </template>

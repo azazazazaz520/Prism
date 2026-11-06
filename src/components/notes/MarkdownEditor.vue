@@ -81,6 +81,9 @@ function isDark(): boolean {
 /** 动态主题 Compartment */
 const themeComp = new Compartment();
 
+/** 只读状态 Compartment：退出准备期间禁止用户输入。 */
+const editableComp = new Compartment();
+
 // ── 自定义主题（布局/间距，叠加在 oneDark/default 之上） ──
 
 const customTheme = EditorView.theme({
@@ -499,6 +502,10 @@ const livePreviewPlugin = createSyntaxTreeViewPlugin(buildLivePreview);
 function buildExtensions(codeLanguages: readonly LanguageDescription[] = []) {
   return [
     historyComp.of(history()),
+    editableComp.of([
+      EditorState.readOnly.of(props.disabled),
+      EditorView.editable.of(!props.disabled),
+    ]),
     // 使用浏览器原生文字选区，避免 Live Preview 的块级装饰把选区扩展成整块背景。
     dropCursor(),
     bracketMatching(),
@@ -542,6 +549,19 @@ watch(
       replaceEditorDocument(view, historyComp, newVal);
     }
     lastEmittedValue = null;
+  },
+);
+
+watch(
+  () => props.disabled,
+  (disabled) => {
+    if (!view) return;
+    view.dispatch({
+      effects: editableComp.reconfigure([
+        EditorState.readOnly.of(disabled),
+        EditorView.editable.of(!disabled),
+      ]),
+    });
   },
 );
 

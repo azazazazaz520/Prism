@@ -10,6 +10,7 @@ import FloatingWindow from './components/overlays/FloatingWindow.vue';
 import ImportFloating from './components/overlays/ImportFloating.vue';
 import ScreenshotSelector from './components/overlays/ScreenshotSelector.vue';
 import { getCurrent, onOpenUrl } from '@tauri-apps/plugin-deep-link';
+import { ensureOutboxReady } from './composables/useOutbox';
 
 function mountApp(component: Component, logger: Logger) {
   const app = createApp(component);
@@ -70,6 +71,7 @@ async function bootstrap() {
   );
 
   try {
+    await ensureOutboxReady();
     await installOAuthDeepLinkListener();
     await initTheme();
 
@@ -88,6 +90,15 @@ async function bootstrap() {
   } catch (error) {
     logger.error('window', 'window.bootstrap_failed', 'Prism 初始化失败', error);
     await logger.dispose();
+    const root = document.getElementById('app');
+    if (root) {
+      const message = document.createElement('p');
+      message.textContent = `应用初始化失败：${String(error)}`;
+      const retry = document.createElement('button');
+      retry.textContent = '重试';
+      retry.onclick = () => window.location.reload();
+      root.replaceChildren(message, retry);
+    }
     throw error;
   }
 }

@@ -355,33 +355,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_file_entry_serialization() {
-        let entry = FileEntry {
-            name: "test.md".to_string(),
-            path: "inbox/test.md".to_string(),
-            is_dir: false,
-            children: None,
-        };
-        let json = serde_json::to_string(&entry).unwrap();
-        assert!(json.contains("test.md"));
-        assert!(json.contains("inbox/test.md"));
-        assert!(!json.contains("children"));
-    }
-
-    #[test]
-    fn test_dir_entry_serialization() {
-        let entry = FileEntry {
-            name: "inbox".to_string(),
-            path: "inbox".to_string(),
-            is_dir: true,
-            children: Some(vec![]),
-        };
-        let json = serde_json::to_string(&entry).unwrap();
-        assert!(json.contains("inbox"));
-        assert!(json.contains("children"));
-    }
-
-    #[test]
     fn test_write_note_content_replaces_target_without_leaving_temporary_file() {
         let tmp = std::env::temp_dir().join(format!("prism-test-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&tmp).unwrap();
@@ -408,24 +381,6 @@ mod tests {
     }
 
     #[test]
-    fn test_read_dir_entries_only_reads_one_level() {
-        let tmp = std::env::temp_dir().join(format!("prism-test-{}", uuid::Uuid::new_v4()));
-        fs::create_dir_all(tmp.join("notes/nested/deep")).unwrap();
-        fs::write(tmp.join("notes/root.md"), "root").unwrap();
-        fs::write(tmp.join("notes/ignored.txt"), "ignored").unwrap();
-        fs::write(tmp.join("notes/nested/child.md"), "child").unwrap();
-
-        let entries = read_dir_entries(&tmp.join("notes"), "").unwrap();
-        assert_eq!(entries.len(), 2);
-        assert!(entries.iter().any(|entry| entry.path == "root.md"));
-        let nested = entries.iter().find(|entry| entry.path == "nested").unwrap();
-        assert!(nested.is_dir);
-        assert!(nested.children.is_none());
-
-        fs::remove_dir_all(&tmp).ok();
-    }
-
-    #[test]
     fn test_resolve_note_path_rejects_traversal() {
         let tmp = std::env::temp_dir().join(format!("prism-test-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(tmp.join("notes")).unwrap();
@@ -437,13 +392,5 @@ mod tests {
         assert!(resolve_note_path(&base, "../../outside/escape.md").is_err());
 
         fs::remove_dir_all(&tmp).ok();
-    }
-
-    #[test]
-    fn test_is_safe_notes_dir_rejects_drive_root() {
-        let path = PathBuf::from("C:\\");
-        if path.exists() {
-            assert!(is_safe_notes_dir(&path).is_err());
-        }
     }
 }

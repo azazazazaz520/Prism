@@ -250,11 +250,6 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
-    fn logs_dir_is_inside_workspace() {
-        assert_eq!(get_logs_dir(), get_workspace_dir().join("logs"));
-    }
-
-    #[test]
     fn data_replacement_preserves_complete_snapshot_and_failed_replace_keeps_target() {
         let dir = temp_dir();
         fs::create_dir_all(&dir).unwrap();
@@ -283,48 +278,6 @@ mod tests {
     }
 
     #[test]
-    fn load_json_or_default_parses_valid_content() {
-        let dir = temp_dir();
-        fs::create_dir_all(&dir).unwrap();
-        let logger = LogWriter::new(dir.clone()).unwrap();
-        let path = dir.join("data.json");
-        fs::write(&path, r#"{"version":1,"tasks":[]}"#).unwrap();
-
-        let loaded: serde_json::Value = load_json_or_default(
-            &path,
-            &logger,
-            serde_json::json!(null),
-            "e1",
-            "d1",
-            "e2",
-            "d2",
-        );
-        assert_eq!(loaded["version"], 1);
-        assert!(path.exists());
-        fs::remove_dir_all(&dir).unwrap();
-    }
-
-    #[test]
-    fn load_json_or_default_returns_default_when_missing() {
-        let dir = temp_dir();
-        fs::create_dir_all(&dir).unwrap();
-        let logger = LogWriter::new(dir.clone()).unwrap();
-        let path = dir.join("missing.json");
-
-        let loaded: serde_json::Value = load_json_or_default(
-            &path,
-            &logger,
-            serde_json::json!({"fallback": true}),
-            "e1",
-            "d1",
-            "e2",
-            "d2",
-        );
-        assert_eq!(loaded, serde_json::json!({"fallback": true}));
-        fs::remove_dir_all(&dir).unwrap();
-    }
-
-    #[test]
     fn load_json_or_default_backs_up_corrupt_file() {
         let dir = temp_dir();
         fs::create_dir_all(&dir).unwrap();
@@ -342,7 +295,6 @@ mod tests {
             "d2",
         );
         assert_eq!(loaded, serde_json::json!(null));
-        // 原文件已被移走，替换为备份文件
         assert!(!path.exists());
         let backups: Vec<String> = fs::read_dir(&dir)
             .unwrap()

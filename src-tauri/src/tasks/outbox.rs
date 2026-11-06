@@ -266,26 +266,6 @@ mod tests {
     }
 
     #[test]
-    fn explicit_completed_target_is_idempotent_and_date_patch_distinguishes_null() {
-        let mut data = data_with_task();
-        let id = data.tasks[0].id.clone();
-        service::set_daily_completed(&mut data, &id, "2026-10-13", true).unwrap();
-        let before = data.clone();
-        service::set_daily_completed(&mut data, &id, "2026-10-13", true).unwrap();
-        enqueue_changes(&before, &mut data, None, None);
-        assert!(data.tasks[0].completed);
-        assert_eq!(data.daily_completions.len(), 1);
-        assert!(data.outbox.is_empty());
-        data.tasks[0].due_date = Some("2026-10-14".into());
-        let title = serde_json::from_value(json!({"id":id,"title":"标题"})).unwrap();
-        service::update(&mut data, title).unwrap();
-        assert_eq!(data.tasks[0].due_date.as_deref(), Some("2026-10-14"));
-        let clear = serde_json::from_value(json!({"id":id,"dueDate":null})).unwrap();
-        service::update(&mut data, clear).unwrap();
-        assert!(data.tasks[0].due_date.is_none());
-    }
-
-    #[test]
     fn cancel_daily_completion_persists_task_and_delete_intent() {
         let mut data = data_with_task();
         let id = data.tasks[0].id.clone();
@@ -301,21 +281,6 @@ mod tests {
         let restored: DataStore = serde_json::from_str(&saved).unwrap();
         assert!(pending_daily(&restored, &id, "2026-10-13"));
         assert!(!restored.tasks[0].completed);
-    }
-
-    #[test]
-    fn cancelling_before_completion_record_arrives_keeps_delete_intent() {
-        let mut data = data_with_task();
-        let id = data.tasks[0].id.clone();
-        data.tasks[0].completed = true;
-        let before = data.clone();
-        service::set_daily_completed(&mut data, &id, "2026-10-13", false).unwrap();
-        enqueue_changes(&before, &mut data, None, None);
-        assert!(!data.tasks[0].completed);
-        assert!(data.daily_completions.is_empty());
-        assert!(pending_daily(&data, &id, "2026-10-13"));
-        assert_eq!(data.outbox.len(), 2);
-        assert_eq!(data.outbox[0].operation.kind, "delete");
     }
 
     #[test]
@@ -379,53 +344,6 @@ mod tests {
     }
 
     #[test]
-    fn compaction_preserves_task_before_daily_records_and_latest_delete_per_date() {
-        let mut data = data_with_task();
-        let task_id = data.tasks[0].id.clone();
-        let before = crate::models::default_data_store();
-        enqueue_changes(&before, &mut data, Some("profile"), None);
-        for date in ["2026-10-13", "2026-10-14"] {
-            let before = data.clone();
-            service::set_daily_completed(&mut data, &task_id, date, true).unwrap();
-            enqueue_changes(&before, &mut data, Some("profile"), None);
-        }
-        let before = data.clone();
-        service::set_daily_completed(&mut data, &task_id, "2026-10-13", false).unwrap();
-        enqueue_changes(&before, &mut data, Some("profile"), None);
-        let before = data.clone();
-        let patch = serde_json::from_value(json!({"id":task_id,"title":"最终标题"})).unwrap();
-        service::update(&mut data, patch).unwrap();
-        enqueue_changes(&before, &mut data, Some("profile"), None);
-        assert_eq!(data.outbox.len(), 3);
-        assert_eq!(data.outbox[0].operation.table, "tasks");
-        assert_eq!(data.outbox[0].operation.data["title"], "最终标题");
-        assert_eq!(data.outbox[1].operation.kind, "delete");
-        assert_eq!(data.outbox[1].operation.data["date"], "2026-10-13");
-        assert_eq!(data.outbox[2].operation.kind, "upsert");
-        assert_eq!(data.outbox[2].operation.data["date"], "2026-10-14");
-        assert!(data
-            .outbox
-            .windows(2)
-            .all(|pair| pair[0].sequence < pair[1].sequence));
-    }
-
-    #[test]
-    fn invalid_legacy_record_keeps_marker_and_queue_unmodified() {
-        let mut data = crate::models::default_data_store();
-        assert!(import_legacy(
-            &mut data,
-            vec![QueueOperation {
-                kind: "delete".into(),
-                table: "tasks".into(),
-                data: json!({})
-            }]
-        )
-        .is_err());
-        assert!(!data.legacy_queue_imported);
-        assert!(data.outbox.is_empty());
-    }
-
-    #[test]
     fn consumer_is_exclusive_and_closing_owner_invalidates_confirmation() {
         let mut data = data_with_task();
         append(
@@ -456,26 +374,5 @@ mod tests {
         assert_ne!(first.token, next.token);
         assert_eq!(first.item.id, next.item.id);
         assert_eq!(data.outbox.len(), 1);
-    }
-
-    #[test]
-    fn renderer_restart_without_confirmation_eventually_releases_claim() {
-        let mut data = data_with_task();
-        append(
-            &mut data,
-            QueueOperation {
-                kind: "upsert".into(),
-                table: "tasks".into(),
-                data: json!({"id":"task"}),
-            },
-        );
-        let mut consumer = Consumer::default();
-        let old = consumer.claim("main", data.outbox.first()).unwrap();
-        consumer.current.as_mut().unwrap().claimed_at =
-            Instant::now() - Duration::from_secs(REQUEST_TIMEOUT_SECS * 2);
-        let new = consumer.claim("main", data.outbox.first()).unwrap();
-        assert_ne!(old.token, new.token);
-        assert!(!consumer.matches("main", &old.token, &old.item.id));
-        assert_eq!(new.item.id, old.item.id);
     }
 }

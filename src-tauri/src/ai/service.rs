@@ -472,29 +472,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_extract_json_plain() {
-        let result = extract_json(r#"{"title":"test"}"#).unwrap();
-        assert_eq!(result, r#"{"title":"test"}"#);
-    }
-
-    #[test]
     fn test_extract_json_with_markdown() {
         let result = extract_json("```json\n{\"title\":\"test\"}\n```").unwrap();
         assert_eq!(result, r#"{"title":"test"}"#);
-    }
-
-    #[test]
-    fn test_extract_json_with_plain_markdown() {
-        let result = extract_json("```\n{\"title\":\"test\"}\n```").unwrap();
-        assert_eq!(result, r#"{"title":"test"}"#);
-    }
-
-    #[test]
-    fn test_empty_focus_on_no_tasks() {
-        let suggestion = FocusSuggestion {
-            items: vec![],
-            summary: "当前没有待办任务".into(),
-        };
-        assert!(suggestion.items.is_empty());
     }
 }

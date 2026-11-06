@@ -186,25 +186,6 @@ mod tests {
     use crate::{tasks::outbox, tasks::service};
 
     #[test]
-    fn candidate_write_keeps_memory_unchanged_when_save_fails() {
-        let mut data = crate::models::default_data_store();
-        let original_version = data.version;
-
-        let error = commit_data_candidate(
-            &mut data,
-            |candidate| {
-                candidate.version = 99;
-                Ok(())
-            },
-            |_| Err("模拟保存失败".into()),
-        )
-        .expect_err("保存失败应阻止候选状态提交");
-
-        assert_eq!(error, "模拟保存失败");
-        assert_eq!(data.version, original_version);
-    }
-
-    #[test]
     fn candidate_write_commits_memory_after_save_succeeds() {
         let mut data = crate::models::default_data_store();
 

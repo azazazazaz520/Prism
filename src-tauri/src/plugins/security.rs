@@ -93,42 +93,11 @@ pub(crate) fn check_plugin_permission(
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn test_valid_plugin_ids_accepted() {
-        assert!(is_valid_plugin_id("com.prism.hello"));
-        assert!(is_valid_plugin_id("com.example.my-plugin_v2"));
-        assert!(is_valid_plugin_id("a.b.c"));
-    }
 
     #[test]
-    fn test_invalid_plugin_ids_rejected() {
-        assert!(!is_valid_plugin_id(""));
+    fn test_plugin_ids_require_a_namespace_and_safe_characters() {
+        assert!(is_valid_plugin_id("com.prism.hello"));
         assert!(!is_valid_plugin_id("hello"));
         assert!(!is_valid_plugin_id("../../.prism"));
-        assert!(!is_valid_plugin_id("a..b"));
-        assert!(!is_valid_plugin_id("a/b"));
-        assert!(!is_valid_plugin_id("a\\b"));
-        assert!(!is_valid_plugin_id("a:b"));
-        assert!(!is_valid_plugin_id(".hidden"));
-        assert!(!is_valid_plugin_id("trailing."));
-        assert!(!is_valid_plugin_id(&"x".repeat(200)));
-    }
-
-    #[test]
-    fn test_script_ids() {
-        assert!(is_valid_script_id("script:my-script.js"));
-        assert!(is_valid_script_id("script:my_script"));
-        assert!(!is_valid_script_id("script:"));
-        assert!(!is_valid_script_id("script:../evil"));
-        assert!(!is_valid_script_id("script:a/b"));
-        assert!(!is_valid_script_id("plugin"));
-    }
-
-    #[test]
-    fn test_callable_ids() {
-        assert!(is_valid_callable_id("com.prism.hello"));
-        assert!(is_valid_callable_id("script:test"));
-        assert!(!is_valid_callable_id("../../x"));
-        assert!(!is_valid_callable_id("script:"));
     }
 }

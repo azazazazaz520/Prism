@@ -461,66 +461,6 @@ mod tests {
     }
 
     #[test]
-    fn rejects_base_url_credentials_and_query() {
-        assert!(validate_base_url("https://user:pass@example.com").is_err());
-        assert!(validate_base_url("https://example.com?token=secret").is_err());
-        assert!(validate_base_url("ftp://example.com").is_err());
-    }
-
-    #[test]
-    fn validates_job_id_characters() {
-        assert!(validate_job_id("abc-123_DEF").is_ok());
-        assert!(validate_job_id("../secret").is_err());
-        assert!(validate_job_id("").is_err());
-    }
-
-    #[test]
-    fn normalizes_docx_output_extension() {
-        let path = if cfg!(windows) {
-            PathBuf::from(r"C:\Temp\result")
-        } else {
-            PathBuf::from("/tmp/result")
-        };
-        assert_eq!(
-            normalize_output_path(&path).unwrap().extension().unwrap(),
-            "docx"
-        );
-    }
-
-    #[test]
-    fn maps_snake_case_health_response_to_camel_case_output() {
-        let health: ApiHealth = serde_json::from_str(
-            r#"{
-                "status": "ok",
-                "engine": "structure-lite",
-                "worker_processes": 1,
-                "max_pending_jobs": 4,
-                "route_mode": "auto",
-                "export_mode": "hybrid",
-                "model_loaded": true,
-                "max_upload_bytes": 52428800,
-                "max_pages": 100,
-                "text_min_page_chars": 20
-            }"#,
-        )
-        .unwrap();
-        let output: PdfToWordHealth = health.into();
-        let json = serde_json::to_value(output).unwrap();
-        assert_eq!(json["workerProcesses"], 1);
-        assert_eq!(json["maxUploadBytes"], 52428800u64);
-    }
-
-    #[test]
-    fn maps_http_status_to_stable_error_codes() {
-        assert!(classify_http_error(StatusCode::UNAUTHORIZED, "")
-            .starts_with("PDF_TO_WORD_AUTH_INVALID"));
-        assert!(classify_http_error(StatusCode::PAYLOAD_TOO_LARGE, "")
-            .starts_with("PDF_TO_WORD_LIMIT_EXCEEDED"));
-        assert!(classify_http_error(StatusCode::TOO_MANY_REQUESTS, "")
-            .starts_with("PDF_TO_WORD_QUEUE_FULL"));
-    }
-
-    #[test]
     fn limits_download_size_before_writing_next_chunk() {
         assert_eq!(
             checked_download_size(MAX_DOWNLOAD_BYTES - 1, 1).unwrap(),

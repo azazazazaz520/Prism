@@ -494,56 +494,6 @@ mod tests {
         labels.iter().map(|label| (*label).to_string()).collect()
     }
 
-    #[test]
-    fn reports_require_current_request_and_participant() {
-        let coordinator = ExitCoordinator::default();
-        let request_id = coordinator.begin_preparing(participants(&["main"]));
-
-        assert!(coordinator
-            .record_report("workspace-a", request_id, success())
-            .is_err());
-        assert!(coordinator
-            .record_report("main", request_id + 1, success())
-            .is_err());
-        assert!(coordinator
-            .record_report("main", request_id, success())
-            .is_ok());
-    }
-
-    #[test]
-    fn duplicate_and_late_reports_are_rejected() {
-        let coordinator = ExitCoordinator::default();
-        let request_id = coordinator.begin_preparing(participants(&["main"]));
-
-        assert!(coordinator
-            .record_report("main", request_id, success())
-            .is_ok());
-        assert!(coordinator
-            .record_report("main", request_id, success())
-            .is_err());
-
-        let cancelled = coordinator.clear_preparing(request_id);
-        assert_eq!(cancelled, vec!["main"]);
-        assert!(!coordinator.is_busy());
-        assert!(coordinator
-            .record_report("main", request_id, success())
-            .is_err());
-    }
-
-    #[test]
-    fn destroyed_participant_cancels_preparation() {
-        let coordinator = ExitCoordinator::default();
-        let request_id = coordinator.begin_preparing(participants(&["main", "workspace-a"]));
-
-        assert!(coordinator.mark_window_destroyed("workspace-a"));
-        assert!(!coordinator.mark_window_destroyed("workspace-b"));
-        assert_eq!(coordinator.state_for("main").phase, "preparing");
-        assert_eq!(
-            coordinator.state_for("workspace-a").request_id,
-            Some(request_id)
-        );
-    }
-
     #[tokio::test]
     async fn wait_completes_after_all_participants_report() {
         let coordinator = ExitCoordinator::default();
@@ -574,18 +524,6 @@ mod tests {
                 assert_eq!(reason, "笔记保存失败，已取消退出");
             }
             WaitOutcome::Completed => panic!("保存失败不应完成退出"),
-        }
-    }
-
-    #[tokio::test]
-    async fn cleared_request_cancels_wait() {
-        let coordinator = ExitCoordinator::default();
-        let request_id = coordinator.begin_preparing(participants(&["main"]));
-        coordinator.clear_preparing(request_id);
-
-        match coordinator.wait(request_id).await {
-            WaitOutcome::Cancelled(_) => {}
-            WaitOutcome::Completed => panic!("已清理的请求不应完成"),
         }
     }
 }

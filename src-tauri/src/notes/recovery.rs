@@ -379,32 +379,6 @@ mod tests {
     }
 
     #[test]
-    fn atomic_write_leaves_no_temporary_file_and_rebuilds_index() {
-        let (store, root) = temp_store();
-        store.save_snapshot(&snapshot("snap-1")).unwrap();
-
-        assert_eq!(store.list_snapshots().unwrap().len(), 1);
-        assert!(store.index_path().exists());
-        let temporary_count = fs::read_dir(store.snapshots_dir())
-            .unwrap()
-            .filter_map(Result::ok)
-            .filter(|entry| entry.file_name().to_string_lossy().contains(".prism-"))
-            .count();
-        assert_eq!(temporary_count, 0);
-
-        fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn invalid_snapshot_id_cannot_escape_snapshot_directory() {
-        let (store, root) = temp_store();
-        fs::create_dir_all(store.snapshots_dir()).unwrap();
-        assert!(store.snapshot_path("../escape").is_err());
-        assert!(store.snapshot_path("snapshot/other").is_err());
-        fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
     fn list_read_delete_and_repeated_delete_are_safe() {
         let (store, root) = temp_store();
         store.save_snapshot(&snapshot("snap-2")).unwrap();

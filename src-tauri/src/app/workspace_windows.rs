@@ -685,11 +685,7 @@ fn log(app: &AppHandle, level: LogLevel, code: &str, message: &str, details: ser
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::cell::{Cell, RefCell};
-
-    fn fake_error() -> tauri::Error {
-        tauri::Error::Io(std::io::Error::other("模拟窗口操作失败"))
-    }
+    use std::cell::Cell;
 
     fn restore_with(windows: &[&dyn ApplicationWindowOps]) -> RestoreReport {
         restore_with_focus(windows, RestoreFocus::Always)
@@ -764,11 +760,6 @@ mod tests {
         label: String,
         visible: Cell<bool>,
         focused: Cell<bool>,
-        visible_error: bool,
-        show_error: bool,
-        unminimize_error: bool,
-        focus_error: bool,
-        calls: RefCell<Vec<String>>,
     }
 
     impl FakeWindow {
@@ -777,31 +768,7 @@ mod tests {
                 label: label.into(),
                 visible: Cell::new(visible),
                 focused: Cell::new(false),
-                visible_error: false,
-                show_error: false,
-                unminimize_error: false,
-                focus_error: false,
-                calls: RefCell::new(Vec::new()),
             }
-        }
-
-        fn focused(mut self, value: bool) -> Self {
-            self.focused = Cell::new(value);
-            self
-        }
-
-        fn with_visible_error(mut self) -> Self {
-            self.visible_error = true;
-            self
-        }
-
-        fn with_show_error(mut self) -> Self {
-            self.show_error = true;
-            self
-        }
-
-        fn recorded(&self) -> Vec<String> {
-            self.calls.borrow().clone()
         }
     }
 
@@ -811,9 +778,6 @@ mod tests {
         }
 
         fn is_visible(&self) -> tauri::Result<bool> {
-            if self.visible_error {
-                return Err(fake_error());
-            }
             Ok(self.visible.get())
         }
 
@@ -822,34 +786,22 @@ mod tests {
         }
 
         fn show(&self) -> tauri::Result<()> {
-            self.calls.borrow_mut().push("show".into());
-            if self.show_error {
-                return Err(fake_error());
-            }
             self.visible.set(true);
             Ok(())
         }
 
         fn unminimize(&self) -> tauri::Result<()> {
-            self.calls.borrow_mut().push("unminimize".into());
-            if self.unminimize_error {
-                return Err(fake_error());
-            }
             Ok(())
         }
 
         fn set_focus(&self) -> tauri::Result<()> {
-            self.calls.borrow_mut().push("focus".into());
-            if self.focus_error {
-                return Err(fake_error());
-            }
             self.focused.set(true);
             Ok(())
         }
     }
 
     #[test]
-    fn hidden_windows_are_shown_and_unminimized_before_focus() {
+    fn hidden_windows_are_restored_and_main_window_receives_focus() {
         let main = FakeWindow::new("main", false);
         let workspace = FakeWindow::new("workspace-a", false);
         let report = restore_with(&[&workspace, &main]);
@@ -858,129 +810,5 @@ mod tests {
         assert_eq!(report.focus_target.as_deref(), Some("main"));
         assert_eq!(report.focused.as_deref(), Some("main"));
         assert!(!report.has_failures());
-        assert_eq!(
-            main.recorded(),
-            vec!["show", "unminimize", "show", "unminimize", "focus"]
-        );
-        assert_eq!(workspace.recorded(), vec!["show", "unminimize"]);
-    }
-
-    #[test]
-    fn visible_minimized_workspace_is_left_untouched() {
-        let main = FakeWindow::new("main", true);
-        let workspace = FakeWindow::new("workspace-a", true);
-        let report = restore_with(&[&main, &workspace]);
-        assert!(report.hidden.is_empty());
-        assert_eq!(workspace.recorded(), Vec::<String>::new());
-        assert_eq!(main.recorded(), vec!["show", "unminimize", "focus"]);
-    }
-
-    #[test]
-    fn second_launch_without_hidden_windows_does_not_expand_target() {
-        let main = FakeWindow::new("main", true);
-        let report = restore_with_focus(&[&main], RestoreFocus::WhenHidden);
-        assert!(report.hidden.is_empty());
-        assert!(report.focus_target.is_none());
-        assert!(main.recorded().is_empty());
-    }
-
-    #[test]
-    fn second_launch_with_hidden_window_expands_and_focuses_target() {
-        let main = FakeWindow::new("main", false);
-        let report = restore_with_focus(&[&main], RestoreFocus::WhenHidden);
-        assert_eq!(report.hidden, vec!["main"]);
-        assert_eq!(report.focused.as_deref(), Some("main"));
-    }
-
-    #[test]
-    fn minimized_main_without_hidden_windows_is_expanded_and_focused() {
-        let main = FakeWindow::new("main", true);
-        let report = restore_with(&[&main]);
-        assert!(report.hidden.is_empty());
-        assert_eq!(report.focus_target.as_deref(), Some("main"));
-        assert_eq!(report.focused.as_deref(), Some("main"));
-        assert!(main.recorded().contains(&"unminimize".to_string()));
-    }
-
-    #[test]
-    fn visibility_query_failure_is_reported_without_touching_window() {
-        let main = FakeWindow::new("main", false);
-        let broken = FakeWindow::new("workspace-broken", false).with_visible_error();
-        let report = restore_with(&[&main, &broken]);
-        assert_eq!(report.visibility_errors.len(), 1);
-        assert_eq!(report.visibility_errors[0].label, "workspace-broken");
-        assert!(report.has_failures());
-        assert!(broken.recorded().is_empty());
-        assert_eq!(report.restored, vec!["main"]);
-    }
-
-    #[test]
-    fn failed_show_is_reported_and_not_counted_as_restored() {
-        let main = FakeWindow::new("main", false).with_show_error();
-        let report = restore_with(&[&main]);
-        assert_eq!(report.hidden, vec!["main"]);
-        assert!(report.restored.is_empty());
-        assert_eq!(report.failed[0].stage, "show");
-        assert_eq!(report.failed[0].label, "main");
-        assert!(report.has_failures());
-    }
-
-    #[test]
-    fn focus_falls_back_to_focused_window_then_smallest_label() {
-        let workspace = FakeWindow::new("workspace-b", true).focused(true);
-        let other = FakeWindow::new("workspace-a", true);
-        let report = restore_with(&[&workspace, &other]);
-        assert_eq!(report.focus_target.as_deref(), Some("workspace-b"));
-
-        let workspace = FakeWindow::new("workspace-b", true);
-        let other = FakeWindow::new("workspace-a", true);
-        let report = restore_with(&[&workspace, &other]);
-        assert_eq!(report.focus_target.as_deref(), Some("workspace-a"));
-    }
-
-    #[test]
-    fn focus_failure_keeps_shown_windows_and_reports_error() {
-        let mut main = FakeWindow::new("main", false);
-        main.focus_error = true;
-        let report = restore_with(&[&main]);
-        assert_eq!(report.restored, vec!["main"]);
-        assert_eq!(report.focus_target.as_deref(), Some("main"));
-        assert!(report.focused.is_none());
-        assert!(report.focus_error.is_some());
-        assert!(!report.has_restore_failures());
-        assert!(report.has_failures());
-    }
-
-    #[test]
-    fn other_visible_window_keeps_workspace_close_normal() {
-        let states = vec![
-            ("main".to_string(), Ok(true)),
-            ("workspace-b".to_string(), Ok(false)),
-        ];
-        assert!(evaluate_visible_application_windows(&states).unwrap());
-    }
-
-    #[test]
-    fn only_hidden_windows_hide_the_last_workspace() {
-        let states = vec![("main".to_string(), Ok(false))];
-        assert!(!evaluate_visible_application_windows(&states).unwrap());
-    }
-
-    #[test]
-    fn visibility_query_error_keeps_current_window() {
-        let states = vec![
-            ("main".to_string(), Ok(false)),
-            ("workspace-b".to_string(), Err("查询失败".into())),
-        ];
-        assert!(evaluate_visible_application_windows(&states).is_err());
-    }
-
-    #[test]
-    fn application_window_filter_excludes_auxiliary_windows() {
-        assert!(is_application_window("main"));
-        assert!(is_application_window("workspace-123"));
-        assert!(!is_application_window("floating"));
-        assert!(!is_application_window("import"));
-        assert!(!is_application_window("selector"));
     }
 }

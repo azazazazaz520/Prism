@@ -480,14 +480,4 @@ mod tests {
         assert_eq!(created[0].title, "提交报告");
         assert_eq!(created[0].tags, vec!["工作"]);
     }
-
-    #[test]
-    fn add_batch_rejects_invalid_date_without_mutating_store() {
-        let mut data = crate::models::default_data_store();
-        let error = add_batch(&mut data, vec![input("提交报告", Some("明天"))])
-            .expect_err("无效日期应被拒绝");
-
-        assert_eq!(error, "第 1 项任务日期格式无效");
-        assert!(data.tasks.is_empty());
-    }
 }

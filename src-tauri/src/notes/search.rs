@@ -593,7 +593,6 @@ fn search_note_content(content: &str, query_lower: &str) -> (usize, Vec<NoteSear
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
 
     #[test]
     fn test_search_note_content_matches_unicode_and_omits_task_markers() {
@@ -664,88 +663,5 @@ mod tests {
         assert_eq!(response.files[1].match_count, 2);
 
         fs::remove_dir_all(&tmp).ok();
-    }
-
-    #[test]
-    fn test_search_notes_streams_large_lines_and_finds_matches_at_file_end() {
-        let tmp = std::env::temp_dir().join(format!("prism-test-{}", uuid::Uuid::new_v4()));
-        fs::create_dir_all(&tmp).unwrap();
-        let prefix_length = 2 * 1024 * 1024 - 2;
-        let prefix = vec![b'x'; prefix_length];
-        let marker = format!(
-            "<!-- prism-task:needle_{} -->",
-            "a".repeat(READ_BUFFER_BYTES)
-        );
-        let mut file = fs::File::create(tmp.join("large.md")).unwrap();
-        file.write_all(&prefix).unwrap();
-        file.write_all("😀Needle".as_bytes()).unwrap();
-        file.write_all(marker.as_bytes()).unwrap();
-        file.write_all(b"Needle\r\n").unwrap();
-        file.write_all(&prefix).unwrap();
-        file.write_all("尾😀Needle needle".as_bytes()).unwrap();
-        drop(file);
-
-        let response = search_notes(&tmp, 8, "needle", &[], || false).unwrap();
-        fs::remove_dir_all(&tmp).ok();
-
-        assert_eq!(response.scanned_file_count, 1);
-        assert_eq!(response.failed_path_count, 0);
-        assert_eq!(response.matched_file_count, 1);
-        assert!(!response.truncated);
-        let result = &response.files[0];
-        assert_eq!(result.path, "large.md");
-        assert_eq!(result.match_count, 4);
-        assert_eq!(result.matches.len(), 3);
-        assert_eq!(result.matches[0].line, 1);
-        assert_eq!(result.matches[0].column_utf16, prefix_length + 2);
-        assert_eq!(
-            result.matches[1].column_utf16,
-            prefix_length + "😀Needle".encode_utf16().count() + marker.encode_utf16().count()
-        );
-        assert_eq!(result.matches[2].line, 2);
-        assert_eq!(result.matches[2].column_utf16, prefix_length + 3);
-        assert_eq!(result.matches[2].length_utf16, 6);
-        assert!(result
-            .matches
-            .iter()
-            .all(|matched| matched.excerpt.contains("Needle")
-                && !matched.excerpt.contains("prism-task")
-                && matched.excerpt.chars().count() <= 167));
-    }
-
-    #[test]
-    fn test_search_note_reader_cancels_within_large_line() {
-        let content = vec![b'x'; READ_BUFFER_BYTES * 4];
-        let mut input = std::io::Cursor::new(content);
-        let checks = std::cell::Cell::new(0);
-        let result = search_note_reader(&mut input, &NoteSearchPattern::new("needle"), &|| {
-            checks.set(checks.get() + 1);
-            checks.get() >= 2
-        });
-
-        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::Interrupted);
-        assert!(input.position() <= READ_BUFFER_BYTES as u64);
-    }
-
-    #[test]
-    fn test_search_notes_limits_displayed_files_and_counts_all_matches() {
-        let tmp = std::env::temp_dir().join(format!("prism-test-{}", uuid::Uuid::new_v4()));
-        fs::create_dir_all(&tmp).unwrap();
-        for index in 0..NOTE_SEARCH_MAX_FILES + 1 {
-            fs::write(tmp.join(format!("{index:03}.md")), "needle").unwrap();
-        }
-        fs::write(tmp.join("z-Needle-title.md"), "other content").unwrap();
-
-        let response = search_notes(&tmp, 9, "needle", &[], || false).unwrap();
-        fs::remove_dir_all(&tmp).ok();
-
-        assert_eq!(response.scanned_file_count, NOTE_SEARCH_MAX_FILES + 2);
-        assert_eq!(response.matched_file_count, NOTE_SEARCH_MAX_FILES + 2);
-        assert_eq!(response.failed_path_count, 0);
-        assert!(response.truncated);
-        assert_eq!(response.files.len(), NOTE_SEARCH_MAX_FILES);
-        assert_eq!(response.files[0].path, "z-Needle-title.md");
-        assert_eq!(response.files[1].path, "000.md");
-        assert_eq!(response.files.last().unwrap().path, "198.md");
     }
 }

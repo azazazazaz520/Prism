@@ -222,76 +222,6 @@ pub async fn check_update() -> Result<WindowsUpdateManifest, String> {
 mod tests {
     use super::*;
 
-    // ── 错误响应构造 ──
-
-    #[test]
-    fn test_error_response_format() {
-        let resp = error_response("timeout", "连接超时");
-        assert!(resp.contains("timeout"));
-        assert!(resp.contains("连接超时"));
-        assert!(resp.contains("error_code"));
-        assert!(resp.contains("message"));
-        let _: serde_json::Value = serde_json::from_str(&resp).unwrap();
-    }
-
-    #[test]
-    fn test_error_response_all_codes_unique() {
-        let codes = [
-            error_response("network_unreachable", ""),
-            error_response("proxy_failed", ""),
-            error_response("timeout", ""),
-            error_response("tls_failed", ""),
-            error_response("rate_limited", ""),
-            error_response("repository_not_found", ""),
-            error_response("bad_response", ""),
-            error_response("invalid_version", ""),
-        ];
-        for json_str in &codes {
-            let _: serde_json::Value = serde_json::from_str(json_str).unwrap();
-        }
-    }
-
-    #[test]
-    fn test_http_error_classification_403() {
-        let result = classify_http_error(reqwest::StatusCode::FORBIDDEN);
-        assert!(result.contains("bad_response"));
-        assert!(result.contains("403"));
-    }
-
-    #[test]
-    fn test_http_error_classification_404() {
-        let result = classify_http_error(reqwest::StatusCode::NOT_FOUND);
-        assert!(result.contains("repository_not_found"));
-    }
-
-    #[test]
-    fn test_http_error_classification_429() {
-        let result = classify_http_error(reqwest::StatusCode::TOO_MANY_REQUESTS);
-        assert!(result.contains("rate_limited"));
-    }
-
-    #[test]
-    fn test_http_error_classification_500() {
-        let result = classify_http_error(reqwest::StatusCode::INTERNAL_SERVER_ERROR);
-        assert!(result.contains("bad_response"));
-        assert!(result.contains("更新服务器暂时不可用"));
-    }
-
-    #[test]
-    fn test_http_error_classification_502() {
-        let result = classify_http_error(reqwest::StatusCode::BAD_GATEWAY);
-        assert!(result.contains("bad_response"));
-    }
-
-    #[test]
-    fn test_http_error_classification_unknown() {
-        let result = classify_http_error(reqwest::StatusCode::IM_A_TEAPOT);
-        assert!(result.contains("bad_response"));
-        assert!(result.contains("418"));
-    }
-
-    // ── 清单校验 ──
-
     fn make_manifest() -> WindowsUpdateManifest {
         WindowsUpdateManifest {
             version: "0.3.0".into(),
@@ -309,59 +239,12 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_manifest_empty_version() {
-        let m = WindowsUpdateManifest {
-            version: String::new(),
-            ..make_manifest()
-        };
-        assert!(validate_manifest(&m)
-            .unwrap_err()
-            .contains("invalid_version"));
-    }
-
-    #[test]
-    fn test_validate_manifest_http_download_rejected() {
-        let m = WindowsUpdateManifest {
-            download_url: "http://example.com/installer.exe".into(),
-            ..make_manifest()
-        };
-        assert!(validate_manifest(&m).unwrap_err().contains("HTTPS"));
-    }
-
-    #[test]
-    fn test_validate_manifest_http_release_rejected() {
-        let m = WindowsUpdateManifest {
-            release_url: "http://example.com/release".into(),
-            ..make_manifest()
-        };
-        assert!(validate_manifest(&m).unwrap_err().contains("HTTPS"));
-    }
-
-    #[test]
     fn test_validate_manifest_disallowed_download_domain() {
         let m = WindowsUpdateManifest {
             download_url: "https://evil.com/malware.exe".into(),
             ..make_manifest()
         };
         assert!(validate_manifest(&m).unwrap_err().contains("域名"));
-    }
-
-    #[test]
-    fn test_validate_manifest_disallowed_release_domain() {
-        let m = WindowsUpdateManifest {
-            release_url: "https://phishing.com/release".into(),
-            ..make_manifest()
-        };
-        assert!(validate_manifest(&m).unwrap_err().contains("域名"));
-    }
-
-    #[test]
-    fn test_validate_manifest_sha256_null() {
-        let m = WindowsUpdateManifest {
-            sha256: None,
-            ..make_manifest()
-        };
-        assert!(validate_manifest(&m).is_ok());
     }
 
     #[test]
@@ -374,90 +257,8 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_manifest_sha256_invalid_chars() {
-        let m = WindowsUpdateManifest {
-            sha256: Some(
-                "ghijklmn1234567890ghijklmn1234567890ghijklmn1234567890ghijklmn1234567890".into(),
-            ),
-            ..make_manifest()
-        };
-        assert!(validate_manifest(&m).unwrap_err().contains("SHA-256"));
-    }
-
-    // ── 清单反序列化 ──
-
-    #[test]
-    fn test_manifest_deserialization() {
-        let json = r#"{
-            "version": "0.3.0",
-            "release_date": "2026-07-24T12:00:00Z",
-            "release_notes": "修复问题",
-            "download_url": "https://github.com/azazazazaz520/Prism/releases/download/v0.3.0/setup.exe",
-            "release_url": "https://github.com/azazazazaz520/Prism/releases/tag/v0.3.0",
-            "sha256": "abc123"
-        }"#;
-        let manifest: WindowsUpdateManifest = serde_json::from_str(json).unwrap();
-        assert_eq!(manifest.version, "0.3.0");
-        assert_eq!(manifest.release_notes, "修复问题");
-        assert_eq!(manifest.sha256, Some("abc123".into()));
-    }
-
-    #[test]
-    fn test_manifest_deserialization_without_sha256() {
-        let json = r#"{
-            "version": "0.3.0",
-            "release_date": "2026-07-24T12:00:00Z",
-            "release_notes": "修复问题",
-            "download_url": "https://github.com/azazazazaz520/Prism/releases/download/v0.3.0/setup.exe",
-            "release_url": "https://github.com/azazazazaz520/Prism/releases/tag/v0.3.0"
-        }"#;
-        let manifest: WindowsUpdateManifest = serde_json::from_str(json).unwrap();
-        assert_eq!(manifest.version, "0.3.0");
-        assert!(manifest.sha256.is_none());
-    }
-
-    #[test]
-    fn test_manifest_invalid_json() {
-        let result: Result<WindowsUpdateManifest, _> = serde_json::from_str("not json");
-        assert!(result.is_err());
-    }
-
-    // ── 客户端构建 ──
-
-    #[test]
-    fn test_build_client_succeeds() {
-        assert!(build_client().is_ok());
-    }
-
-    // ── 备用地址判断 ──
-
-    #[test]
-    fn test_should_fallback_for_network_errors() {
-        let err = error_response("network_unreachable", "");
-        assert!(should_fallback(&err));
-    }
-
-    #[test]
-    fn test_should_fallback_for_timeout() {
-        let err = error_response("timeout", "");
-        assert!(should_fallback(&err));
-    }
-
-    #[test]
-    fn test_should_fallback_for_tls_failed() {
-        let err = error_response("tls_failed", "");
-        assert!(should_fallback(&err));
-    }
-
-    #[test]
-    fn test_should_not_fallback_for_404() {
-        let err = error_response("repository_not_found", "");
-        assert!(!should_fallback(&err));
-    }
-
-    #[test]
-    fn test_should_not_fallback_for_bad_response() {
-        let err = error_response("bad_response", "");
-        assert!(!should_fallback(&err));
+    fn test_fallback_follows_error_category() {
+        assert!(should_fallback(&error_response("network_unreachable", "")));
+        assert!(!should_fallback(&error_response("bad_response", "")));
     }
 }

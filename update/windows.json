@@ -1,8 +1,8 @@
 {
-  "release_url": "https://github.com/azazazazaz520/Prism/releases/tag/v0.5.2",
-  "release_date": "2026-10-09T03:32:29.7183999Z",
-  "version": "0.5.2",
-  "release_notes": "## Changes since v0.5.1\n\n- fix: 修复笔记文件树收起后无法展开的问题 (asd_fire)\n- chore: 同步稳定版更新清单 (github-actions[bot])",
-  "sha256": "cc82e338da679a2f6c9daa62ebd4ed70b5e38b530d3fbae00f6762c9a61a8574",
-  "download_url": "https://github.com/azazazazaz520/Prism/releases/download/v0.5.2/Prism_0.5.2_x64-setup.exe"
+  "version": "0.6.0",
+  "release_notes": "## Changes since v0.5.2\n\n- test: 精简后端测试并保留主要业务场景 (asd_fire)\n- test: 精简前端测试并按功能合并用例 (asd_fire)\n- feat: 实现关闭到托盘与退出保存握手 (asd_fire)\n- refactor(backend): 按功能整理 Rust 后端模块 (asd_fire)\n- fix(sync): 统一多窗口任务状态并持久化同步发件箱 (asd_fire)\n- feat: 支持独立笔记工作区多窗口 (asd_fire)\n- refactor(notes): 统一 Markdown 语法解析 (asd_fire)\n- chore: 更新Readme.md (asd_fire)\n- fix: 修复 Markdown 表格解析与显示异常 (asd_fire)\n- fix: 改用流式扫描完善笔记全文搜索 (asd_fire)\n- fix: 保留搜索重开的笔记编辑内容 (asd_fire)\n- chore: 同步稳定版更新清单 (github-actions[bot])\n- feat: 实现笔记全文搜索 (asd_fire)",
+  "download_url": "https://github.com/azazazazaz520/Prism/releases/download/v0.6.0/Prism_0.6.0_x64-setup.exe",
+  "release_url": "https://github.com/azazazazaz520/Prism/releases/tag/v0.6.0",
+  "sha256": "df8de951c94b03abbe0cec4e3f241a8a74c8a690cc23bf18fcd72db13c377018",
+  "release_date": "2026-11-06T08:26:21.9881827Z"
 }

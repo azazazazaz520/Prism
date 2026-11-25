@@ -1,5 +1,6 @@
 mod json;
 pub(crate) mod paths;
+pub(crate) mod secrets;
 pub(crate) use json::{
     backup_data_for_queue_migration, backup_legacy_queue, load_config, load_data, load_sync,
     save_config, save_data, save_sync,

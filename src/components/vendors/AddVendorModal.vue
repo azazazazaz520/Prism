@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import type { Vendor, VendorPreset } from '../../types';
+import type { Vendor, VendorInput, VendorPreset } from '../../types';
 
 const props = defineProps<{
   vendor: Vendor | null;
 }>();
 
 const emit = defineEmits<{
-  save: [vendor: Vendor];
+  save: [vendor: VendorInput];
   close: [];
 }>();
 
@@ -40,7 +40,7 @@ const isEditing = computed(() => !!props.vendor);
 const selectedPreset = ref<string>(props.vendor?.provider || 'openai');
 const enabled = ref(props.vendor?.enabled ?? true);
 const name = ref(props.vendor?.name || '');
-const apiKey = ref(props.vendor?.api_key || '');
+const apiKey = ref('');
 const baseUrl = ref(props.vendor?.base_url || '');
 const apiPath = ref(props.vendor?.api_path || '');
 const model = ref(props.vendor?.model || '');
@@ -69,7 +69,7 @@ if (props.vendor) {
 }
 
 function handleSave() {
-  const vendor: Vendor = {
+  const vendor: VendorInput = {
     id: props.vendor?.id || genId(),
     name: name.value || PRESETS.find((p) => p.provider === selectedPreset.value)!.name,
     provider: selectedPreset.value,
@@ -120,7 +120,11 @@ function handleSave() {
 
         <div class="field-row">
           <label>API 密钥</label>
-          <input v-model="apiKey" type="password" placeholder="sk-..." />
+          <input
+            v-model="apiKey"
+            type="password"
+            :placeholder="props.vendor?.has_api_key ? '已设置，留空则保持不变' : 'sk-...'"
+          />
         </div>
 
         <div class="field-row">

@@ -170,7 +170,8 @@ export function summarizeInvokeArgs(args: unknown): LogContext {
   const source = args as Record<string, unknown>;
   const summary: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(source)) {
-    if (/content|apiKey|token|secret|authorization|headers|prompt|response/i.test(key)) continue;
+    if (/content|key|sync_?code|token|secret|authorization|headers|prompt|response/i.test(key))
+      continue;
     if (Array.isArray(value)) summary[`${key}_count`] = value.length;
     else if (typeof value === 'string') summary[`${key}_length`] = value.length;
     else if (typeof value === 'number' || typeof value === 'boolean' || value === null)

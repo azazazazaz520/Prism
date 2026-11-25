@@ -1,5 +1,6 @@
 use serde::Serialize;
 
+use crate::storage::secrets::{self, SystemSecretStore};
 use crate::AppState;
 
 /// 聚合同步配置的返回结构
@@ -10,17 +11,19 @@ pub struct SyncConfig {
     pub last_sync_at: Option<String>,
 }
 
-/// 获取完整同步配置
+/// 获取完整同步配置；同步码从系统凭据库读取
 #[tauri::command]
-pub fn get_sync_config(state: tauri::State<AppState>) -> SyncConfig {
-    state.with_sync(|sync| SyncConfig {
-        sync_code: sync.sync_code.clone(),
-        profile_id: sync.profile_id.clone(),
-        last_sync_at: sync.last_sync_at.clone(),
+pub fn get_sync_config(state: tauri::State<AppState>) -> Result<SyncConfig, String> {
+    state.with_sync(|sync| {
+        Ok(SyncConfig {
+            sync_code: secrets::sync_code(&SystemSecretStore, sync)?,
+            profile_id: sync.profile_id.clone(),
+            last_sync_at: sync.last_sync_at.clone(),
+        })
     })
 }
 
-/// 设置同步配置（部分更新：传入字段替换，未传入字段保持不变）
+/// 设置同步配置（部分更新：传入字段替换，未传入字段保持不变）；同步码写入系统凭据库
 #[tauri::command]
 pub fn set_sync_config(
     state: tauri::State<AppState>,
@@ -28,9 +31,10 @@ pub fn set_sync_config(
     profile_id: Option<String>,
     last_sync_at: Option<String>,
 ) -> Result<(), String> {
+    let code_replaced = secrets::save_sync_code(&SystemSecretStore, sync_code.as_deref())?;
     state.with_sync_mut(|sync| {
-        if let Some(v) = sync_code {
-            sync.sync_code = Some(v);
+        if code_replaced {
+            sync.legacy_sync_code = None;
         }
         if let Some(v) = profile_id {
             sync.profile_id = Some(v);

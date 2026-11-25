@@ -67,17 +67,22 @@ export interface ModuleDescriptor {
 
 // ── AI 相关类型 ──────────────────────────────
 
-/** AI 供应商 */
+/** AI 供应商（不包含 API 密钥，`has_api_key` 表示密钥是否已保存在系统凭据库中） */
 export interface Vendor {
   id: string;
   name: string;
   provider: string;
-  api_key: string;
   base_url: string;
   api_path: string;
   model: string;
   enabled: boolean;
   is_default: boolean;
+  has_api_key: boolean;
+}
+
+/** 提交给后端的供应商；`api_key` 为空或缺省时保留已保存的密钥 */
+export interface VendorInput extends Omit<Vendor, 'has_api_key'> {
+  api_key?: string;
 }
 
 /** 供应商预设 */

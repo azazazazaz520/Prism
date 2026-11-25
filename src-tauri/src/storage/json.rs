@@ -171,20 +171,25 @@ pub fn load_config(logger: &LogWriter) -> ConfigStore {
 
 /// 将应用配置序列化写入磁盘
 pub fn save_config(store: &ConfigStore) -> Result<(), String> {
-    let path = get_config_path();
     let content = serde_json::to_string_pretty(store).map_err(|e| e.to_string())?;
+    write_json_atomically(&get_config_path(), &content)
+}
+
+/// 通过临时文件与原子替换写入 JSON，失败时保留原文件。
+fn write_json_atomically(path: &std::path::Path, content: &str) -> Result<(), String> {
     let temporary = path.with_file_name(format!(
-        ".config.json.prism-{}.tmp",
+        ".{}.prism-{}.tmp",
+        path.file_name().unwrap_or_default().to_string_lossy(),
         uuid::Uuid::new_v4().simple()
     ));
     let result = (|| -> Result<(), String> {
         let mut file =
-            fs::File::create_new(&temporary).map_err(|e| format!("创建临时配置文件失败: {}", e))?;
+            fs::File::create_new(&temporary).map_err(|e| format!("创建临时文件失败: {}", e))?;
         file.write_all(content.as_bytes())
-            .map_err(|e| format!("写入临时配置文件失败: {}", e))?;
+            .map_err(|e| format!("写入临时文件失败: {}", e))?;
         file.sync_all()
-            .map_err(|e| format!("刷新临时配置文件失败: {}", e))?;
-        replace_config_file(&temporary, &path)
+            .map_err(|e| format!("刷新临时文件失败: {}", e))?;
+        replace_config_file(&temporary, path)
     })();
 
     if result.is_err() {
@@ -239,9 +244,8 @@ pub fn load_sync(logger: &LogWriter) -> SyncStore {
 
 /// 将同步状态序列化写入磁盘
 pub fn save_sync(store: &SyncStore) -> Result<(), String> {
-    let path = get_sync_path();
     let content = serde_json::to_string_pretty(store).map_err(|e| e.to_string())?;
-    fs::write(&path, content).map_err(|e| e.to_string())
+    write_json_atomically(&get_sync_path(), &content)
 }
 
 #[cfg(test)]

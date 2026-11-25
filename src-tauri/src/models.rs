@@ -68,16 +68,14 @@ pub struct DailyCompletion {
     pub profile_id: Option<String>,
 }
 
-/// AI 供应商（支持 OpenAI 等）
+/// AI 供应商的非敏感字段，供存储结构、提交结构与返回结构共用。
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Vendor {
+pub struct VendorFields {
     pub id: String,
     /// 显示名称
     pub name: String,
     /// 供应商类型
     pub provider: String,
-    /// API 密钥
-    pub api_key: String,
     /// API 基础地址
     pub base_url: String,
     /// API 路径
@@ -89,6 +87,33 @@ pub struct Vendor {
     /// 是否为默认供应商
     #[serde(default)]
     pub is_default: bool,
+}
+
+/// 存储于 config.json 的供应商；API 密钥保存在系统凭据库中。
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Vendor {
+    #[serde(flatten)]
+    pub fields: VendorFields,
+    /// 旧版本明文密钥，仅用于启动迁移；迁移成功后为 None，且不再写入文件。
+    #[serde(rename = "api_key", default, skip_serializing_if = "Option::is_none")]
+    pub legacy_api_key: Option<String>,
+}
+
+/// 前端提交的供应商；`api_key` 为空或缺省时保留已保存的密钥。
+#[derive(Debug, Deserialize, Clone)]
+pub struct VendorInput {
+    #[serde(flatten)]
+    pub fields: VendorFields,
+    #[serde(default)]
+    pub api_key: Option<String>,
+}
+
+/// 返回给前端的供应商；仅说明是否已设置密钥，不包含密钥内容。
+#[derive(Debug, Serialize, Clone)]
+pub struct VendorView {
+    #[serde(flatten)]
+    pub fields: VendorFields,
+    pub has_api_key: bool,
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -115,9 +140,9 @@ pub struct DataStore {
 /// 同步状态（存储于 sync.json，独立于用户偏好配置）
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SyncStore {
-    /// 设备配对用的同步码
-    #[serde(default)]
-    pub sync_code: Option<String>,
+    /// 旧版本明文同步码，仅用于启动迁移；迁移成功后为 None，且不再写入文件。
+    #[serde(rename = "sync_code", default, skip_serializing_if = "Option::is_none")]
+    pub legacy_sync_code: Option<String>,
     /// Supabase profile ID
     #[serde(default)]
     pub profile_id: Option<String>,
@@ -218,7 +243,7 @@ pub fn default_config_store() -> ConfigStore {
 /// 构造空的默认同步状态
 pub fn default_sync_store() -> SyncStore {
     SyncStore {
-        sync_code: None,
+        legacy_sync_code: None,
         profile_id: None,
         last_sync_at: None,
     }

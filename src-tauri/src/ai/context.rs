@@ -1,32 +1,29 @@
+use crate::storage::secrets::{self, SystemSecretStore};
 use crate::{ai, AppState};
 
-/// 解析当前 AI 配置：优先用选中的供应商，否则用第一个启用的
+/// 解析当前 AI 配置：优先用选中的供应商，否则用第一个启用的；API 密钥从凭据库读取。
 pub(crate) fn resolve_ai_settings(
     config: &crate::models::ConfigStore,
 ) -> Result<ai::AiSettings, String> {
-    if let Some(active_id) = &config.active_vendor_id {
-        if let Some(v) = config
-            .vendors
-            .iter()
-            .find(|v| v.id == *active_id && v.enabled)
-        {
-            return Ok(ai::AiSettings {
-                enabled: true,
-                api_endpoint: format!("{}{}", v.base_url, v.api_path),
-                api_key: v.api_key.clone(),
-                model: v.model.clone(),
-            });
-        }
-    }
-    if let Some(v) = config.vendors.iter().find(|v| v.enabled) {
-        return Ok(ai::AiSettings {
-            enabled: true,
-            api_endpoint: format!("{}{}", v.base_url, v.api_path),
-            api_key: v.api_key.clone(),
-            model: v.model.clone(),
-        });
-    }
-    Err("AI 未配置：请在设置中添加并启用供应商".into())
+    let vendor = config
+        .active_vendor_id
+        .as_ref()
+        .and_then(|active_id| {
+            config
+                .vendors
+                .iter()
+                .find(|v| v.fields.id == *active_id && v.fields.enabled)
+        })
+        .or_else(|| config.vendors.iter().find(|v| v.fields.enabled))
+        .ok_or("AI 未配置：请在设置中添加并启用供应商")?;
+    let api_key = secrets::vendor_api_key(&SystemSecretStore, vendor)?
+        .ok_or("AI 未配置：请在设置中填写 API 密钥")?;
+    Ok(ai::AiSettings {
+        enabled: true,
+        api_endpoint: format!("{}{}", vendor.fields.base_url, vendor.fields.api_path),
+        api_key,
+        model: vendor.fields.model.clone(),
+    })
 }
 
 /// 解析 AI 配置，并在任务数据读锁内执行命令前置操作。

@@ -45,8 +45,9 @@ fn initialize_app_state(app: &tauri::AppHandle) {
         );
     }));
 
-    let (data, config) = crate::storage::initialize(&logger);
-    let sync = crate::storage::load_sync(&logger);
+    let (data, mut config) = crate::storage::initialize(&logger);
+    let mut sync = crate::storage::load_sync(&logger);
+    crate::storage::secrets::migrate_startup_secrets(&mut config, &mut sync, &logger);
     app.manage(AppState {
         data: Mutex::new(data),
         config: Mutex::new(config),

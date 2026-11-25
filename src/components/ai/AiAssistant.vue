@@ -2,6 +2,7 @@
 import { ref, nextTick, computed } from 'vue';
 import { invokeWithDiagnostics as invoke } from '../../diagnostics/invoke-logged';
 import type { ChatMessage } from '../../types';
+import { formatChatLine, renderAssistantMessage } from '../../utils/chat-format';
 
 // ── 状态 ──────────────────────────────
 
@@ -133,16 +134,14 @@ const hasMessages = computed(() => messages.value.length > 0);
           <line x1="8" y1="16" x2="8.01" y2="16" />
           <line x1="16" y1="16" x2="16.01" y2="16" />
         </svg>
-        <div class="msg-bubble">
+        <div
+          v-if="msg.role === 'assistant'"
+          class="msg-bubble markdown-body"
+          v-html="renderAssistantMessage(msg.content)"
+        />
+        <div v-else class="msg-bubble">
           <template v-for="(line, li) in msg.content.split('\n')" :key="li">
-            <span
-              v-if="line"
-              v-html="
-                line
-                  .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                  .replace(/`(.+?)`/g, '<code>$1</code>')
-              "
-            />
+            <span v-if="line" v-html="formatChatLine(line)" />
             <br v-if="line === '' && li < msg.content.split('\n').length - 1" />
           </template>
         </div>
@@ -343,6 +342,71 @@ const hasMessages = computed(() => messages.value.length > 0);
 
 .msg-row.user .msg-bubble :deep(code) {
   background: rgba(255, 255, 255, 0.2);
+}
+
+.markdown-body :deep(h1),
+.markdown-body :deep(h2),
+.markdown-body :deep(h3) {
+  font-size: var(--text-base);
+  font-weight: 600;
+  margin: var(--space-sm) 0 var(--space-xs);
+}
+
+.markdown-body :deep(p),
+.markdown-body :deep(ul),
+.markdown-body :deep(ol),
+.markdown-body :deep(blockquote),
+.markdown-body :deep(pre),
+.markdown-body :deep(table) {
+  margin: 0 0 var(--space-xs);
+}
+
+.markdown-body :deep(*:last-child) {
+  margin-bottom: 0;
+}
+
+.markdown-body :deep(ul),
+.markdown-body :deep(ol) {
+  padding-left: var(--space-lg);
+}
+
+.markdown-body :deep(li) {
+  margin-bottom: 2px;
+}
+
+.markdown-body :deep(blockquote) {
+  border-left: 3px solid var(--border-light);
+  padding-left: var(--space-md);
+  color: var(--text-secondary);
+}
+
+.markdown-body :deep(pre) {
+  background: rgba(0, 0, 0, 0.06);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+}
+
+.markdown-body :deep(pre code) {
+  background: none;
+  padding: 0;
+}
+
+.markdown-body :deep(table) {
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.markdown-body :deep(th),
+.markdown-body :deep(td) {
+  border: 1px solid var(--border-light);
+  padding: 4px 8px;
+  text-align: left;
+}
+
+.markdown-body :deep(a) {
+  color: var(--accent);
+  text-decoration: none;
 }
 
 /* ── 打字动画 ────────────────────── */

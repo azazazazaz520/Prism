@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { invokeWithDiagnostics as invoke } from '../../diagnostics/invoke-logged';
-import type { Vendor } from '../../types';
+import type { Vendor, VendorInput } from '../../types';
 import AddVendorModal from './AddVendorModal.vue';
 
 const vendors = ref<Vendor[]>([]);
@@ -33,7 +33,7 @@ function openEdit(vendor: Vendor) {
   showAddModal.value = true;
 }
 
-async function handleSave(vendor: Vendor) {
+async function handleSave(vendor: VendorInput) {
   if (editingVendor.value) {
     await invoke('update_vendor', { vendor });
   } else {

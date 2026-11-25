@@ -1,4 +1,7 @@
 use crate::app::tray::{self, CloseToTrayStatus};
+use crate::logging::LogLevel;
+use crate::models::{Vendor, VendorInput, VendorView};
+use crate::storage::secrets::{self, SystemSecretStore};
 use crate::AppState;
 use std::path::PathBuf;
 use tauri::{Emitter, Manager};
@@ -41,7 +44,7 @@ pub fn get_ai_settings_all(state: tauri::State<AppState>) -> serde_json::Value {
     state.with_config(|config| {
         serde_json::json!({
             "active_vendor_id": config.active_vendor_id,
-            "has_enabled_vendor": config.vendors.iter().any(|v| v.enabled),
+            "has_enabled_vendor": config.vendors.iter().any(|v| v.fields.enabled),
         })
     })
 }
@@ -51,42 +54,86 @@ pub fn get_ai_settings_all(state: tauri::State<AppState>) -> serde_json::Value {
 // ═══════════════════════════════════════════
 
 #[tauri::command]
-pub fn get_vendors(state: tauri::State<AppState>) -> Vec<crate::models::Vendor> {
-    state.with_config(|config| config.vendors.clone())
+pub fn get_vendors(state: tauri::State<AppState>) -> Result<Vec<VendorView>, String> {
+    let vendors = state.with_config(|config| config.vendors.clone());
+    vendors
+        .into_iter()
+        .map(|vendor| {
+            let has_api_key = secrets::vendor_api_key(&SystemSecretStore, &vendor)?.is_some();
+            Ok(VendorView {
+                fields: vendor.fields,
+                has_api_key,
+            })
+        })
+        .collect()
 }
 
+/// 新增供应商：密钥先写入凭据库，配置保存失败时回滚凭据。
 #[tauri::command]
 pub fn add_vendor(
     state: tauri::State<AppState>,
-    vendor: crate::models::Vendor,
-) -> Result<crate::models::Vendor, String> {
-    state.with_config_mut(|config| {
-        config.vendors.push(vendor.clone());
-        vendor
+    vendor: VendorInput,
+) -> Result<VendorView, String> {
+    let store = SystemSecretStore;
+    let id = vendor.fields.id.clone();
+    let has_api_key = secrets::save_vendor_api_key(&store, &id, vendor.api_key.as_deref())?;
+    let saved = Vendor {
+        fields: vendor.fields.clone(),
+        legacy_api_key: None,
+    };
+    if let Err(error) = state.with_config_mut(|config| config.vendors.push(saved)) {
+        if has_api_key {
+            let _ = secrets::delete_vendor_api_key(&store, &id);
+        }
+        return Err(error);
+    }
+    Ok(VendorView {
+        fields: vendor.fields,
+        has_api_key,
     })
 }
 
+/// 更新供应商；提交的密钥为空时保留已保存的密钥。
 #[tauri::command]
-pub fn update_vendor(
-    state: tauri::State<AppState>,
-    vendor: crate::models::Vendor,
-) -> Result<(), String> {
+pub fn update_vendor(state: tauri::State<AppState>, vendor: VendorInput) -> Result<(), String> {
+    let key_replaced = secrets::save_vendor_api_key(
+        &SystemSecretStore,
+        &vendor.fields.id,
+        vendor.api_key.as_deref(),
+    )?;
     state.with_config_mut(|config| {
-        if let Some(v) = config.vendors.iter_mut().find(|v| v.id == vendor.id) {
-            *v = vendor;
+        if let Some(v) = config
+            .vendors
+            .iter_mut()
+            .find(|v| v.fields.id == vendor.fields.id)
+        {
+            v.fields = vendor.fields;
+            if key_replaced {
+                v.legacy_api_key = None;
+            }
         }
     })
 }
 
-/// 删除供应商，若为当前激活项则清除激活状态
+/// 删除供应商，若为当前激活项则清除激活状态；凭据删除失败只记录日志，不影响配置结果。
 #[tauri::command]
 pub fn delete_vendor(state: tauri::State<AppState>, id: String) -> Result<(), String> {
     state.with_config_mut(|config| {
-        config.vendors.retain(|v| v.id != id);
+        config.vendors.retain(|v| v.fields.id != id);
         if config.active_vendor_id.as_deref() == Some(&id) {
             config.active_vendor_id = None;
         }
-    })
+    })?;
+    if let Err(error) = secrets::delete_vendor_api_key(&SystemSecretStore, &id) {
+        let _ = state.logger.append_internal(
+            LogLevel::Error,
+            "secrets",
+            "secrets.vendor_delete_failed",
+            "供应商已删除，但凭据删除失败",
+            serde_json::json!({ "error": error }),
+        );
+    }
+    Ok(())
 }
 
 #[tauri::command]

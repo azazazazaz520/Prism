@@ -6,7 +6,7 @@ const UNSERIALIZABLE = '[UNSERIALIZABLE]';
 const MAX_DEPTH = 5;
 const MAX_STRING_LENGTH = 2048;
 const SENSITIVE_KEY =
-  /key|token|secret|authorization|password|content|prompt|response|headers|cookie|credential/i;
+  /key|sync_?code|token|secret|authorization|password|content|prompt|response|headers|cookie|credential/i;
 
 function truncateString(value: string): string {
   return value.length <= MAX_STRING_LENGTH ? value : value.slice(0, MAX_STRING_LENGTH);
